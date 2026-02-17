@@ -22,7 +22,9 @@ if ('serviceWorker' in navigator) {
 
 const updateAppHeight = () => {
   const height = window.visualViewport?.height ?? window.innerHeight;
+  const offsetTop = window.visualViewport?.offsetTop ?? 0;
   document.documentElement.style.setProperty('--app-height', `${height}px`);
+  document.documentElement.style.setProperty('--app-offset', `${offsetTop}px`);
 };
 
 updateAppHeight();

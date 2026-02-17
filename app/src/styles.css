@@ -5,6 +5,7 @@
 :root {
   font-family: "Space Grotesk", sans-serif;
   --app-height: 100vh;
+  --app-offset: 0px;
 }
 
 body {
@@ -60,6 +61,7 @@ body {
 
 .chat-input {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  transform: translateY(var(--app-offset));
 }
 
 @media (pointer: coarse) {
