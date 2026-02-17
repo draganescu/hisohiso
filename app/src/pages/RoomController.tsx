@@ -134,8 +134,20 @@ const RoomController = () => {
   useEffect(() => {
     if (roomState === 'PARTICIPANT') {
       document.body.classList.add('no-scroll');
+      const handleTouchMove = (event: TouchEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (!target) {
+          return;
+        }
+        if (target.closest('.chat-scroll')) {
+          return;
+        }
+        event.preventDefault();
+      };
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
       return () => {
         document.body.classList.remove('no-scroll');
+        document.removeEventListener('touchmove', handleTouchMove);
       };
     }
     document.body.classList.remove('no-scroll');
