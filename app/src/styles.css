@@ -4,12 +4,54 @@
 
 :root {
   font-family: "Space Grotesk", sans-serif;
+  --app-height: 100vh;
 }
 
 body {
   margin: 0;
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
   box-sizing: border-box;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  :root {
+    --app-height: -webkit-fill-available;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+.app-shell {
+  height: var(--app-height);
+  overscroll-behavior: contain;
+}
+
+.chat-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.chat-input {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }

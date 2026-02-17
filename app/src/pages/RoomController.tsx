@@ -542,7 +542,7 @@ const RoomController = () => {
         )}
 
         {roomState === 'PARTICIPANT' && (
-          <div className="fixed inset-0 bg-[#efe7d5]">
+          <div className="fixed inset-0 bg-[#efe7d5] app-shell">
             <div className="mx-auto flex h-full max-w-3xl flex-col overflow-hidden border-x border-[#1716132e] bg-[#f7f2e6] shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1716132e] bg-[#f7f2e6] px-5 py-4">
                 <div>
@@ -598,7 +598,7 @@ const RoomController = () => {
                 <div
                   ref={listRef}
                   onScroll={handleScroll}
-                  className="flex-1 overflow-y-auto pr-2"
+                  className="flex-1 overflow-y-auto pr-2 chat-scroll"
                 >
                   <div className="flex flex-col gap-3">
                     {messages.length === 0 && (
@@ -667,7 +667,7 @@ const RoomController = () => {
                   </button>
                 )}
 
-                <div className="sticky bottom-0 bg-[#f7f2e6] pt-4">
+                <div className="sticky bottom-0 bg-[#f7f2e6] pt-4 chat-input">
                   <div className="flex items-end gap-3 border-t border-[#1716132e] pt-4">
                     <textarea
                       className="flex-1 resize-none rounded-2xl border border-[#17161333] bg-white/80 px-4 py-3 text-sm"
