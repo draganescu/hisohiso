@@ -132,6 +132,17 @@ const RoomController = () => {
   }, [roomSecret]);
 
   useEffect(() => {
+    if (roomState === 'PARTICIPANT') {
+      document.body.classList.add('no-scroll');
+      return () => {
+        document.body.classList.remove('no-scroll');
+      };
+    }
+    document.body.classList.remove('no-scroll');
+    return undefined;
+  }, [roomState]);
+
+  useEffect(() => {
     if (!roomHash || roomState === 'DESTROYED') {
       return;
     }
@@ -543,7 +554,7 @@ const RoomController = () => {
 
         {roomState === 'PARTICIPANT' && (
           <div className="fixed inset-0 bg-[#efe7d5] app-shell">
-            <div className="mx-auto flex h-full max-w-3xl flex-col overflow-hidden border-x border-[#1716132e] bg-[#f7f2e6] shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
+            <div className="mx-auto flex h-full max-w-3xl flex-col overflow-hidden bg-[#f7f2e6]">
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1716132e] bg-[#f7f2e6] px-5 py-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Chat for All</p>

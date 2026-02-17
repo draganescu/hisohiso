@@ -39,6 +39,13 @@ body,
   overscroll-behavior: contain;
 }
 
+.no-scroll {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: var(--app-height);
+}
+
 .chat-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
