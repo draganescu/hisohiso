@@ -19,3 +19,12 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+const updateAppHeight = () => {
+  const height = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${height}px`);
+};
+
+updateAppHeight();
+window.addEventListener('resize', updateAppHeight);
+window.visualViewport?.addEventListener('resize', updateAppHeight);

@@ -670,7 +670,7 @@ const RoomController = () => {
                 <div className="sticky bottom-0 bg-[#f7f2e6] pt-4 chat-input">
                   <div className="flex items-end gap-3 border-t border-[#1716132e] pt-4">
                     <textarea
-                      className="flex-1 resize-none rounded-2xl border border-[#17161333] bg-white/80 px-4 py-3 text-sm"
+                      className="flex-1 resize-none rounded-2xl border border-[#17161333] bg-white/80 px-4 py-3 text-base"
                       placeholder="Type a message"
                       rows={2}
                       value={chatInput}
