@@ -62,6 +62,18 @@ export const deriveMessageKey = async (roomSecret: string): Promise<CryptoKey> =
   );
 };
 
+export const deriveKnockKey = async (roomSecret: string, password: string): Promise<CryptoKey> => {
+  const prefix = encoder.encode('cfa.k_knock');
+  const secretBytes = base64UrlDecode(roomSecret);
+  const passwordBytes = encoder.encode(password);
+  const combined = new Uint8Array(prefix.length + secretBytes.length + passwordBytes.length);
+  combined.set(prefix, 0);
+  combined.set(secretBytes, prefix.length);
+  combined.set(passwordBytes, prefix.length + secretBytes.length);
+  const digest = await crypto.subtle.digest('SHA-256', combined);
+  return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+};
+
 export type EncryptedPayload = {
   v: 0;
   alg: 'A256GCM';

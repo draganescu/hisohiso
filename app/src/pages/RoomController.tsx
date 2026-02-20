@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   decryptText,
+  deriveKnockKey,
   deriveMessageKey,
   deriveRoomHash,
   encryptText,
@@ -11,6 +12,7 @@ import {
   type EncryptedPayload
 } from '../lib/crypto';
 import {
+  clearHandle,
   clearToken,
   getHandle,
   getToken,
@@ -21,15 +23,14 @@ import {
   updateRoomHandle
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
-import { deleteMessage, loadMessages, saveMessage, type ChatMessage } from '../lib/db';
+import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage } from '../lib/db';
 import QrModal from '../components/QrModal';
 
 type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED';
 
-type RoomCheckResponse = {
-  status: 'created' | 'exists';
+type RoomLookupResponse = {
+  status: 'exists';
   has_participants: boolean;
-  participant_token?: string;
 };
 
 type RoomEvent = {
@@ -56,6 +57,7 @@ const RoomController = () => {
   const [knockSent, setKnockSent] = useState(false);
   const [knockNotice, setKnockNotice] = useState<string>('');
   const [knocks, setKnocks] = useState<KnockRequest[]>([]);
+  const [knockPassword, setKnockPassword] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -63,6 +65,7 @@ const RoomController = () => {
   const [showDisband, setShowDisband] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
+  const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
   const [tokenHash, setTokenHash] = useState<string | null>(null);
   const [handle, setHandleState] = useState<string>('');
@@ -72,8 +75,56 @@ const RoomController = () => {
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const prevCountRef = useRef(0);
+  const knockKeyRef = useRef<CryptoKey | null>(null);
 
   const shareUrl = useMemo(() => `${window.location.origin}/${roomSecret}`, [roomSecret]);
+
+  const wipeLocalRoom = useCallback(async (hash: string) => {
+    clearToken(hash);
+    clearHandle(hash);
+    removeRoom(hash);
+    await clearRoomMessages(hash);
+    setTokenState(null);
+    setTokenHash(null);
+    setKnocks([]);
+    setMessages([]);
+    setMessage('');
+    setChatInput('');
+    setKnockPassword('');
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const nextPassword = knockPassword.trim();
+    if (!roomSecret || !nextPassword) {
+      setKnockKey(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    void deriveKnockKey(roomSecret, nextPassword)
+      .then((key) => {
+        if (!active) {
+          return;
+        }
+        setKnockKey(key);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setKnockKey(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [roomSecret, knockPassword]);
+
+  useEffect(() => {
+    knockKeyRef.current = knockKey;
+  }, [knockKey]);
 
   useEffect(() => {
     const init = async () => {
@@ -82,39 +133,56 @@ const RoomController = () => {
         setRoomHash(hash);
         setCryptoKey(await deriveMessageKey(roomSecret));
         setMessages(await loadMessages(hash));
-        upsertRoom(hash, roomSecret);
         const savedHandle = getHandle(hash);
-        if (savedHandle) {
-          setHandleState(savedHandle);
-        }
+        setHandleState(savedHandle ?? '');
 
         const existingToken = getToken(hash);
         if (existingToken) {
-          setTokenState(existingToken);
-          setTokenHash(await sha256Hex(existingToken));
-          setRoomState('PARTICIPANT');
-          return;
+          const presenceResponse = await fetch(`/api/rooms/${hash}/presence`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Chat-Token': existingToken
+            }
+          });
+
+          if (presenceResponse.status === 404) {
+            await wipeLocalRoom(hash);
+            setRoomState('DESTROYED');
+            return;
+          }
+
+          if (presenceResponse.ok) {
+            upsertRoom(hash, roomSecret, savedHandle ?? null);
+            setTokenState(existingToken);
+            setTokenHash(await sha256Hex(existingToken));
+            setRoomState('PARTICIPANT');
+            return;
+          }
+
+          if (presenceResponse.status === 401 || presenceResponse.status === 403) {
+            clearToken(hash);
+            setTokenState(null);
+            setTokenHash(null);
+          } else {
+            throw new Error(`Server responded ${presenceResponse.status}`);
+          }
         }
 
-        const response = await fetch('/api/rooms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ room_hash: hash })
-        });
+        const response = await fetch(`/api/rooms/${hash}`);
+
+        if (response.status === 404) {
+          await wipeLocalRoom(hash);
+          setRoomState('DESTROYED');
+          return;
+        }
 
         if (!response.ok) {
           throw new Error(`Server responded ${response.status}`);
         }
 
-        const data = (await response.json()) as RoomCheckResponse;
-
-        if (data.status === 'created' && data.participant_token) {
-          setToken(hash, data.participant_token);
-          setTokenState(data.participant_token);
-          setTokenHash(await sha256Hex(data.participant_token));
-          setRoomState('PARTICIPANT');
-          return;
-        }
+        const data = (await response.json()) as RoomLookupResponse;
+        upsertRoom(hash, roomSecret, savedHandle ?? null);
 
         if (data.has_participants) {
           setRoomState('LOBBY_WAITING');
@@ -129,7 +197,7 @@ const RoomController = () => {
     if (roomSecret) {
       void init();
     }
-  }, [roomSecret]);
+  }, [roomSecret, wipeLocalRoom]);
 
   useEffect(() => {
     if (roomState === 'PARTICIPANT') {
@@ -170,11 +238,29 @@ const RoomController = () => {
         }
 
         if (payload.type === 'knock' && roomState === 'PARTICIPANT') {
-          const knockId = `${payload.ts}-${Math.random().toString(36).slice(2)}`;
-          setKnocks((prev) => [
-            { id: knockId, ts: payload.ts, message: (payload.body?.message as string | null) ?? null },
-            ...prev
-          ]);
+          const activeKnockKey = knockKeyRef.current;
+          if (!activeKnockKey) {
+            return;
+          }
+          const rawPayload = payload.body?.encrypted_payload;
+          const msgId = (payload.body?.msg_id as string | null) ?? '';
+          if (!rawPayload || !msgId) {
+            return;
+          }
+          const parsed: EncryptedPayload =
+            typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
+          const plaintext = await decryptText(activeKnockKey, roomHash, 'knock', msgId, parsed);
+          const knockMessage = plaintext.trim();
+          if (!knockMessage) {
+            return;
+          }
+          const knockId = `${payload.ts}-${msgId}`;
+          setKnocks((prev) => {
+            if (prev.find((item) => item.id === knockId)) {
+              return prev;
+            }
+            return [{ id: knockId, ts: payload.ts, message: knockMessage }, ...prev];
+          });
         }
 
         if (payload.type === 'approve' && payload.body?.new_participant_token) {
@@ -192,7 +278,7 @@ const RoomController = () => {
         }
 
         if (payload.type === 'destroy') {
-          clearToken(roomHash);
+          await wipeLocalRoom(roomHash);
           setRoomState('DESTROYED');
         }
 
@@ -259,7 +345,7 @@ const RoomController = () => {
       eventTypes.forEach((type) => source.removeEventListener(type, handleEvent));
       source.close();
     };
-  }, [roomHash, roomState, cryptoKey, token, tokenHash]);
+  }, [roomHash, roomState, cryptoKey, token, tokenHash, wipeLocalRoom]);
 
   useEffect(() => {
     if (roomState !== 'PARTICIPANT' || !token || !roomHash) {
@@ -272,13 +358,23 @@ const RoomController = () => {
       if (!active) {
         return;
       }
-      await fetch(`/api/rooms/${roomHash}/presence`, {
+      const response = await fetch(`/api/rooms/${roomHash}/presence`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Chat-Token': token
         }
       });
+
+      if (!active) {
+        return;
+      }
+
+      if (response.status === 404) {
+        active = false;
+        await wipeLocalRoom(roomHash);
+        setRoomState('DESTROYED');
+      }
     };
 
     void ping();
@@ -287,23 +383,43 @@ const RoomController = () => {
       active = false;
       window.clearInterval(interval);
     };
-  }, [roomState, token, roomHash]);
+  }, [roomState, token, roomHash, wipeLocalRoom]);
 
   const sendKnock = useCallback(async () => {
     if (!roomHash) {
       return;
     }
-    const response = await fetch(`/api/rooms/${roomHash}/knock`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
-    });
-
-    if (response.ok) {
-      setKnockSent(true);
-      setKnockNotice('Waiting for approval…');
+    if (!knockKey || !knockPassword.trim()) {
+      setKnockSent(false);
+      setKnockNotice('Enter the shared passphrase first.');
+      return;
     }
-  }, [roomHash, message]);
+
+    const msgId = base64UrlEncode(randomBytes(12));
+    const knockMessage = message.trim() || 'Knock';
+    try {
+      const encrypted = await encryptText(knockKey, roomHash, 'knock', msgId, knockMessage);
+      const response = await fetch(`/api/rooms/${roomHash}/knock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          msg_id: msgId,
+          encrypted_payload: JSON.stringify(encrypted)
+        })
+      });
+
+      if (response.ok) {
+        setKnockSent(true);
+        setKnockNotice('Waiting for approval…');
+      } else {
+        setKnockSent(false);
+        setKnockNotice('Unable to send join request.');
+      }
+    } catch {
+      setKnockSent(false);
+      setKnockNotice('Unable to send join request.');
+    }
+  }, [roomHash, message, knockKey, knockPassword]);
 
   const approveKnock = useCallback(
     async (knockId: string) => {
@@ -429,17 +545,18 @@ const RoomController = () => {
     if (!roomHash || !token) {
       return;
     }
-    await fetch(`/api/rooms/${roomHash}/disband`, {
+    const response = await fetch(`/api/rooms/${roomHash}/disband`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Chat-Token': token
       }
     });
-    clearToken(roomHash);
-    removeRoom(roomHash);
-    setRoomState('DESTROYED');
-  }, [roomHash, token]);
+    if (response.ok || response.status === 404) {
+      await wipeLocalRoom(roomHash);
+      setRoomState('DESTROYED');
+    }
+  }, [roomHash, token, wipeLocalRoom]);
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(shareUrl);
@@ -519,9 +636,22 @@ const RoomController = () => {
             </button>
           </div>
 
-          {knocks.length > 0 && (
-            <div className="border-b border-[#1716132e] px-5 py-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[#3a362f]">Join requests</h2>
+          <div className="border-b border-[#1716132e] px-5 py-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[#3a362f]">Join requests</h2>
+            <input
+              className="mt-3 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
+              placeholder="Shared passphrase"
+              type="password"
+              value={knockPassword}
+              onChange={(event) => setKnockPassword(event.target.value)}
+            />
+            <p className="mt-2 text-xs text-[#3a362f]">Only knocks decrypted with this passphrase are shown.</p>
+
+            {knocks.length === 0 && (
+              <p className="mt-3 text-sm text-[#3a362f]">No valid join requests yet.</p>
+            )}
+
+            {knocks.length > 0 && (
               <div className="mt-3 flex flex-col gap-3">
                 {knocks.map((knock) => (
                   <div key={knock.id} className="rounded-xl border border-[#1716132e] bg-white/80 p-4 text-sm">
@@ -545,8 +675,8 @@ const RoomController = () => {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex flex-1 flex-col px-5 py-4 min-h-0">
             <p className="mb-3 text-xs text-[#3a362f]">
@@ -762,8 +892,19 @@ const RoomController = () => {
             <h1 className="text-3xl font-semibold">Join room</h1>
             <p className="mt-3 text-[#3a362f]">Ask to be let in. Someone inside has to approve you.</p>
 
-            <textarea
+            <input
               className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
+              placeholder="Shared passphrase"
+              type="password"
+              value={knockPassword}
+              onChange={(event) => setKnockPassword(event.target.value)}
+            />
+            <p className="mt-2 text-xs text-[#3a362f]">
+              The passphrase never leaves your device. It is only used to encrypt your knock.
+            </p>
+
+            <textarea
+              className="mt-4 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
               placeholder="Optional message"
               rows={3}
               value={message}
@@ -815,8 +956,8 @@ const RoomController = () => {
 
         {roomState === 'DESTROYED' && (
           <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
-            <h1 className="text-3xl font-semibold">Room disbanded</h1>
-            <p className="mt-3 text-[#3a362f]">Everyone was disconnected. This cannot be undone.</p>
+            <h1 className="text-3xl font-semibold">Room unavailable</h1>
+            <p className="mt-3 text-[#3a362f]">This room was disbanded or no longer exists.</p>
           </div>
         )}
       </div>

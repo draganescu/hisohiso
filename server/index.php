@@ -116,15 +116,30 @@ if ($path === '/api/rooms' && $method === 'POST') {
     ]);
 }
 
+if (preg_match('#^/api/rooms/([^/]+)$#', $path, $matches) && $method === 'GET') {
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    $count = participant_count($room_hash);
+    json_response([
+        'status' => 'exists',
+        'has_participants' => $count > 0,
+    ]);
+}
+
 if (preg_match('#^/api/rooms/([^/]+)/knock$#', $path, $matches) && $method === 'POST') {
     $room_hash = $matches[1];
     if (!room_exists($room_hash)) {
         json_response(['error' => 'room_not_found'], 404);
     }
     $body = read_json_body();
+    if (!isset($body['msg_id']) || !isset($body['encrypted_payload'])) {
+        json_response(['error' => 'missing_knock_payload'], 400);
+    }
     publish_event($room_hash, 'knock', [
-        'public_key_temp' => $body['public_key_temp'] ?? null,
-        'message' => $body['message'] ?? null,
+        'msg_id' => $body['msg_id'],
+        'encrypted_payload' => $body['encrypted_payload'],
     ]);
     touch_room($room_hash);
     json_response(['status' => 'ok']);
