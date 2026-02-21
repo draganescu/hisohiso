@@ -26,6 +26,20 @@ export const clearHandle = (roomHash: string): void => {
   localStorage.removeItem(handleKey(roomHash));
 };
 
+const roomPasswordKey = (roomHash: string): string => `cfa.room_password.${roomHash}`;
+
+export const getRoomPassword = (roomHash: string): string | null => {
+  return localStorage.getItem(roomPasswordKey(roomHash));
+};
+
+export const setRoomPassword = (roomHash: string, password: string): void => {
+  localStorage.setItem(roomPasswordKey(roomHash), password);
+};
+
+export const clearRoomPassword = (roomHash: string): void => {
+  localStorage.removeItem(roomPasswordKey(roomHash));
+};
+
 export type StoredRoom = {
   roomHash: string;
   roomSecret: string;

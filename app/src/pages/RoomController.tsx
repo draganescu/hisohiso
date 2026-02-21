@@ -13,10 +13,13 @@ import {
 } from '../lib/crypto';
 import {
   clearHandle,
+  clearRoomPassword,
   clearToken,
   getHandle,
+  getRoomPassword,
   getToken,
   setHandle,
+  setRoomPassword,
   setToken,
   upsertRoom,
   removeRoom,
@@ -57,7 +60,7 @@ const RoomController = () => {
   const [knockSent, setKnockSent] = useState(false);
   const [knockNotice, setKnockNotice] = useState<string>('');
   const [knocks, setKnocks] = useState<KnockRequest[]>([]);
-  const [knockPassword, setKnockPassword] = useState('');
+  const [roomPassword, setRoomPasswordState] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -82,6 +85,7 @@ const RoomController = () => {
   const wipeLocalRoom = useCallback(async (hash: string) => {
     clearToken(hash);
     clearHandle(hash);
+    clearRoomPassword(hash);
     removeRoom(hash);
     await clearRoomMessages(hash);
     setTokenState(null);
@@ -90,20 +94,31 @@ const RoomController = () => {
     setMessages([]);
     setMessage('');
     setChatInput('');
-    setKnockPassword('');
+    setRoomPasswordState('');
+    setCryptoKey(null);
+    setKnockKey(null);
   }, []);
+
+  const updateRoomPassword = useCallback(
+    (nextPassword: string) => {
+      setRoomPasswordState(nextPassword);
+      if (roomHash) {
+        setRoomPassword(roomHash, nextPassword);
+      }
+    },
+    [roomHash]
+  );
 
   useEffect(() => {
     let active = true;
-    const nextPassword = knockPassword.trim();
-    if (!roomSecret || !nextPassword) {
+    if (!roomSecret) {
       setKnockKey(null);
       return () => {
         active = false;
       };
     }
 
-    void deriveKnockKey(roomSecret, nextPassword)
+    void deriveKnockKey(roomSecret, roomPassword)
       .then((key) => {
         if (!active) {
           return;
@@ -120,7 +135,35 @@ const RoomController = () => {
     return () => {
       active = false;
     };
-  }, [roomSecret, knockPassword]);
+  }, [roomSecret, roomPassword]);
+
+  useEffect(() => {
+    let active = true;
+    if (!roomSecret) {
+      setCryptoKey(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    void deriveMessageKey(roomSecret, roomPassword)
+      .then((key) => {
+        if (!active) {
+          return;
+        }
+        setCryptoKey(key);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setCryptoKey(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [roomSecret, roomPassword]);
 
   useEffect(() => {
     knockKeyRef.current = knockKey;
@@ -131,10 +174,11 @@ const RoomController = () => {
       try {
         const hash = await deriveRoomHash(roomSecret);
         setRoomHash(hash);
-        setCryptoKey(await deriveMessageKey(roomSecret));
         setMessages(await loadMessages(hash));
         const savedHandle = getHandle(hash);
+        const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
+        setRoomPasswordState(savedRoomPassword ?? '');
 
         const existingToken = getToken(hash);
         if (existingToken) {
@@ -389,9 +433,9 @@ const RoomController = () => {
     if (!roomHash) {
       return;
     }
-    if (!knockKey || !knockPassword.trim()) {
+    if (!knockKey) {
       setKnockSent(false);
-      setKnockNotice('Enter the shared passphrase first.');
+      setKnockNotice('Preparing encryption key…');
       return;
     }
 
@@ -419,7 +463,7 @@ const RoomController = () => {
       setKnockSent(false);
       setKnockNotice('Unable to send join request.');
     }
-  }, [roomHash, message, knockKey, knockPassword]);
+  }, [roomHash, message, knockKey]);
 
   const approveKnock = useCallback(
     async (knockId: string) => {
@@ -640,12 +684,14 @@ const RoomController = () => {
             <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[#3a362f]">Join requests</h2>
             <input
               className="mt-3 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
-              placeholder="Shared passphrase"
+              placeholder="Room password (optional)"
               type="password"
-              value={knockPassword}
-              onChange={(event) => setKnockPassword(event.target.value)}
+              value={roomPassword}
+              onChange={(event) => updateRoomPassword(event.target.value)}
             />
-            <p className="mt-2 text-xs text-[#3a362f]">Only knocks decrypted with this passphrase are shown.</p>
+            <p className="mt-2 text-xs text-[#3a362f]">
+              Saved on this device. Used to encrypt both knocks and chat messages.
+            </p>
 
             {knocks.length === 0 && (
               <p className="mt-3 text-sm text-[#3a362f]">No valid join requests yet.</p>
@@ -894,13 +940,13 @@ const RoomController = () => {
 
             <input
               className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
-              placeholder="Shared passphrase"
+              placeholder="Room password (optional)"
               type="password"
-              value={knockPassword}
-              onChange={(event) => setKnockPassword(event.target.value)}
+              value={roomPassword}
+              onChange={(event) => updateRoomPassword(event.target.value)}
             />
             <p className="mt-2 text-xs text-[#3a362f]">
-              The passphrase never leaves your device. It is only used to encrypt your knock.
+              Saved on this device. Used to encrypt your knock and chat messages.
             </p>
 
             <textarea

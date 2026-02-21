@@ -45,21 +45,16 @@ export const deriveRoomHash = async (roomSecret: string): Promise<string> => {
   return bufferToHex(digest);
 };
 
-export const deriveMessageKey = async (roomSecret: string): Promise<CryptoKey> => {
+export const deriveMessageKey = async (roomSecret: string, password: string): Promise<CryptoKey> => {
+  const prefix = encoder.encode('cfa.k_msg');
   const secretBytes = base64UrlDecode(roomSecret);
-  const keyMaterial = await crypto.subtle.importKey('raw', secretBytes, 'HKDF', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {
-      name: 'HKDF',
-      hash: 'SHA-256',
-      salt: new Uint8Array(),
-      info: encoder.encode('cfa.k_msg')
-    },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
+  const passwordBytes = encoder.encode(password);
+  const combined = new Uint8Array(prefix.length + secretBytes.length + passwordBytes.length);
+  combined.set(prefix, 0);
+  combined.set(secretBytes, prefix.length);
+  combined.set(passwordBytes, prefix.length + secretBytes.length);
+  const digest = await crypto.subtle.digest('SHA-256', combined);
+  return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 };
 
 export const deriveKnockKey = async (roomSecret: string, password: string): Promise<CryptoKey> => {
