@@ -35,3 +35,7 @@
 		file_server
 	}
 }
+
+www.hisohiso.org {
+	redir https://hisohiso.org{uri} 308
+}
