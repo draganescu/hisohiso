@@ -56,7 +56,7 @@ const RoomsPage = () => {
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
               className="flex-1 rounded-full border border-[#17161333] bg-white/80 px-4 py-2 text-sm"
-              placeholder="https://chatty.andreidraganescu.info/ROOM_SECRET"
+              placeholder="https://hisohiso.org/ROOM_SECRET"
               value={joinValue}
               onChange={(event) => setJoinValue(event.target.value)}
             />

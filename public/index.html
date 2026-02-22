@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chat for All</title>
-    <meta name="description" content="A minimal, URL-capability, encrypted chat system. No accounts. No tracking." />
+    <title>Hisohiso</title>
+    <meta name="description" content="Hisohiso: a minimal, URL-capability, encrypted chat system. No accounts. No tracking." />
     <link rel="manifest" href="/manifest.json" />
     <style>
       :root {
@@ -28,7 +28,7 @@
   <body>
     <main class="page">
       <section id="hero" class="section hero">
-        <p class="eyebrow">Chat for All</p>
+        <p class="eyebrow">Hisohiso</p>
         <h1>Fuck your bubble color.</h1>
         <p class="lead">Just chat. No accounts. No tracking. No feeds. No blue vs green.</p>
         <div class="hero-actions">
@@ -74,6 +74,19 @@
         <p>
           The protocol is simple. Run your own server. Add features if you want. Charge for them if you want.
           Or just use it.
+        </p>
+      </section>
+
+      <section id="selfhost" class="section">
+        <h2>Repo + easy deploy</h2>
+        <p>
+          The code lives in the <a href="https://github.com/draganescu/hisohiso">hisohiso</a> repo. It ships with
+          Docker Compose, FrankenPHP/Caddy, and Mercure wiring, so most people can self-host it by setting a few
+          environment variables and running one compose command.
+        </p>
+        <p style="margin-top: 12px;">
+          If your server can run Docker and expose HTTP/HTTPS (VPS, homelab box, or container host), you can deploy it.
+          Clone, configure, run, and share a room link.
         </p>
       </section>
 

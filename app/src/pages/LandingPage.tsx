@@ -3,7 +3,7 @@ const LandingPage = () => {
     <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
       <div className="mx-auto flex max-w-4xl flex-col gap-12 px-6 py-16">
         <section className="rounded-2xl border-2 border-[#171613] bg-gradient-to-br from-[#f6efdf] via-[#efe0c7] to-[#e5cda8] p-10 shadow-[0_20px_40px_rgba(23,22,19,0.12)]">
-          <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Chat for All</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Hisohiso</p>
           <h1 className="mt-4 text-4xl font-semibold leading-tight md:text-5xl">
             Fuck your bubble color.
           </h1>
@@ -55,6 +55,22 @@ const LandingPage = () => {
           <p className="mt-3 text-[#3a362f]">
             The protocol is simple. Run your own server. Add features if you want. Charge for them if you want. Or
             just use it.
+          </p>
+        </section>
+
+        <section className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_14px_30px_rgba(23,22,19,0.1)]">
+          <h2 className="text-2xl font-semibold">Repo + easy deploy</h2>
+          <p className="mt-3 text-[#3a362f]">
+            The code lives in the{' '}
+            <a className="underline" href="https://github.com/draganescu/hisohiso">
+              hisohiso
+            </a>{' '}
+            repo. It ships with Docker Compose, FrankenPHP/Caddy, and Mercure wiring, so most people can self-host it
+            by setting a few environment variables and running one compose command.
+          </p>
+          <p className="mt-3 text-[#3a362f]">
+            If your server can run Docker and expose HTTP/HTTPS (VPS, homelab box, or container host), you can deploy
+            it. Clone, configure, run, and share a room link.
           </p>
         </section>
 
