@@ -58,6 +58,13 @@ p {
   line-height: 1.7;
 }
 
+code {
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.95em;
+  background: rgba(23, 22, 19, 0.06);
+  padding: 0.1em 0.35em;
+}
+
 .lead {
   font-size: 1.25rem;
   color: var(--ink);
@@ -112,6 +119,22 @@ p {
   font-size: 0.95rem;
   color: var(--ink-soft);
   padding-bottom: 20px;
+}
+
+.deploy-steps {
+  margin: 16px 0 0;
+  padding-left: 1.2rem;
+  color: var(--ink);
+  display: grid;
+  gap: 8px;
+}
+
+.deploy-steps li {
+  line-height: 1.5;
+}
+
+.selfhost-note {
+  margin-top: 14px;
 }
 
 @media (max-width: 640px) {

@@ -81,13 +81,24 @@
         <h2>Repo + easy deploy</h2>
         <p>
           The code lives in the <a href="https://github.com/draganescu/hisohiso">hisohiso</a> repo. It ships with
-          Docker Compose, FrankenPHP/Caddy, and Mercure wiring, so most people can self-host it by setting a few
-          environment variables and running one compose command.
+          Docker Compose, FrankenPHP/Caddy, and Mercure wiring, so most people can self-host it on a VPS without
+          building custom infra.
         </p>
-        <p style="margin-top: 12px;">
-          If your server can run Docker and expose HTTP/HTTPS (VPS, homelab box, or container host), you can deploy it.
-          Clone, configure, run, and share a room link.
+        <ol class="deploy-steps">
+          <li>Point your domain to the server and expose ports 80/443.</li>
+          <li>Run <code>./deploy.sh</code> from your laptop to bootstrap a Docker-based droplet (or do it manually).</li>
+          <li>The server gets a generated <code>.env</code> with <code>SERVER_NAME</code> and Mercure keys.</li>
+          <li>Later updates run <code>./scripts/deploy.sh</code> (or the production compose command) on the server.</li>
+          <li>Optional: connect GitHub Actions so pushes to <code>main</code>/<code>staging</code> redeploy automatically.</li>
+        </ol>
+        <p class="selfhost-note">
+          If your host can run Docker and terminate TLS on 80/443, it can run Hisohiso. The deploy guide in the repo
+          includes the GitHub Actions secret names used by the built-in DigitalOcean-style SSH deploy workflow.
         </p>
+        <div class="hero-actions">
+          <a class="cta" href="https://github.com/draganescu/hisohiso#easy-vps-deploy-github-actions-digitalocean-ready">Deploy guide</a>
+          <a class="link" href="https://github.com/draganescu/hisohiso">GitHub repo</a>
+        </div>
       </section>
 
       <footer class="footer">
