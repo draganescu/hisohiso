@@ -119,6 +119,12 @@ If you are starting from a fresh Ubuntu/Debian droplet, run:
 ./deploy.sh
 ```
 
+Non-interactive example (useful for copy/paste docs or scripting):
+
+```bash
+./deploy.sh --host 203.0.113.10 --domain hisohiso.org --yes
+```
+
 This helper:
 
 - SSHes to the droplet
