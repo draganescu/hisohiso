@@ -51,6 +51,33 @@ type KnockRequest = {
   message?: string | null;
 };
 
+const formatMailStamp = (timestamp: number): string => {
+  return new Date(timestamp * 1000).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+};
+
+const getMessagePreview = (content: string): string => {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return 'Empty message';
+  }
+  return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
+};
+
+const getMessageLabel = (message: ChatMessage): string => {
+  if (message.type === 'system') {
+    return 'System';
+  }
+  if (message.direction === 'out') {
+    return message.handle ? `${message.handle} (You)` : 'You';
+  }
+  return message.handle || 'Room member';
+};
+
 const RoomController = () => {
   const { roomSecret = '' } = useParams();
   const [roomHash, setRoomHash] = useState<string>('');
@@ -67,6 +94,11 @@ const RoomController = () => {
   const [showQr, setShowQr] = useState(false);
   const [showDisband, setShowDisband] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
+  const [showComposer, setShowComposer] = useState(false);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [headerCondensed, setHeaderCondensed] = useState(false);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
@@ -81,6 +113,9 @@ const RoomController = () => {
   const knockKeyRef = useRef<CryptoKey | null>(null);
 
   const shareUrl = useMemo(() => `${window.location.origin}/${roomSecret}`, [roomSecret]);
+  const visibleMessages = useMemo(() => [...messages].sort((a, b) => b.timestamp - a.timestamp), [messages]);
+  const activeMessage = useMemo(() => messages.find((entry) => entry.id === selectedId) ?? null, [messages, selectedId]);
+  const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
 
   const wipeLocalRoom = useCallback(async (hash: string) => {
     clearToken(hash);
@@ -94,6 +129,9 @@ const RoomController = () => {
     setMessages([]);
     setMessage('');
     setChatInput('');
+    setShowComposer(false);
+    setReplyToId(null);
+    setSelectedId(null);
     setRoomPasswordState('');
     setCryptoKey(null);
     setKnockKey(null);
@@ -108,6 +146,10 @@ const RoomController = () => {
     },
     [roomHash]
   );
+
+  const persistMessage = useCallback((record: ChatMessage) => {
+    void saveMessage(record).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -361,7 +403,7 @@ const RoomController = () => {
             from: payload.from ?? null,
             handle: messageHandle
           };
-          await saveMessage(messageRecord);
+          persistMessage(messageRecord);
           setMessages((prev) => {
             if (prev.find((item) => item.id === msgId)) {
               return prev;
@@ -389,7 +431,7 @@ const RoomController = () => {
       eventTypes.forEach((type) => source.removeEventListener(type, handleEvent));
       source.close();
     };
-  }, [roomHash, roomState, cryptoKey, token, tokenHash, wipeLocalRoom]);
+  }, [roomHash, roomState, cryptoKey, token, tokenHash, wipeLocalRoom, persistMessage]);
 
   useEffect(() => {
     if (roomState !== 'PARTICIPANT' || !token || !roomHash) {
@@ -513,10 +555,10 @@ const RoomController = () => {
         type: 'system',
         direction: 'in'
       };
-      await saveMessage(record);
+      persistMessage(record);
       setMessages((prev) => [...prev, record].sort((a, b) => a.timestamp - b.timestamp));
     },
-    [roomHash]
+    [roomHash, persistMessage]
   );
 
   const sendMessage = useCallback(async () => {
@@ -543,6 +585,8 @@ const RoomController = () => {
       updateRoomHandle(roomHash, nextHandle);
       await addSystemMessage(`Handle set to ${nextHandle}.`);
       setChatInput('');
+      setShowComposer(false);
+      setReplyToId(null);
       return;
     }
 
@@ -574,7 +618,7 @@ const RoomController = () => {
         from: tokenHash,
         handle: handle || null
       };
-      await saveMessage(messageRecord);
+      persistMessage(messageRecord);
       setMessages((prev) => {
         if (prev.find((item) => item.id === msgId)) {
           return prev;
@@ -582,8 +626,11 @@ const RoomController = () => {
         return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
       });
       setChatInput('');
+      setShowComposer(false);
+      setReplyToId(null);
+      setSelectedId(null);
     }
-  }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret]);
+  }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret, persistMessage]);
 
   const disbandRoom = useCallback(async () => {
     if (!roomHash || !token) {
@@ -617,12 +664,23 @@ const RoomController = () => {
     setSelectedId(null);
   }, []);
 
-  const scrollToBottom = useCallback(() => {
+  const openComposer = useCallback((messageId?: string) => {
+    setReplyToId(messageId ?? null);
+    setSelectedId(null);
+    setShowComposer(true);
+  }, []);
+
+  const closeComposer = useCallback(() => {
+    setShowComposer(false);
+    setReplyToId(null);
+  }, []);
+
+  const scrollToLatest = useCallback(() => {
     const el = listRef.current;
     if (!el) {
       return;
     }
-    el.scrollTop = el.scrollHeight;
+    el.scrollTop = 0;
   }, []);
 
   const handleScroll = useCallback(() => {
@@ -630,9 +688,10 @@ const RoomController = () => {
     if (!el) {
       return;
     }
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
-    setAutoScroll(atBottom);
-    if (atBottom) {
+    const atTop = el.scrollTop <= 40;
+    setAutoScroll(atTop);
+    setHeaderCondensed(el.scrollTop > 32);
+    if (atTop) {
       setUnreadCount(0);
     }
   }, []);
@@ -644,9 +703,9 @@ const RoomController = () => {
     }
     prevCountRef.current = messages.length;
     if (autoScroll) {
-      requestAnimationFrame(scrollToBottom);
+      requestAnimationFrame(scrollToLatest);
     }
-  }, [messages, autoScroll, scrollToBottom]);
+  }, [messages, autoScroll, scrollToLatest]);
 
   if (error) {
     return (
@@ -662,174 +721,434 @@ const RoomController = () => {
 
   if (roomState === 'PARTICIPANT') {
     return (
-      <main className="app-shell text-[#171613]">
-        <div className="mx-auto flex h-full w-full max-w-3xl flex-col">
-          <div className="flex items-center justify-between border-b border-[#1716132e] bg-[#f7f2e6] px-5 py-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Chat for All</p>
-              <p className="text-sm text-[#3a362f]">
-                {connection === 'connected' ? 'Live' : connection === 'error' ? 'Reconnecting…' : 'Connecting…'}
-              </p>
-            </div>
-            <button
-              className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold"
-              onClick={() => setShowMenu(true)}
-              type="button"
-            >
-              Menu
-            </button>
-          </div>
-
-          <div className="border-b border-[#1716132e] px-5 py-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[#3a362f]">Join requests</h2>
-            <input
-              className="mt-3 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
-              placeholder="Room password (optional)"
-              type="password"
-              value={roomPassword}
-              onChange={(event) => updateRoomPassword(event.target.value)}
-            />
-            <p className="mt-2 text-xs text-[#3a362f]">
-              Saved on this device. Used to encrypt both knocks and chat messages.
-            </p>
-
-            {knocks.length === 0 && (
-              <p className="mt-3 text-sm text-[#3a362f]">No valid join requests yet.</p>
-            )}
-
-            {knocks.length > 0 && (
-              <div className="mt-3 flex flex-col gap-3">
-                {knocks.map((knock) => (
-                  <div key={knock.id} className="rounded-xl border border-[#1716132e] bg-white/80 p-4 text-sm">
-                    <p className="text-[#3a362f]">{knock.message ? `"${knock.message}"` : 'No message provided.'}</p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-1 text-xs font-semibold text-[#f6f0e8]"
-                        onClick={() => approveKnock(knock.id)}
-                        type="button"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="rounded-full border-2 border-[#171613] px-4 py-1 text-xs font-semibold"
-                        onClick={() => rejectKnock(knock.id)}
-                        type="button"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-1 flex-col px-5 py-4 min-h-0">
-            <p className="mb-3 text-xs text-[#3a362f]">
-              {handle ? `You are ${handle}.` : 'Set a handle with /iam name.'}
-            </p>
+      <main className="app-shell relative text-[#171613] md:px-4 md:py-4 lg:px-6">
+        <div className="relative mx-auto flex h-full w-full max-w-[1320px] flex-col overflow-hidden bg-[#f4efe4] md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_90px_rgba(23,22,19,0.16)]">
+          <div className="relative">
             <div
-              ref={listRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto pr-2 chat-scroll min-h-0"
+              className={`overflow-hidden px-4 transition-[max-height,padding,opacity,border-color,background-color] duration-300 ease-out sm:px-6 lg:px-8 ${
+                headerCondensed
+                  ? 'max-h-0 border-b border-transparent bg-transparent py-0 opacity-0'
+                  : 'max-h-48 border-b border-[#1716131f] bg-gradient-to-b from-[#f9f6ee] to-[#ebe4d7] py-4 opacity-100 sm:py-5'
+              }`}
             >
-              <div className="flex flex-col gap-3">
-                {messages.length === 0 && <p className="text-sm text-[#3a362f]">No messages yet.</p>}
-                {messages.map((msg) => {
-                  const isSelected = selectedId === msg.id;
+              <div
+                className={`min-w-0 max-w-3xl pr-36 transition-[transform,opacity] duration-300 ease-out sm:pr-40 ${
+                  headerCondensed ? '-translate-y-4 opacity-0' : 'translate-y-0 opacity-100'
+                }`}
+              >
+                <p className="text-[11px] uppercase tracking-[0.35em] text-[#6a6358]">Hisohiso Mail</p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Inbox</h1>
+                <p className="mt-1 text-sm text-[#5a5349] sm:text-base">
+                  {connection === 'connected' ? 'Live room' : connection === 'error' ? 'Reconnecting…' : 'Connecting…'}
+                </p>
+                <div className="mt-2 overflow-hidden">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#8c7f6a]">
+                    {handle ? `Signed as ${handle}` : 'Set sender with /iam name'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`absolute right-4 z-20 flex flex-wrap items-center justify-end gap-2 transition-[top,transform] duration-300 ease-out sm:right-6 sm:gap-3 lg:right-8 ${
+                headerCondensed ? 'top-2.5 sm:top-3' : 'top-4 sm:top-5'
+              }`}
+            >
+              <button
+                aria-label={knocks.length === 0 ? 'Open join queue' : `Open join queue, ${knocks.length} waiting`}
+                className={`relative inline-flex items-center justify-center rounded-full border border-[#17161326] bg-white/85 text-[#332f2a] shadow-sm transition-all duration-300 hover:-translate-y-[1px] ${
+                  headerCondensed ? 'h-10 w-10' : 'h-12 w-12'
+                }`}
+                onClick={() => setShowQueue(true)}
+                type="button"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                  <path d="M10 17a2 2 0 0 0 4 0" />
+                </svg>
+                {knocks.length > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#d9592f] px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
+                    {knocks.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                aria-label="Open help"
+                className={`inline-flex items-center justify-center rounded-full border border-[#17161326] bg-white/85 text-[#332f2a] shadow-sm transition-all duration-300 hover:-translate-y-[1px] ${
+                  headerCondensed ? 'h-10 w-10' : 'h-12 w-12'
+                }`}
+                onClick={() => setShowHelp(true)}
+                type="button"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M9.6 9.2a2.6 2.6 0 1 1 4.1 2.1c-.9.6-1.7 1.1-1.7 2.2" />
+                  <path d="M12 17h.01" />
+                </svg>
+              </button>
+
+              <button
+                className={`rounded-full border border-[#17161326] bg-white/80 font-semibold text-[#332f2a] shadow-sm transition-all duration-300 ${
+                  headerCondensed ? 'px-4 py-2 text-xs sm:text-sm' : 'px-4 py-2 text-xs sm:px-5 sm:text-sm'
+                }`}
+                onClick={() => setShowMenu(true)}
+                type="button"
+              >
+                Menu
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={listRef}
+            onScroll={handleScroll}
+            className={`flex-1 overflow-y-auto px-4 pb-32 transition-[padding] duration-300 ease-out chat-scroll sm:px-6 lg:px-8 lg:pb-36 ${
+              headerCondensed ? 'pt-16 sm:pt-[4.5rem] lg:pt-20' : 'pt-5 sm:pt-6 lg:pt-7'
+            }`}
+          >
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8d816c]">Messages</h2>
+                <span className="text-xs text-[#7a7266]">{visibleMessages.length} card{visibleMessages.length === 1 ? '' : 's'}</span>
+              </div>
+
+              {visibleMessages.length === 0 && (
+                <div className="rounded-[30px] border border-dashed border-[#cdbfa8] bg-[#faf5eb] px-5 py-10 text-center shadow-[0_14px_30px_rgba(23,22,19,0.04)] sm:px-8 lg:px-10 lg:py-14">
+                  <p className="text-base font-semibold text-[#171613] sm:text-xl">Inbox empty</p>
+                  <p className="mt-2 text-sm leading-7 text-[#5d564d] sm:text-base">
+                    Start with a note. Incoming messages and your own sent mail will collect here as separate cards.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 lg:gap-4">
+                {visibleMessages.map((msg) => {
                   const isSystem = msg.type === 'system';
+                  const isMine = msg.direction === 'out' && !isSystem;
+
                   return (
-                    <div key={msg.id} className={`flex flex-col ${msg.direction === 'out' ? 'items-end' : 'items-start'}`}>
-                      <button
-                        type="button"
-                        className={`max-w-[80%] rounded-2xl border px-4 py-2 text-left text-sm ${
-                          isSystem
-                            ? 'border-[#1716132e] bg-[#fef6e8] text-[#3a362f]'
-                            : msg.direction === 'out'
-                            ? 'border-[#171613] bg-[#171613] text-[#f6f0e8]'
-                            : 'border-[#1716132e] bg-white/80 text-[#171613]'
-                        }`}
-                        onClick={() => setSelectedId(isSelected ? null : msg.id)}
-                      >
-                        {msg.handle && !isSystem && <span className="mr-2 font-semibold">{msg.handle}</span>}
-                        {msg.content}
-                      </button>
-                      {isSelected && (
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-[#3a362f]">
-                          <span>{new Date(msg.timestamp * 1000).toLocaleTimeString()}</span>
-                          <button type="button" className="underline" onClick={() => handleCopyMessage(msg.content)}>
-                            Copy
-                          </button>
-                          <button type="button" className="underline" onClick={() => handleDeleteMessage(msg.id)}>
-                            Delete
-                          </button>
+                    <button
+                      key={msg.id}
+                      type="button"
+                      onClick={() => setSelectedId(msg.id)}
+                      className={`w-full rounded-[30px] border p-5 text-left shadow-[0_18px_36px_rgba(23,22,19,0.08)] transition hover:-translate-y-[1px] sm:p-6 lg:max-w-[min(100%,58rem)] ${
+                        isSystem
+                          ? 'border-[#e0d2bc] bg-[#fff7ea] text-[#3f3529]'
+                          : isMine
+                          ? 'ml-3 border-[#16233c] bg-[#1b2a46] text-[#f8f4ec] sm:ml-8 lg:ml-auto'
+                          : 'mr-3 border-[#d5c8b2] bg-[#fdf9f2] text-[#171613] sm:mr-8'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className={`text-sm font-semibold ${isMine ? 'text-white' : 'text-[#171613]'}`}>{getMessageLabel(msg)}</p>
+                          <p className={`mt-1 text-[11px] uppercase tracking-[0.22em] ${isMine ? 'text-[#d2ddf5]' : 'text-[#8d816c]'}`}>
+                            {isSystem ? 'Room event' : isMine ? 'Sent from this device' : 'Incoming message'}
+                          </p>
                         </div>
-                      )}
-                    </div>
+                        <div
+                          className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                            isMine
+                              ? 'border-white/20 bg-white/10 text-white'
+                              : 'border-[#d7ccb8] bg-[#f4ede1] text-[#6a5e4e]'
+                          }`}
+                        >
+                          {isMine ? 'Mine' : isSystem ? 'Notice' : 'Room'}
+                        </div>
+                      </div>
+                      <p className={`mt-4 text-base leading-7 sm:text-lg ${isMine ? 'text-[#f8f4ec]' : 'text-[#2f2a24]'}`}>{getMessagePreview(msg.content)}</p>
+                      <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
+                    </button>
                   );
                 })}
               </div>
-            </div>
+            </section>
+          </div>
 
-            {!autoScroll && unreadCount > 0 && (
-              <button
-                className="mt-4 w-full rounded-full border-2 border-[#171613] bg-white/80 px-4 py-2 text-xs font-semibold"
-                onClick={() => {
-                  scrollToBottom();
-                  setAutoScroll(true);
-                  setUnreadCount(0);
-                }}
-                type="button"
-              >
-                {unreadCount} new message{unreadCount === 1 ? '' : 's'} · Jump to latest
-              </button>
-            )}
+          {!autoScroll && unreadCount > 0 && (
+            <button
+              className="absolute bottom-24 left-4 right-4 z-20 rounded-full border border-[#1716131f] bg-[#fffaf1] px-4 py-2 text-xs font-semibold text-[#171613] shadow-[0_12px_24px_rgba(23,22,19,0.12)] sm:left-auto sm:right-6 sm:w-auto"
+              onClick={() => {
+                scrollToLatest();
+                setAutoScroll(true);
+                setUnreadCount(0);
+              }}
+              type="button"
+            >
+              {unreadCount} new message{unreadCount === 1 ? '' : 's'} · Jump to latest
+            </button>
+          )}
+        </div>
 
-            <div className="mt-4 border-t border-[#1716132e] pt-4 chat-input">
-              <div className="flex items-end gap-3">
-                <textarea
-                  className="flex-1 resize-none rounded-2xl border border-[#17161333] bg-white/80 px-4 py-3 text-base"
-                  placeholder="Type a message"
-                  rows={2}
-                  value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  onFocus={() => {
-                    setAutoScroll(true);
-                    requestAnimationFrame(scrollToBottom);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      void sendMessage();
-                    }
-                  }}
-                />
-                <button
-                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#171613] bg-[#171613] text-[#f6f0e8]"
-                  onClick={sendMessage}
-                  type="button"
-                  aria-label="Send message"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="18"
-                    height="18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M22 2L11 13" />
-                    <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-                  </svg>
+        <button
+          className="fixed bottom-4 left-4 right-4 z-30 rounded-full border border-[#171613] bg-[#d9592f] px-5 py-4 text-base font-semibold text-[#fff7ee] shadow-[0_18px_40px_rgba(98,40,20,0.35)] sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto sm:text-sm"
+          onClick={() => openComposer()}
+          type="button"
+        >
+          Compose
+        </button>
+
+        <QrModal open={showQr} onClose={() => setShowQr(false)} value={shareUrl} />
+
+        {showQueue && (
+          <div className="fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 py-6 text-[#171613] md:px-5">
+            <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-[34px] border border-[#1716131f] bg-[#f4efe4] shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
+              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4 sm:px-6">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">Notifications</p>
+                  <h2 className="mt-1 text-lg font-semibold">Join queue</h2>
+                </div>
+                <button className="text-sm font-semibold text-[#4f473e]" onClick={() => setShowQueue(false)} type="button">
+                  Close
                 </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+                {knocks.length === 0 && (
+                  <div className="rounded-[28px] border border-dashed border-[#cdbfa8] bg-[#faf5eb] px-5 py-10 text-center shadow-[0_14px_30px_rgba(23,22,19,0.04)]">
+                    <p className="text-base font-semibold">No one is waiting</p>
+                    <p className="mt-2 text-sm leading-7 text-[#5d564d]">
+                      New join requests will appear here. The bell badge will light up when someone knocks.
+                    </p>
+                  </div>
+                )}
+
+                {knocks.length > 0 && (
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {knocks.map((knock) => (
+                      <div
+                        key={knock.id}
+                        className="rounded-[28px] border border-[#d2c5ae] bg-[#fffaf1] p-4 shadow-[0_16px_34px_rgba(23,22,19,0.06)] sm:p-5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-[#171613]">Join request</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[#8d816c]">{formatMailStamp(knock.ts)}</p>
+                          </div>
+                          <div className="rounded-full border border-[#d7ccb8] bg-[#f7efe3] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5e4e]">
+                            Knock
+                          </div>
+                        </div>
+                        <p className="mt-4 text-sm leading-7 text-[#40382f]">{knock.message ? knock.message : 'No note included.'}</p>
+                        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                          <button
+                            className="flex-1 rounded-full border border-[#171613] bg-[#171613] px-4 py-2 text-sm font-semibold text-[#f6f0e8]"
+                            onClick={() => approveKnock(knock.id)}
+                            type="button"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="flex-1 rounded-full border border-[#17161333] bg-white px-4 py-2 text-sm font-semibold text-[#171613]"
+                            onClick={() => rejectKnock(knock.id)}
+                            type="button"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        <QrModal open={showQr} onClose={() => setShowQr(false)} value={shareUrl} />
+        {showHelp && (
+          <div className="fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 py-6 text-[#171613] md:px-5">
+            <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-[34px] border border-[#1716131f] bg-[#f4efe4] shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
+              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4 sm:px-6">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">Help</p>
+                  <h2 className="mt-1 text-lg font-semibold">Room notes</h2>
+                </div>
+                <button className="text-sm font-semibold text-[#4f473e]" onClick={() => setShowHelp(false)} type="button">
+                  Close
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+                  <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Sender</p>
+                    <p className="mt-2 text-lg font-semibold">{handle || 'No sender set yet'}</p>
+                    <p className="mt-3 text-sm leading-7 text-[#5d564d]">
+                      Use <span className="font-semibold">/iam name</span> in the composer to change the sender label shown on your cards.
+                    </p>
+
+                    <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Storage</p>
+                    <p className="mt-3 text-sm leading-7 text-[#5d564d]">
+                      Messages stay on this device. If you clear local browser storage, this inbox disappears here.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room key</p>
+                    <p className="mt-2 text-sm leading-7 text-[#5d564d]">
+                      Optional password used to encrypt knocks and message cards for this room.
+                    </p>
+                    <input
+                      className="mt-4 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base shadow-inner"
+                      placeholder="Room password (optional)"
+                      type="password"
+                      value={roomPassword}
+                      onChange={(event) => updateRoomPassword(event.target.value)}
+                    />
+                    <p className="mt-3 text-xs leading-5 text-[#6a6358]">
+                      Saved only on this device. Everyone who should read the room needs the same password.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeMessage && (
+          <div className="fixed inset-0 z-40 bg-[#f4efe4] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
+            <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-3xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
+              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4">
+                <button className="text-sm font-semibold text-[#4f473e]" onClick={() => setSelectedId(null)} type="button">
+                  Inbox
+                </button>
+                <p className="text-sm font-semibold">{activeMessage.direction === 'out' ? 'Sent message' : 'Message'}</p>
+                <button
+                  className="text-sm font-semibold text-[#c44f2d]"
+                  onClick={() => openComposer(activeMessage.id)}
+                  type="button"
+                >
+                  Reply
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+                <article
+                  className={`rounded-[32px] border p-6 shadow-[0_20px_40px_rgba(23,22,19,0.1)] sm:p-7 lg:p-8 ${
+                    activeMessage.direction === 'out' && activeMessage.type !== 'system'
+                      ? 'border-[#16233c] bg-[#1b2a46] text-[#f8f4ec]'
+                      : activeMessage.type === 'system'
+                      ? 'border-[#e0d2bc] bg-[#fff7ea] text-[#3f3529]'
+                      : 'border-[#d5c8b2] bg-[#fdf9f2] text-[#171613]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{getMessageLabel(activeMessage)}</p>
+                      <p
+                        className={`mt-1 text-[11px] uppercase tracking-[0.22em] ${
+                          activeMessage.direction === 'out' && activeMessage.type !== 'system' ? 'text-[#d2ddf5]' : 'text-[#8d816c]'
+                        }`}
+                      >
+                        {activeMessage.type === 'system'
+                          ? 'Room event'
+                          : activeMessage.direction === 'out'
+                          ? 'Sent from this device'
+                          : 'Incoming message'}
+                      </p>
+                    </div>
+                    <div className="text-right text-xs">
+                      <p>{formatMailStamp(activeMessage.timestamp)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 whitespace-pre-wrap text-[15px] leading-7 sm:text-[17px] sm:leading-8">{activeMessage.content}</div>
+                </article>
+
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    className="flex-1 rounded-full border border-[#17161333] bg-white px-4 py-3 text-sm font-semibold"
+                    onClick={() => void handleCopyMessage(activeMessage.content)}
+                    type="button"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    className="flex-1 rounded-full border border-[#171613] bg-[#171613] px-4 py-3 text-sm font-semibold text-[#f6f0e8]"
+                    onClick={() => void handleDeleteMessage(activeMessage.id)}
+                    type="button"
+                  >
+                    Delete local copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showComposer && (
+          <div className="fixed inset-0 z-50 bg-[#f4efe4] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
+            <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
+              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4">
+                <button className="text-sm font-semibold text-[#4f473e]" onClick={closeComposer} type="button">
+                  Cancel
+                </button>
+                <p className="text-sm font-semibold">{replyTarget ? 'Reply' : 'New message'}</p>
+                <button className="text-sm font-semibold text-[#c44f2d]" onClick={sendMessage} type="button">
+                  Send
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+                <div className="rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">From</p>
+                      <p className="mt-2 text-lg font-semibold text-[#171613]">{handle || 'You'}</p>
+                    </div>
+                    <div className="rounded-full border border-[#d7ccb8] bg-[#f4ede1] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6a5e4e]">
+                      Draft
+                    </div>
+                  </div>
+
+                  {replyTarget && (
+                    <div className="mt-5 rounded-[24px] border border-[#eadcc6] bg-[#f7efe3] p-4">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-[#8d816c]">Replying to</p>
+                      <p className="mt-2 text-sm font-semibold text-[#171613]">{getMessageLabel(replyTarget)}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#4d463d]">{getMessagePreview(replyTarget.content)}</p>
+                    </div>
+                  )}
+
+                  <textarea
+                    className="mt-5 h-[52vh] w-full resize-none border-0 bg-transparent text-[17px] leading-8 text-[#171613] outline-none md:h-[46vh] lg:h-[42vh]"
+                    placeholder="Write like an email, send like a chat."
+                    value={chatInput}
+                    onChange={(event) => setChatInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                        event.preventDefault();
+                        void sendMessage();
+                      }
+                    }}
+                  />
+
+                  <p className="mt-4 text-xs leading-5 text-[#6a6358]">
+                    Replies are just new messages for now. Use <span className="font-semibold">/iam name</span> to change the sender label.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showDisband && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
