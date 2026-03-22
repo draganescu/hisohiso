@@ -216,46 +216,6 @@ const RoomController = () => {
     knockKeyRef.current = knockKey;
   }, [knockKey]);
 
-  useEffect(() => {
-    if (!showComposer) {
-      return;
-    }
-
-    let rafId = 0;
-    const resizeTextarea = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const textarea = composerInputRef.current;
-        if (!textarea) {
-          return;
-        }
-
-        const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-        const maxHeight = viewportHeight * 0.45;
-
-        textarea.style.height = 'auto';
-        const scrollHeight = textarea.scrollHeight;
-
-        if (scrollHeight > maxHeight) {
-          textarea.style.height = `${maxHeight}px`;
-          textarea.style.overflowY = 'auto';
-        } else {
-          textarea.style.height = `${scrollHeight}px`;
-          textarea.style.overflowY = 'hidden';
-        }
-      });
-    };
-
-    resizeTextarea();
-
-    window.visualViewport?.addEventListener('resize', resizeTextarea);
-    window.addEventListener('resize', resizeTextarea);
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.visualViewport?.removeEventListener('resize', resizeTextarea);
-      window.removeEventListener('resize', resizeTextarea);
-    };
-  }, [showComposer, chatInput]);
 
   useEffect(() => {
     const init = async () => {
@@ -1167,9 +1127,9 @@ const RoomController = () => {
               </div>
 
               <div
-                className="composer-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
+                className="composer-scroll flex-1 min-h-0 flex flex-col overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
               >
-                <div className="flex min-h-full flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
+                <div className="flex flex-1 min-h-0 flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">From</p>
@@ -1190,12 +1150,11 @@ const RoomController = () => {
                     </div>
                   )}
 
-                  <div className="mt-5">
+                  <div className="mt-5 flex-1 min-h-0 flex flex-col">
                     <textarea
                       ref={composerInputRef}
-                      className="block min-h-[8rem] w-full resize-none border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
+                      className="block flex-1 min-h-[6rem] w-full resize-none overflow-y-auto border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
                       placeholder="Write like an email, send like a chat."
-                      rows={5}
                       style={{
                         WebkitOverflowScrolling: 'touch',
                         WebkitUserSelect: 'text',
