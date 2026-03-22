@@ -60,6 +60,26 @@ body {
   touch-action: pan-y;
 }
 
+.composer-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.composer-overlay {
+  height: var(--app-height);
+  will-change: height;
+  contain: layout style;
+}
+
+@media (min-width: 768px) {
+  .composer-overlay {
+    height: auto;
+    will-change: auto;
+    contain: none;
+  }
+}
+
 .chat-input {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }

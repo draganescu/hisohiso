@@ -103,7 +103,6 @@ const RoomController = () => {
   const [showComposer, setShowComposer] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [headerCondensed, setHeaderCondensed] = useState(false);
-  const [composerViewport, setComposerViewport] = useState<{ height: number; offsetTop: number } | null>(null);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
@@ -219,38 +218,6 @@ const RoomController = () => {
 
   useEffect(() => {
     if (!showComposer) {
-      setComposerViewport(null);
-      return;
-    }
-
-    const updateComposerViewport = () => {
-      const viewport = window.visualViewport;
-      if (!viewport) {
-        setComposerViewport({
-          height: window.innerHeight,
-          offsetTop: 0
-        });
-        return;
-      }
-      setComposerViewport({
-        height: viewport.height,
-        offsetTop: 0
-      });
-    };
-
-    updateComposerViewport();
-
-    window.visualViewport?.addEventListener('resize', updateComposerViewport);
-    window.addEventListener('orientationchange', updateComposerViewport);
-
-    return () => {
-      window.visualViewport?.removeEventListener('resize', updateComposerViewport);
-      window.removeEventListener('orientationchange', updateComposerViewport);
-    };
-  }, [showComposer]);
-
-  useEffect(() => {
-    if (!showComposer) {
       return;
     }
 
@@ -259,9 +226,20 @@ const RoomController = () => {
       return;
     }
 
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const maxHeight = viewportHeight * 0.45;
+
     textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [showComposer, chatInput, composerViewport]);
+    const scrollHeight = textarea.scrollHeight;
+
+    if (scrollHeight > maxHeight) {
+      textarea.style.height = `${maxHeight}px`;
+      textarea.style.overflowY = 'auto';
+    } else {
+      textarea.style.height = `${scrollHeight}px`;
+      textarea.style.overflowY = 'hidden';
+    }
+  }, [showComposer, chatInput]);
 
   useEffect(() => {
     const init = async () => {
@@ -345,7 +323,7 @@ const RoomController = () => {
         if (!target) {
           return;
         }
-        if (target.closest('.chat-scroll')) {
+        if (target.closest('.chat-scroll') || target.closest('.composer-scroll') || target.tagName === 'TEXTAREA') {
           return;
         }
         event.preventDefault();
@@ -1155,10 +1133,8 @@ const RoomController = () => {
 
         {showComposer && (
           <div
-            className="fixed inset-x-0 top-0 z-50 bg-[#f4efe4] text-[#171613] md:inset-0 md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6"
+            className="composer-overlay fixed inset-x-0 top-0 z-50 bg-[#f4efe4] text-[#171613] md:inset-0 md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6"
             style={{
-              height: composerViewport ? `${composerViewport.height}px` : '100dvh',
-              top: composerViewport ? `${composerViewport.offsetTop}px` : undefined,
               WebkitUserSelect: 'none',
               userSelect: 'none'
             }}
@@ -1175,8 +1151,7 @@ const RoomController = () => {
               </div>
 
               <div
-                className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
-                style={{ WebkitOverflowScrolling: 'touch' }}
+                className="composer-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
               >
                 <div className="flex min-h-full flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
                   <div className="flex items-start justify-between gap-3">
@@ -1202,9 +1177,9 @@ const RoomController = () => {
                   <div className="mt-5">
                     <textarea
                       ref={composerInputRef}
-                      className="block min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
+                      className="block min-h-[8rem] w-full resize-none border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
                       placeholder="Write like an email, send like a chat."
-                      rows={8}
+                      rows={5}
                       style={{
                         WebkitOverflowScrolling: 'touch',
                         WebkitUserSelect: 'text',
