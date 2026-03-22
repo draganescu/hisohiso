@@ -103,6 +103,7 @@ const RoomController = () => {
   const [showComposer, setShowComposer] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [headerCondensed, setHeaderCondensed] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
@@ -216,6 +217,29 @@ const RoomController = () => {
     knockKeyRef.current = knockKey;
   }, [knockKey]);
 
+  useEffect(() => {
+    if (!showComposer) {
+      setKeyboardVisible(false);
+      return;
+    }
+
+    const isTouch = window.matchMedia('(pointer: coarse)').matches;
+    if (!isTouch || !window.visualViewport) {
+      return;
+    }
+
+    const baseHeight = window.innerHeight;
+    const checkKeyboard = () => {
+      const visible = window.visualViewport!.height < baseHeight * 0.75;
+      setKeyboardVisible(visible);
+    };
+
+    checkKeyboard();
+    window.visualViewport.addEventListener('resize', checkKeyboard);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', checkKeyboard);
+    };
+  }, [showComposer]);
 
   useEffect(() => {
     const init = async () => {
@@ -1116,21 +1140,47 @@ const RoomController = () => {
             }}
           >
             <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
-              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4">
+              <div
+                className={`flex items-center justify-between px-4 transition-all duration-200 ease-out ${
+                  keyboardVisible
+                    ? 'bg-transparent py-2'
+                    : 'border-b border-[#1716131f] bg-[#f8f4eb] py-4'
+                }`}
+              >
                 <button className="text-sm font-semibold text-[#4f473e]" onClick={closeComposer} type="button">
                   Cancel
                 </button>
-                <p className="text-sm font-semibold">{replyTarget ? 'Reply' : 'New message'}</p>
+                <p
+                  className={`text-sm font-semibold transition-opacity duration-200 ${
+                    keyboardVisible ? 'opacity-0' : 'opacity-100'
+                  }`}
+                >
+                  {replyTarget ? 'Reply' : 'New message'}
+                </p>
                 <button className="text-sm font-semibold text-[#c44f2d]" onClick={sendMessage} type="button">
                   Send
                 </button>
               </div>
 
               <div
-                className="composer-scroll flex-1 min-h-0 flex flex-col overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
+                className={`composer-scroll flex-1 min-h-0 flex flex-col overscroll-contain transition-all duration-200 ease-out ${
+                  keyboardVisible
+                    ? 'px-3 py-1 sm:px-6 sm:py-6 lg:px-8'
+                    : 'px-4 py-5 sm:px-6 sm:py-6 lg:px-8'
+                }`}
               >
-                <div className="flex flex-1 min-h-0 flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
-                  <div className="flex items-start justify-between gap-3">
+                <div
+                  className={`flex flex-1 min-h-0 flex-col transition-all duration-200 ease-out ${
+                    keyboardVisible
+                      ? 'rounded-2xl border-transparent bg-[#fdf9f2] p-3 shadow-none sm:rounded-[32px] sm:border-[#d5c8b2] sm:bg-[#fdf9f2] sm:p-6 sm:shadow-[0_18px_36px_rgba(23,22,19,0.08)] lg:p-8'
+                      : 'rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8'
+                  }`}
+                >
+                  <div
+                    className={`flex items-start justify-between gap-3 overflow-hidden transition-all duration-200 ease-out ${
+                      keyboardVisible ? 'max-h-0 opacity-0' : 'max-h-24 opacity-100'
+                    }`}
+                  >
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">From</p>
                       <p className="mt-2 text-lg font-semibold text-[#171613]">{handle || 'You'}</p>
@@ -1141,16 +1191,42 @@ const RoomController = () => {
                   </div>
 
                   {replyTarget && (
-                    <div className="mt-5 rounded-[24px] border border-[#eadcc6] bg-[#f7efe3] p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-[#8d816c]">Replying to</p>
-                      <p className="mt-2 text-sm font-semibold text-[#171613]">{getMessageLabel(replyTarget)}</p>
-                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#4d463d]">
+                    <div
+                      className={`overflow-hidden transition-all duration-200 ease-out ${
+                        keyboardVisible
+                          ? 'mb-2 max-h-8 rounded-xl border border-[#eadcc6] bg-[#f7efe3] px-3 py-1'
+                          : 'mt-5 max-h-60 rounded-[24px] border border-[#eadcc6] bg-[#f7efe3] p-4'
+                      }`}
+                    >
+                      <p
+                        className={`transition-all duration-200 ${
+                          keyboardVisible ? 'hidden' : 'text-[11px] uppercase tracking-[0.2em] text-[#8d816c]'
+                        }`}
+                      >
+                        Replying to
+                      </p>
+                      <p
+                        className={`font-semibold text-[#171613] transition-all duration-200 ${
+                          keyboardVisible ? 'truncate text-xs' : 'mt-2 text-sm'
+                        }`}
+                      >
+                        {getMessageLabel(replyTarget)}
+                      </p>
+                      <p
+                        className={`whitespace-pre-line text-sm leading-6 text-[#4d463d] transition-all duration-200 ${
+                          keyboardVisible ? 'hidden' : 'mt-2'
+                        }`}
+                      >
                         {getMessagePreview(replyTarget.content)}
                       </p>
                     </div>
                   )}
 
-                  <div className="mt-5 flex-1 min-h-0 flex flex-col">
+                  <div
+                    className={`flex-1 min-h-0 flex flex-col transition-all duration-200 ease-out ${
+                      keyboardVisible ? 'mt-0' : 'mt-5'
+                    }`}
+                  >
                     <textarea
                       ref={composerInputRef}
                       className="block flex-1 min-h-[6rem] w-full resize-none overflow-y-auto border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
@@ -1171,7 +1247,11 @@ const RoomController = () => {
                     />
                   </div>
 
-                  <p className="mt-4 text-xs leading-5 text-[#6a6358]">
+                  <p
+                    className={`text-xs leading-5 text-[#6a6358] overflow-hidden transition-all duration-200 ease-out ${
+                      keyboardVisible ? 'max-h-0 opacity-0 mt-0' : 'max-h-12 opacity-100 mt-4'
+                    }`}
+                  >
                     Replies are just new messages for now. Use <span className="font-semibold">/iam name</span> to change the sender label.
                   </p>
                 </div>
