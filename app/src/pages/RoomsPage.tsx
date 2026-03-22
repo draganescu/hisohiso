@@ -45,7 +45,7 @@ const RoomsPage = () => {
     <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
         <header>
-          <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Chat for All</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Hisohiso</p>
           <h1 className="mt-3 text-3xl font-semibold">Your rooms</h1>
           <p className="mt-2 text-sm text-[#3a362f]">Stored locally on this device only.</p>
         </header>

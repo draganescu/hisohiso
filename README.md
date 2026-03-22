@@ -1,4 +1,4 @@
-# Chat for All
+# Hisohiso
 
 Minimal encrypted room chat with no accounts, no cloud message history, and URL-based room sharing.
 

@@ -1,4 +1,4 @@
-export const tokenKey = (roomHash: string): string => `cfa.token.${roomHash}`;
+export const tokenKey = (roomHash: string): string => `hisohiso.token.${roomHash}`;
 
 export const getToken = (roomHash: string): string | null => {
   return localStorage.getItem(tokenKey(roomHash));
@@ -12,7 +12,7 @@ export const clearToken = (roomHash: string): void => {
   localStorage.removeItem(tokenKey(roomHash));
 };
 
-const handleKey = (roomHash: string): string => `cfa.handle.${roomHash}`;
+const handleKey = (roomHash: string): string => `hisohiso.handle.${roomHash}`;
 
 export const getHandle = (roomHash: string): string | null => {
   return localStorage.getItem(handleKey(roomHash));
@@ -26,7 +26,7 @@ export const clearHandle = (roomHash: string): void => {
   localStorage.removeItem(handleKey(roomHash));
 };
 
-const roomPasswordKey = (roomHash: string): string => `cfa.room_password.${roomHash}`;
+const roomPasswordKey = (roomHash: string): string => `hisohiso.room_password.${roomHash}`;
 
 export const getRoomPassword = (roomHash: string): string | null => {
   return localStorage.getItem(roomPasswordKey(roomHash));
@@ -47,7 +47,7 @@ export type StoredRoom = {
   handle?: string | null;
 };
 
-const roomsKey = 'cfa.rooms';
+const roomsKey = 'hisohiso.rooms';
 
 const readRooms = (): StoredRoom[] => {
   const raw = localStorage.getItem(roomsKey);

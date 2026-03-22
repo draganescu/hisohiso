@@ -1,7 +1,7 @@
 {
-  "name": "Chat for All",
-  "short_name": "Chat",
-  "description": "Minimal encrypted chat. No accounts. No tracking.",
+  "name": "Hisohiso",
+  "short_name": "Hisohiso",
+  "description": "Hisohiso: minimal encrypted chat. No accounts. No tracking.",
   "start_url": "/rooms",
   "scope": "/",
   "display": "standalone",

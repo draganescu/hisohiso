@@ -1,4 +1,4 @@
-Chat for All
+Hisohiso
 
 A minimal, URL-capability, encrypted chat system.
 
@@ -26,8 +26,8 @@ Client generates or receives via URL:
 	•	room_secret (32 bytes, 256-bit random)
 
 Client derives:
-	•	room_hash = SHA-256("cfa.room_hash" || room_secret)
-	•	k_msg = HKDF(room_secret, "cfa.k_msg")
+	•	room_hash = SHA-256("hisohiso.room_hash" || room_secret)
+	•	k_msg = HKDF(room_secret, "hisohiso.k_msg")
 
 Server only ever sees room_hash.
 
@@ -328,4 +328,3 @@ End
 Minimal protocol.
 Local storage.
 No accounts.
-

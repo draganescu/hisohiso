@@ -1,6 +1,6 @@
 {
   "product": {
-    "name": "Chat for All",
+    "name": "Hisohiso",
     "version": "0.1.0",
     "description": "A minimal, URL-capability, encrypted chat system. No accounts. No cloud history. No tracking.",
     "core_principles": [
@@ -26,12 +26,12 @@
   "protocol_implementation": {
     "cryptography_flow": {
       "creation": {
-        "client_action": "Generate 32-byte random 'room_secret'. Derive 'room_hash' = SHA256('cfa.room_hash' + room_secret). Redirect to /room/{room_secret}.",
+        "client_action": "Generate 32-byte random 'room_secret'. Derive 'room_hash' = SHA256('hisohiso.room_hash' + room_secret). Redirect to /room/{room_secret}.",
         "server_knowledge": "Receives 'room_hash' only. Does not see 'room_secret'."
       },
       "messaging": {
         "algorithm": "AES-256-GCM",
-        "derivation": "k_msg = HKDF(room_secret, 'cfa.k_msg')",
+        "derivation": "k_msg = HKDF(room_secret, 'hisohiso.k_msg')",
         "payload": {
           "nonce": "12 bytes (unique)",
           "aad": "room_hash + msg_type + msg_id",

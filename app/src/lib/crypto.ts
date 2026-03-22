@@ -36,7 +36,7 @@ export const generateRoomSecret = (): string => {
 };
 
 export const deriveRoomHash = async (roomSecret: string): Promise<string> => {
-  const prefix = encoder.encode('cfa.room_hash');
+  const prefix = encoder.encode('hisohiso.room_hash');
   const secretBytes = base64UrlDecode(roomSecret);
   const combined = new Uint8Array(prefix.length + secretBytes.length);
   combined.set(prefix, 0);
@@ -46,7 +46,7 @@ export const deriveRoomHash = async (roomSecret: string): Promise<string> => {
 };
 
 export const deriveMessageKey = async (roomSecret: string, password: string): Promise<CryptoKey> => {
-  const prefix = encoder.encode('cfa.k_msg');
+  const prefix = encoder.encode('hisohiso.k_msg');
   const secretBytes = base64UrlDecode(roomSecret);
   const passwordBytes = encoder.encode(password);
   const combined = new Uint8Array(prefix.length + secretBytes.length + passwordBytes.length);
@@ -58,7 +58,7 @@ export const deriveMessageKey = async (roomSecret: string, password: string): Pr
 };
 
 export const deriveKnockKey = async (roomSecret: string, password: string): Promise<CryptoKey> => {
-  const prefix = encoder.encode('cfa.k_knock');
+  const prefix = encoder.encode('hisohiso.k_knock');
   const secretBytes = base64UrlDecode(roomSecret);
   const passwordBytes = encoder.encode(password);
   const combined = new Uint8Array(prefix.length + secretBytes.length + passwordBytes.length);

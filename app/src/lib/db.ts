@@ -15,7 +15,7 @@ class ChatDatabase extends Dexie {
   messages!: Table<ChatMessage, string>;
 
   constructor() {
-    super('cfa');
+    super('hisohiso');
     this.version(1).stores({
       messages: 'id, room_hash, timestamp, [room_hash+timestamp]'
     });
