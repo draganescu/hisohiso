@@ -114,6 +114,7 @@ const RoomController = () => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const listRef = useRef<HTMLDivElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
 
@@ -233,22 +234,34 @@ const RoomController = () => {
       }
       setComposerViewport({
         height: viewport.height,
-        offsetTop: viewport.offsetTop
+        offsetTop: 0
       });
     };
 
     updateComposerViewport();
 
     window.visualViewport?.addEventListener('resize', updateComposerViewport);
-    window.visualViewport?.addEventListener('scroll', updateComposerViewport);
     window.addEventListener('orientationchange', updateComposerViewport);
 
     return () => {
       window.visualViewport?.removeEventListener('resize', updateComposerViewport);
-      window.visualViewport?.removeEventListener('scroll', updateComposerViewport);
       window.removeEventListener('orientationchange', updateComposerViewport);
     };
   }, [showComposer]);
+
+  useEffect(() => {
+    if (!showComposer) {
+      return;
+    }
+
+    const textarea = composerInputRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [showComposer, chatInput, composerViewport]);
 
   useEffect(() => {
     const init = async () => {
@@ -1145,7 +1158,9 @@ const RoomController = () => {
             className="fixed inset-x-0 top-0 z-50 bg-[#f4efe4] text-[#171613] md:inset-0 md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6"
             style={{
               height: composerViewport ? `${composerViewport.height}px` : '100dvh',
-              top: composerViewport ? `${composerViewport.offsetTop}px` : undefined
+              top: composerViewport ? `${composerViewport.offsetTop}px` : undefined,
+              WebkitUserSelect: 'none',
+              userSelect: 'none'
             }}
           >
             <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
@@ -1163,7 +1178,7 @@ const RoomController = () => {
                 className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
                 style={{ WebkitOverflowScrolling: 'touch' }}
               >
-                <div className="flex h-full min-h-0 flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
+                <div className="flex min-h-full flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">From</p>
@@ -1184,11 +1199,17 @@ const RoomController = () => {
                     </div>
                   )}
 
-                  <div className="mt-5 flex min-h-0 flex-1 overflow-hidden">
+                  <div className="mt-5">
                     <textarea
-                      className="h-full min-h-[12rem] w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
+                      ref={composerInputRef}
+                      className="block min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
                       placeholder="Write like an email, send like a chat."
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      rows={8}
+                      style={{
+                        WebkitOverflowScrolling: 'touch',
+                        WebkitUserSelect: 'text',
+                        userSelect: 'text'
+                      }}
                       value={chatInput}
                       onChange={(event) => setChatInput(event.target.value)}
                       onKeyDown={(event) => {
