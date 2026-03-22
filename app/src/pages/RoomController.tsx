@@ -860,11 +860,11 @@ const RoomController = () => {
           <div
             ref={listRef}
             onScroll={handleScroll}
-            className={`flex-1 overflow-y-auto px-4 pb-32 transition-[padding] duration-300 ease-out chat-scroll sm:px-6 lg:px-8 lg:pb-36 ${
+            className={`flex-1 overflow-y-auto px-4 pb-40 transition-[padding] duration-300 ease-out chat-scroll sm:px-6 lg:px-8 lg:pb-44 ${
               headerCondensed ? 'pt-16 sm:pt-[4.5rem] lg:pt-20' : 'pt-5 sm:pt-6 lg:pt-7'
             }`}
           >
-            <section>
+            <section style={{ minHeight: 'calc(100% + 1px)' }}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8d816c]">Messages</h2>
                 <span className="text-xs text-[#7a7266]">{visibleMessages.length} card{visibleMessages.length === 1 ? '' : 's'}</span>
