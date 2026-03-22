@@ -1148,7 +1148,7 @@ const RoomController = () => {
               userSelect: 'none'
             }}
           >
-            <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
+            <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
               <div
                 className={`flex items-center justify-between px-4 transition-all duration-200 ease-out ${
                   keyboardVisible
