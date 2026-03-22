@@ -318,12 +318,6 @@ const RoomController = () => {
   useEffect(() => {
     if (roomState === 'PARTICIPANT') {
       document.body.classList.add('no-scroll');
-
-      let lastTouchY = 0;
-      const handleTouchStart = (event: TouchEvent) => {
-        lastTouchY = event.touches[0].clientY;
-      };
-
       const handleTouchMove = (event: TouchEvent) => {
         const target = event.target as HTMLElement | null;
         if (!target) {
@@ -332,34 +326,20 @@ const RoomController = () => {
         if (target.tagName === 'TEXTAREA') {
           return;
         }
-
-        const touchY = event.touches[0].clientY;
-        const deltaY = touchY - lastTouchY;
-
         let el: HTMLElement | null = target;
         while (el) {
           const style = window.getComputedStyle(el);
           const overflowY = style.overflowY;
           if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
-            const { scrollTop, scrollHeight, clientHeight } = el;
-            const atTop = scrollTop <= 0;
-            const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-            if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
-              event.preventDefault();
-            }
             return;
           }
           el = el.parentElement;
         }
         event.preventDefault();
       };
-
-      document.addEventListener('touchstart', handleTouchStart, { passive: true });
       document.addEventListener('touchmove', handleTouchMove, { passive: false });
       return () => {
         document.body.classList.remove('no-scroll');
-        document.removeEventListener('touchstart', handleTouchStart);
         document.removeEventListener('touchmove', handleTouchMove);
       };
     }
@@ -884,7 +864,7 @@ const RoomController = () => {
               headerCondensed ? 'pt-16 sm:pt-[4.5rem] lg:pt-20' : 'pt-5 sm:pt-6 lg:pt-7'
             }`}
           >
-            <section>
+            <section style={{ minHeight: 'calc(100% + 1px)' }}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8d816c]">Messages</h2>
                 <span className="text-xs text-[#7a7266]">{visibleMessages.length} card{visibleMessages.length === 1 ? '' : 's'}</span>
