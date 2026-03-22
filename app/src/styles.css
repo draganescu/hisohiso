@@ -69,6 +69,7 @@ body {
 .composer-overlay {
   height: var(--app-height);
   top: var(--app-offset);
+  padding-top: env(safe-area-inset-top);
   will-change: height, top;
   contain: layout style;
 }

@@ -221,32 +221,39 @@ const RoomController = () => {
       return;
     }
 
+    let rafId = 0;
     const resizeTextarea = () => {
-      const textarea = composerInputRef.current;
-      if (!textarea) {
-        return;
-      }
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const textarea = composerInputRef.current;
+        if (!textarea) {
+          return;
+        }
 
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      const maxHeight = viewportHeight * 0.45;
+        const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+        const maxHeight = viewportHeight * 0.45;
 
-      textarea.style.height = 'auto';
-      const scrollHeight = textarea.scrollHeight;
+        textarea.style.height = 'auto';
+        const scrollHeight = textarea.scrollHeight;
 
-      if (scrollHeight > maxHeight) {
-        textarea.style.height = `${maxHeight}px`;
-        textarea.style.overflowY = 'auto';
-      } else {
-        textarea.style.height = `${scrollHeight}px`;
-        textarea.style.overflowY = 'hidden';
-      }
+        if (scrollHeight > maxHeight) {
+          textarea.style.height = `${maxHeight}px`;
+          textarea.style.overflowY = 'auto';
+        } else {
+          textarea.style.height = `${scrollHeight}px`;
+          textarea.style.overflowY = 'hidden';
+        }
+      });
     };
 
     resizeTextarea();
 
     window.visualViewport?.addEventListener('resize', resizeTextarea);
+    window.addEventListener('resize', resizeTextarea);
     return () => {
+      cancelAnimationFrame(rafId);
       window.visualViewport?.removeEventListener('resize', resizeTextarea);
+      window.removeEventListener('resize', resizeTextarea);
     };
   }, [showComposer, chatInput]);
 
