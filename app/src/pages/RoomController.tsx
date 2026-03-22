@@ -61,11 +61,15 @@ const formatMailStamp = (timestamp: number): string => {
 };
 
 const getMessagePreview = (content: string): string => {
-  const normalized = content.replace(/\s+/g, ' ').trim();
+  const normalized = content.replace(/\r\n?/g, '\n').trim();
   if (!normalized) {
     return 'Empty message';
   }
-  return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
+  const compact = normalized
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trimEnd())
+    .join('\n');
+  return compact.length > 160 ? `${compact.slice(0, 157)}...` : compact;
 };
 
 const getMessageLabel = (message: ChatMessage): string => {
@@ -875,7 +879,13 @@ const RoomController = () => {
                           {isMine ? 'Mine' : isSystem ? 'Notice' : 'Room'}
                         </div>
                       </div>
-                      <p className={`mt-4 text-base leading-7 sm:text-lg ${isMine ? 'text-[#f8f4ec]' : 'text-[#2f2a24]'}`}>{getMessagePreview(msg.content)}</p>
+                      <p
+                        className={`mt-4 whitespace-pre-line text-base leading-7 sm:text-lg ${
+                          isMine ? 'text-[#f8f4ec]' : 'text-[#2f2a24]'
+                        }`}
+                      >
+                        {getMessagePreview(msg.content)}
+                      </p>
                       <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
                     </button>
                   );
@@ -1096,7 +1106,7 @@ const RoomController = () => {
         )}
 
         {showComposer && (
-          <div className="fixed inset-0 z-50 bg-[#f4efe4] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
+          <div className="fixed inset-0 z-50 h-[100dvh] bg-[#f4efe4] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
             <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
               <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4">
                 <button className="text-sm font-semibold text-[#4f473e]" onClick={closeComposer} type="button">
@@ -1108,8 +1118,8 @@ const RoomController = () => {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-                <div className="rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
+              <div className="flex-1 min-h-0 overflow-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+                <div className="flex h-full min-h-0 flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">From</p>
@@ -1124,22 +1134,26 @@ const RoomController = () => {
                     <div className="mt-5 rounded-[24px] border border-[#eadcc6] bg-[#f7efe3] p-4">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-[#8d816c]">Replying to</p>
                       <p className="mt-2 text-sm font-semibold text-[#171613]">{getMessageLabel(replyTarget)}</p>
-                      <p className="mt-2 text-sm leading-6 text-[#4d463d]">{getMessagePreview(replyTarget.content)}</p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#4d463d]">
+                        {getMessagePreview(replyTarget.content)}
+                      </p>
                     </div>
                   )}
 
-                  <textarea
-                    className="mt-5 h-[52vh] w-full resize-none border-0 bg-transparent text-[17px] leading-8 text-[#171613] outline-none md:h-[46vh] lg:h-[42vh]"
-                    placeholder="Write like an email, send like a chat."
-                    value={chatInput}
-                    onChange={(event) => setChatInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                        event.preventDefault();
-                        void sendMessage();
-                      }
-                    }}
-                  />
+                  <div className="mt-5 flex min-h-0 flex-1 overflow-hidden">
+                    <textarea
+                      className="h-full min-h-[12rem] w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
+                      placeholder="Write like an email, send like a chat."
+                      value={chatInput}
+                      onChange={(event) => setChatInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                          event.preventDefault();
+                          void sendMessage();
+                        }
+                      }}
+                    />
+                  </div>
 
                   <p className="mt-4 text-xs leading-5 text-[#6a6358]">
                     Replies are just new messages for now. Use <span className="font-semibold">/iam name</span> to change the sender label.
