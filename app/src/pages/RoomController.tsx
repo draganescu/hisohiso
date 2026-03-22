@@ -1229,7 +1229,7 @@ const RoomController = () => {
                   >
                     <textarea
                       ref={composerInputRef}
-                      className="block flex-1 min-h-[6rem] w-full resize-none overflow-y-auto border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
+                      className="block flex-1 min-h-[6rem] w-full resize-none overflow-y-auto border-0 bg-transparent pb-2 pr-3 text-[17px] leading-8 text-[#171613] outline-none"
                       placeholder="Write like an email, send like a chat."
                       style={{
                         WebkitOverflowScrolling: 'touch',
@@ -1237,7 +1237,15 @@ const RoomController = () => {
                         userSelect: 'text'
                       }}
                       value={chatInput}
-                      onChange={(event) => setChatInput(event.target.value)}
+                      onChange={(event) => {
+                        setChatInput(event.target.value);
+                        requestAnimationFrame(() => {
+                          const ta = composerInputRef.current;
+                          if (ta) {
+                            ta.scrollTop = ta.scrollHeight - ta.clientHeight;
+                          }
+                        });
+                      }}
                       onKeyDown={(event) => {
                         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
                           event.preventDefault();
