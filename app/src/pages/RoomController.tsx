@@ -221,24 +221,33 @@ const RoomController = () => {
       return;
     }
 
-    const textarea = composerInputRef.current;
-    if (!textarea) {
-      return;
-    }
+    const resizeTextarea = () => {
+      const textarea = composerInputRef.current;
+      if (!textarea) {
+        return;
+      }
 
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-    const maxHeight = viewportHeight * 0.45;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const maxHeight = viewportHeight * 0.45;
 
-    textarea.style.height = 'auto';
-    const scrollHeight = textarea.scrollHeight;
+      textarea.style.height = 'auto';
+      const scrollHeight = textarea.scrollHeight;
 
-    if (scrollHeight > maxHeight) {
-      textarea.style.height = `${maxHeight}px`;
-      textarea.style.overflowY = 'auto';
-    } else {
-      textarea.style.height = `${scrollHeight}px`;
-      textarea.style.overflowY = 'hidden';
-    }
+      if (scrollHeight > maxHeight) {
+        textarea.style.height = `${maxHeight}px`;
+        textarea.style.overflowY = 'auto';
+      } else {
+        textarea.style.height = `${scrollHeight}px`;
+        textarea.style.overflowY = 'hidden';
+      }
+    };
+
+    resizeTextarea();
+
+    window.visualViewport?.addEventListener('resize', resizeTextarea);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', resizeTextarea);
+    };
   }, [showComposer, chatInput]);
 
   useEffect(() => {

@@ -68,13 +68,15 @@ body {
 
 .composer-overlay {
   height: var(--app-height);
-  will-change: height;
+  top: var(--app-offset);
+  will-change: height, top;
   contain: layout style;
 }
 
 @media (min-width: 768px) {
   .composer-overlay {
     height: auto;
+    top: 0;
     will-change: auto;
     contain: none;
   }
