@@ -103,6 +103,7 @@ const RoomController = () => {
   const [showComposer, setShowComposer] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [headerCondensed, setHeaderCondensed] = useState(false);
+  const [composerViewport, setComposerViewport] = useState<{ height: number; offsetTop: number } | null>(null);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
@@ -214,6 +215,40 @@ const RoomController = () => {
   useEffect(() => {
     knockKeyRef.current = knockKey;
   }, [knockKey]);
+
+  useEffect(() => {
+    if (!showComposer) {
+      setComposerViewport(null);
+      return;
+    }
+
+    const updateComposerViewport = () => {
+      const viewport = window.visualViewport;
+      if (!viewport) {
+        setComposerViewport({
+          height: window.innerHeight,
+          offsetTop: 0
+        });
+        return;
+      }
+      setComposerViewport({
+        height: viewport.height,
+        offsetTop: viewport.offsetTop
+      });
+    };
+
+    updateComposerViewport();
+
+    window.visualViewport?.addEventListener('resize', updateComposerViewport);
+    window.visualViewport?.addEventListener('scroll', updateComposerViewport);
+    window.addEventListener('orientationchange', updateComposerViewport);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateComposerViewport);
+      window.visualViewport?.removeEventListener('scroll', updateComposerViewport);
+      window.removeEventListener('orientationchange', updateComposerViewport);
+    };
+  }, [showComposer]);
 
   useEffect(() => {
     const init = async () => {
@@ -1106,7 +1141,13 @@ const RoomController = () => {
         )}
 
         {showComposer && (
-          <div className="fixed inset-0 z-50 h-[100dvh] bg-[#f4efe4] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
+          <div
+            className="fixed inset-x-0 top-0 z-50 bg-[#f4efe4] text-[#171613] md:inset-0 md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6"
+            style={{
+              height: composerViewport ? `${composerViewport.height}px` : '100dvh',
+              top: composerViewport ? `${composerViewport.offsetTop}px` : undefined
+            }}
+          >
             <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
               <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4">
                 <button className="text-sm font-semibold text-[#4f473e]" onClick={closeComposer} type="button">
@@ -1118,7 +1159,10 @@ const RoomController = () => {
                 </button>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+              <div
+                className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
                 <div className="flex h-full min-h-0 flex-col rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -1144,6 +1188,7 @@ const RoomController = () => {
                     <textarea
                       className="h-full min-h-[12rem] w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent pb-2 text-[17px] leading-8 text-[#171613] outline-none"
                       placeholder="Write like an email, send like a chat."
+                      style={{ WebkitOverflowScrolling: 'touch' }}
                       value={chatInput}
                       onChange={(event) => setChatInput(event.target.value)}
                       onKeyDown={(event) => {
