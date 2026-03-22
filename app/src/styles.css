@@ -60,7 +60,8 @@ body {
   touch-action: pan-y;
 }
 
-.composer-scroll {
+.composer-scroll,
+.detail-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;

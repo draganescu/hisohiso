@@ -323,8 +323,17 @@ const RoomController = () => {
         if (!target) {
           return;
         }
-        if (target.closest('.chat-scroll') || target.closest('.composer-scroll') || target.tagName === 'TEXTAREA') {
+        if (target.tagName === 'TEXTAREA') {
           return;
+        }
+        let el: HTMLElement | null = target;
+        while (el) {
+          const style = window.getComputedStyle(el);
+          const overflowY = style.overflowY;
+          if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+            return;
+          }
+          el = el.parentElement;
         }
         event.preventDefault();
       };
@@ -1077,7 +1086,7 @@ const RoomController = () => {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+              <div className="detail-scroll flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
                 <article
                   className={`rounded-[32px] border p-6 shadow-[0_20px_40px_rgba(23,22,19,0.1)] sm:p-7 lg:p-8 ${
                     activeMessage.direction === 'out' && activeMessage.type !== 'system'
