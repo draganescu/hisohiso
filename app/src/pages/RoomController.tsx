@@ -1037,7 +1037,7 @@ const RoomController = () => {
         )}
 
         {activeMessage && (
-          <div className="fixed inset-0 z-40 bg-[#f4efe4] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
+          <div className="fixed inset-0 z-40 bg-[#f4efe4] pt-[env(safe-area-inset-top)] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
             <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-3xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
               <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4">
                 <button className="text-sm font-semibold text-[#4f473e]" onClick={() => setSelectedId(null)} type="button">
