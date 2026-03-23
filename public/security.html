@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How Hisohiso Works</title>
+    <meta name="description" content="How Hisohiso encrypts your messages: three layers of security, zero trust in the server." />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "IBM Plex Sans", "SF Pro Text", sans-serif;
+        background: radial-gradient(circle at top left, #f2f0e9 0%, #e7e0d2 35%, #cfc3ab 100%);
+        color: #171613;
+      }
+      a {
+        color: inherit;
+      }
+    </style>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .back {
+        display: inline-block;
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 600;
+        border-bottom: 2px solid var(--ink);
+        padding-bottom: 2px;
+        margin-bottom: 8px;
+      }
+      .back:hover,
+      .back:focus {
+        color: var(--accent);
+        border-color: var(--accent-dark);
+      }
+
+      .layer {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      .layer-num {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid var(--ink);
+        border-radius: 50%;
+        font-weight: 700;
+        font-size: 1.1rem;
+      }
+      .layer-body h3 {
+        margin: 0 0 6px;
+        font-size: 1.15rem;
+      }
+      .layer-body p {
+        margin: 0;
+      }
+
+      .diagram {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        font-size: 0.9rem;
+        margin-top: 8px;
+      }
+      .diagram-box {
+        flex: 1;
+        padding: 16px 14px;
+        text-align: center;
+        border: 1px solid var(--border);
+        background: rgba(247, 242, 230, 0.5);
+      }
+      .diagram-box:first-child {
+        border-right: none;
+      }
+      .diagram-box:last-child {
+        border-left: none;
+      }
+      .diagram-box strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.95rem;
+      }
+      .diagram-arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 6px;
+        font-size: 1.2rem;
+        color: var(--ink-soft);
+      }
+
+      .detail {
+        font-size: 0.92rem;
+        color: var(--ink-soft);
+        margin-top: 10px;
+        line-height: 1.65;
+      }
+      .detail code {
+        font-family: "SF Mono", "Fira Code", Consolas, monospace;
+        background: rgba(23, 22, 19, 0.07);
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 0.85rem;
+      }
+
+      .tldr {
+        border-left: 3px solid var(--ink);
+        padding-left: 20px;
+      }
+      .tldr p {
+        font-size: 1.05rem;
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      @media (max-width: 640px) {
+        .layer {
+          flex-direction: column;
+          gap: 12px;
+        }
+        .diagram {
+          flex-direction: column;
+        }
+        .diagram-box:first-child {
+          border-right: 1px solid var(--border);
+          border-bottom: none;
+        }
+        .diagram-box:last-child {
+          border-left: 1px solid var(--border);
+          border-top: none;
+        }
+        .diagram-arrow {
+          transform: rotate(90deg);
+          padding: 4px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+
+      <section class="section hero" style="padding: 40px;">
+        <a class="back" href="/">&larr; Home</a>
+        <h1 style="font-size: clamp(2rem, 3vw, 3rem);">How it works.</h1>
+        <p class="lead">Three layers between your words and everyone else.</p>
+      </section>
+
+      <section class="section tldr">
+        <p>
+          The server never sees your messages, never sees your room link, and never stores anything readable.
+          If someone seized the server, they'd get a pile of hashes and ciphertext. That's the point.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="diagram">
+          <div class="diagram-box">
+            <strong>Your browser</strong>
+            Encrypts messages<br />Holds the room secret
+          </div>
+          <div class="diagram-arrow">&rarr;</div>
+          <div class="diagram-box">
+            <strong>The server</strong>
+            Routes ciphertext<br />Sees only hashes
+          </div>
+          <div class="diagram-arrow">&rarr;</div>
+          <div class="diagram-box">
+            <strong>Their browser</strong>
+            Decrypts messages<br />Holds the room secret
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="layer">
+          <div class="layer-num">1</div>
+          <div class="layer-body">
+            <h3>The room secret stays in the URL</h3>
+            <p>
+              When you create a room, your browser generates a 256-bit random secret. This secret lives only
+              in the URL fragment &mdash; the part after the hash. It never leaves your device or hits the server.
+              Instead, your browser derives a one-way hash from it and sends only that hash to register the room.
+            </p>
+            <p class="detail">
+              Derivation: <code>room_hash = SHA-256("hisohiso.room_hash" || room_secret)</code>.
+              The server stores the hash, never the secret. Sharing the room means sharing the URL.
+              Losing the URL means losing access &mdash; by design.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="layer">
+          <div class="layer-num">2</div>
+          <div class="layer-body">
+            <h3>Messages are encrypted before they leave</h3>
+            <p>
+              Every message is encrypted in your browser using AES-256-GCM before it's sent.
+              The encryption key is derived from the room secret, so only people who have the link can read anything.
+              The server relays ciphertext &mdash; it can't decrypt a single word.
+            </p>
+            <p class="detail">
+              Key derivation: <code>k_msg = HKDF(room_secret, "hisohiso.k_msg")</code>.
+              Each message gets a unique 12-byte nonce. The room hash, message type, and message ID
+              are bound as additional authenticated data (AAD), so tampering is detectable.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="layer">
+          <div class="layer-num">3</div>
+          <div class="layer-body">
+            <h3>The server proves it knows nothing</h3>
+            <p>
+              The server's database contains room hashes, participant token hashes, and timestamps.
+              No names, no emails, no plaintext, no message history. Participants are identified by
+              random tokens that are also stored as hashes. Even if someone dumped the entire database,
+              they couldn't reconstruct who was in which room or what was said.
+            </p>
+            <p class="detail">
+              Participant tokens are 32-byte random values. The server stores
+              <code>SHA-256(token)</code> and validates requests by hashing the presented token.
+              Messages are never stored server-side &mdash; they're relayed in real time and discarded.
+              History lives in IndexedDB on each device, nowhere else.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>What about joining?</h2>
+        <p>
+          Someone with the link knocks. An existing participant &mdash; anyone already in the room &mdash;
+          approves or rejects. If nobody is online, nobody can approve. There's no backdoor,
+          no admin account, no way in without someone inside saying yes.
+        </p>
+        <p style="margin-top: 12px;">
+          And any participant can disband the room entirely. When that happens, the server
+          deletes the room record, all connections drop, and clients wipe local data for that room.
+          Irreversible.
+        </p>
+      </section>
+
+      <section class="section">
+        <h2>What we didn't build</h2>
+        <p>
+          No accounts. No password recovery. No email verification. No phone number binding.
+          No cloud backup of messages. No read receipts. No typing indicators. No user profiles.
+          No contact list. No friend requests.
+        </p>
+        <p style="margin-top: 12px;">
+          Every feature we left out is a surface we don't have to secure and a promise we don't have to keep.
+        </p>
+      </section>
+
+      <section class="section">
+        <h2>Open source</h2>
+        <p>
+          The code is on <a href="https://github.com/draganescu/hisohiso" class="link">GitHub</a>.
+          Read it. Run your own. The protocol is documented in the repo.
+          If you find a flaw, open an issue.
+        </p>
+      </section>
+
+      <footer class="footer">
+        <p><a href="/" class="link">Back to Hisohiso</a></p>
+      </footer>
+    </main>
+  </body>
+</html>

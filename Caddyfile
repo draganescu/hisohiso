@@ -22,8 +22,9 @@
 	}
 
 	# Landing page (static)
-	@landing path / /styles.css
+	@landing path / /styles.css /security /security.html /og.png
 	handle @landing {
+		rewrite /security /security.html
 		root * /app/landing
 		file_server
 	}
