@@ -223,6 +223,10 @@ const RoomController = () => {
       return;
     }
 
+    requestAnimationFrame(() => {
+      composerInputRef.current?.focus();
+    });
+
     const isTouch = window.matchMedia('(pointer: coarse)').matches;
     if (!isTouch || !window.visualViewport) {
       return;
@@ -714,6 +718,29 @@ const RoomController = () => {
     setReplyToId(null);
   }, []);
 
+  useEffect(() => {
+    if (roomState !== 'PARTICIPANT') {
+      return;
+    }
+    const isTouch = window.matchMedia('(pointer: coarse)').matches;
+    if (isTouch) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+        if (showComposer || showMenu || showHelp || showQueue || showDisband || showQr || selectedId) {
+          return;
+        }
+        event.preventDefault();
+        openComposer();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [roomState, showComposer, showMenu, showHelp, showQueue, showDisband, showQr, selectedId, openComposer]);
+
   const scrollToLatest = useCallback(() => {
     const el = listRef.current;
     if (!el) {
@@ -1156,7 +1183,7 @@ const RoomController = () => {
                     : 'border-b border-[#1716131f] bg-[#f8f4eb] py-4'
                 }`}
               >
-                <button className="text-sm font-semibold text-[#4f473e]" onClick={closeComposer} type="button">
+                <button className="hidden text-sm font-semibold text-[#4f473e] md:block" onClick={closeComposer} type="button">
                   Cancel
                 </button>
                 <p
@@ -1166,7 +1193,7 @@ const RoomController = () => {
                 >
                   {replyTarget ? 'Reply' : 'New message'}
                 </p>
-                <button className="text-sm font-semibold text-[#c44f2d]" onClick={sendMessage} type="button">
+                <button className="hidden text-sm font-semibold text-[#c44f2d] md:block" onClick={sendMessage} type="button">
                   Send
                 </button>
               </div>
@@ -1193,9 +1220,6 @@ const RoomController = () => {
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">From</p>
                       <p className="mt-2 text-lg font-semibold text-[#171613]">{handle || 'You'}</p>
-                    </div>
-                    <div className="rounded-full border border-[#d7ccb8] bg-[#f4ede1] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6a5e4e]">
-                      Draft
                     </div>
                   </div>
 
@@ -1272,6 +1296,20 @@ const RoomController = () => {
                     Replies are just new messages for now. Use <span className="font-semibold">/iam name</span> to change the sender label.
                   </p>
                 </div>
+              </div>
+
+              <div
+                className={`flex items-center gap-3 px-4 md:hidden ${
+                  keyboardVisible ? 'py-2' : 'border-t border-[#1716131f] bg-[#f8f4eb] py-4'
+                }`}
+                style={{ paddingBottom: keyboardVisible ? undefined : 'max(1rem, env(safe-area-inset-bottom))' }}
+              >
+                <button className="flex-1 rounded-full border border-[#17161333] bg-white px-4 py-3 text-sm font-semibold text-[#4f473e]" onClick={closeComposer} type="button">
+                  Cancel
+                </button>
+                <button className="flex-1 rounded-full border border-[#171613] bg-[#d9592f] px-4 py-3 text-sm font-semibold text-[#fff7ee]" onClick={sendMessage} type="button">
+                  Send
+                </button>
               </div>
             </div>
           </div>

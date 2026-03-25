@@ -1,11 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getToken, listRooms, removeRoom, type StoredRoom } from '../lib/storage';
+
+declare global {
+  interface Window {
+    BarcodeDetector?: new (opts: { formats: string[] }) => {
+      detect(source: ImageBitmapSource): Promise<{ rawValue: string }[]>;
+    };
+  }
+}
+
+const hasBarcodeDetector = typeof window !== 'undefined' && !!window.BarcodeDetector;
+
+const extractSecret = (raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  let secret = trimmed;
+  try {
+    if (trimmed.includes('://')) {
+      const url = new URL(trimmed);
+      secret = url.pathname.replace(/^\//, '');
+    }
+  } catch {
+    secret = trimmed;
+  }
+  return secret || null;
+};
 
 const RoomsPage = () => {
   const [rooms, setRooms] = useState<StoredRoom[]>([]);
   const [joinValue, setJoinValue] = useState('');
   const [joinError, setJoinError] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -18,28 +47,84 @@ const RoomsPage = () => {
   };
 
   const handleJoin = () => {
-    const trimmed = joinValue.trim();
-    if (!trimmed) {
-      setJoinError('Paste a room link or secret.');
-      return;
-    }
-    let secret = trimmed;
-    try {
-      if (trimmed.includes('://')) {
-        const url = new URL(trimmed);
-        secret = url.pathname.replace(/^\//, '');
-      }
-    } catch {
-      // If URL parsing fails, treat as raw secret.
-      secret = trimmed;
-    }
+    const secret = extractSecret(joinValue);
     if (!secret) {
-      setJoinError('Invalid link or secret.');
+      setJoinError('Paste a room link or secret.');
       return;
     }
     setJoinError('');
     navigate(`/${secret}`);
   };
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setScanning(false);
+  }, []);
+
+  const startScan = useCallback(async () => {
+    setScanError('');
+    setScanning(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      streamRef.current = stream;
+
+      if (!videoRef.current) {
+        stopCamera();
+        return;
+      }
+
+      const video = videoRef.current;
+      video.srcObject = stream;
+      await video.play();
+
+      const detector = new window.BarcodeDetector!({ formats: ['qr_code'] });
+
+      let active = true;
+      const tick = async () => {
+        if (!active || !videoRef.current || video.readyState < 2) {
+          if (active) requestAnimationFrame(tick);
+          return;
+        }
+        try {
+          const results = await detector.detect(video);
+          if (results.length > 0) {
+            const secret = extractSecret(results[0].rawValue);
+            if (secret) {
+              active = false;
+              stopCamera();
+              navigate(`/${secret}`);
+              return;
+            }
+          }
+        } catch {
+          // detection frame failed, continue
+        }
+        if (active) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+
+      return () => {
+        active = false;
+      };
+    } catch {
+      setScanError('Camera access denied.');
+      stopCamera();
+    }
+  }, [navigate, stopCamera]);
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
   return (
     <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
@@ -69,6 +154,42 @@ const RoomsPage = () => {
             </button>
           </div>
           {joinError && <p className="mt-2 text-xs text-[#6b2411]">{joinError}</p>}
+
+          {hasBarcodeDetector && !scanning && (
+            <button
+              className="mt-4 rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+              onClick={() => void startScan()}
+              type="button"
+            >
+              Scan QR code
+            </button>
+          )}
+
+          {scanning && (
+            <div className="mt-4">
+              <div className="relative overflow-hidden rounded-2xl bg-black">
+                <video
+                  ref={videoRef}
+                  className="w-full"
+                  playsInline
+                  muted
+                  style={{ maxHeight: '320px', objectFit: 'cover' }}
+                />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="h-48 w-48 rounded-2xl border-2 border-white/50" />
+                </div>
+              </div>
+              <button
+                className="mt-3 rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+                onClick={stopCamera}
+                type="button"
+              >
+                Stop scanning
+              </button>
+            </div>
+          )}
+
+          {scanError && <p className="mt-2 text-xs text-[#6b2411]">{scanError}</p>}
         </section>
 
         {rooms.length === 0 && (
