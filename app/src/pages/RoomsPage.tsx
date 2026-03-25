@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import jsQR from 'jsqr';
 import { getToken, listRooms, removeRoom, type StoredRoom } from '../lib/storage';
 
-declare global {
-  interface Window {
-    BarcodeDetector?: new (opts: { formats: string[] }) => {
-      detect(source: ImageBitmapSource): Promise<{ rawValue: string }[]>;
-    };
-  }
-}
-
-const hasBarcodeDetector = typeof window !== 'undefined' && !!window.BarcodeDetector;
+const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
 const extractSecret = (raw: string): string | null => {
   const trimmed = raw.trim();
@@ -34,6 +27,7 @@ const RoomsPage = () => {
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const navigate = useNavigate();
 
@@ -83,27 +77,28 @@ const RoomsPage = () => {
       video.srcObject = stream;
       await video.play();
 
-      const detector = new window.BarcodeDetector!({ formats: ['qr_code'] });
+      const canvas = canvasRef.current!;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
       let active = true;
-      const tick = async () => {
+      const tick = () => {
         if (!active || !videoRef.current || video.readyState < 2) {
           if (active) requestAnimationFrame(tick);
           return;
         }
-        try {
-          const results = await detector.detect(video);
-          if (results.length > 0) {
-            const secret = extractSecret(results[0].rawValue);
-            if (secret) {
-              active = false;
-              stopCamera();
-              navigate(`/${secret}`);
-              return;
-            }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height);
+        if (code) {
+          const secret = extractSecret(code.data);
+          if (secret) {
+            active = false;
+            stopCamera();
+            navigate(`/${secret}`);
+            return;
           }
-        } catch {
-          // detection frame failed, continue
         }
         if (active) requestAnimationFrame(tick);
       };
@@ -155,7 +150,8 @@ const RoomsPage = () => {
           </div>
           {joinError && <p className="mt-2 text-xs text-[#6b2411]">{joinError}</p>}
 
-          {hasBarcodeDetector && !scanning && (
+          <canvas ref={canvasRef} className="hidden" />
+          {hasCamera && !scanning && (
             <button
               className="mt-4 rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
               onClick={() => void startScan()}
