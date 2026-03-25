@@ -958,7 +958,7 @@ const RoomController = () => {
 
           {!autoScroll && unreadCount > 0 && (
             <button
-              className="absolute bottom-24 left-4 right-4 z-20 rounded-full border border-[#1716131f] bg-[#fffaf1] px-4 py-2 text-xs font-semibold text-[#171613] shadow-[0_12px_24px_rgba(23,22,19,0.12)] sm:left-auto sm:right-6 sm:w-auto"
+              className="absolute top-20 left-4 right-4 z-20 rounded-full border border-[#d9592f] bg-[#d9592f] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(98,40,20,0.3)] sm:left-auto sm:right-6 sm:w-auto"
               onClick={() => {
                 scrollToLatest();
                 setAutoScroll(true);
@@ -966,7 +966,7 @@ const RoomController = () => {
               }}
               type="button"
             >
-              {unreadCount} new message{unreadCount === 1 ? '' : 's'} · Jump to latest
+              {unreadCount} new message{unreadCount === 1 ? '' : 's'} ↑
             </button>
           )}
         </div>
