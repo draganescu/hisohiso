@@ -12,13 +12,13 @@ const extractSecret = (raw: string): string | null => {
   try {
     if (trimmed.includes('://')) {
       const url = new URL(trimmed);
-      // Support hash-based URLs: hisohiso.org/#/SECRET
-      const hashPath = url.hash.replace(/^#\/?/, '');
-      if (hashPath) {
-        secret = hashPath;
+      // Support hash-based URLs: hisohiso.org/room#SECRET
+      const hashSecret = url.hash.replace(/^#\/?/, '');
+      if (hashSecret) {
+        secret = hashSecret;
       } else {
         // Fallback for old path-based URLs: hisohiso.org/SECRET
-        secret = url.pathname.replace(/^\//, '');
+        secret = url.pathname.replace(/^\/(room\/?)?/, '');
       }
     }
   } catch {
@@ -54,7 +54,7 @@ const RoomsPage = () => {
       return;
     }
     setJoinError('');
-    navigate(`/${secret}`);
+    window.location.href = `/room#${secret}`;
   };
 
   const stopCamera = useCallback(() => {
@@ -103,7 +103,7 @@ const RoomsPage = () => {
           if (secret) {
             active = false;
             stopCamera();
-            navigate(`/${secret}`);
+            window.location.href = `/room#${secret}`;
             return;
           }
         }
@@ -198,7 +198,7 @@ const RoomsPage = () => {
         {rooms.length === 0 && (
           <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8">
             <p className="text-[#3a362f]">No rooms yet. Start one or join using a link.</p>
-            <a className="mt-4 inline-block text-sm underline" href="/#/new">
+            <a className="mt-4 inline-block text-sm underline" href="/new">
               Start a room
             </a>
           </div>
@@ -226,7 +226,7 @@ const RoomsPage = () => {
                     <div className="flex flex-wrap gap-2">
                       <a
                         className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-xs font-semibold text-[#f6f0e8]"
-                        href={`/#/${room.roomSecret}`}
+                        href={`/room#${room.roomSecret}`}
                       >
                         Open
                       </a>
@@ -246,7 +246,7 @@ const RoomsPage = () => {
           </div>
         )}
 
-        <a className="text-sm underline" href="/#/">
+        <a className="text-sm underline" href="/">
           Back to landing
         </a>
       </div>

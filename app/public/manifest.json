@@ -2,7 +2,7 @@
   "name": "Hisohiso",
   "short_name": "Hisohiso",
   "description": "Hisohiso: minimal encrypted chat. No accounts. No tracking.",
-  "start_url": "/#/rooms",
+  "start_url": "/rooms",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f7f2e6",

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import {
   decryptText,
   deriveKnockKey,
@@ -83,7 +82,7 @@ const getMessageLabel = (message: ChatMessage): string => {
 };
 
 const RoomController = () => {
-  const { roomSecret = '' } = useParams();
+  const [roomSecret] = useState(() => window.location.hash.replace(/^#\/?/, ''));
   const [roomHash, setRoomHash] = useState<string>('');
   const [roomState, setRoomState] = useState<RoomState>('INIT');
   const [error, setError] = useState<string>('');
@@ -118,7 +117,7 @@ const RoomController = () => {
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
 
-  const shareUrl = useMemo(() => `${window.location.origin}/#/${roomSecret}`, [roomSecret]);
+  const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
   const visibleMessages = useMemo(() => [...messages].sort((a, b) => b.timestamp - a.timestamp), [messages]);
   const activeMessage = useMemo(() => messages.find((entry) => entry.id === selectedId) ?? null, [messages, selectedId]);
   const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
@@ -1363,7 +1362,7 @@ const RoomController = () => {
               </div>
               <p className="mt-2 text-xs text-[#3a362f]">Messages stay on this device only.</p>
 
-              <a className="mt-4 inline-block text-sm underline" href="/#/rooms">
+              <a className="mt-4 inline-block text-sm underline" href="/rooms">
                 Your rooms
               </a>
 
@@ -1546,7 +1545,7 @@ const RoomController = () => {
             </div>
             <p className="mt-2 text-xs text-[#3a362f]">Messages stay on this device only.</p>
 
-            <a className="mt-4 inline-block text-sm underline" href="/#/rooms">
+            <a className="mt-4 inline-block text-sm underline" href="/rooms">
               Your rooms
             </a>
 

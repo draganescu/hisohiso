@@ -11,7 +11,7 @@ const App = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/rooms" element={<RoomsPage />} />
       <Route path="/new" element={<RoomCreator />} />
-      <Route path="/:roomSecret" element={<RoomController />} />
+      <Route path="/room" element={<RoomController />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
