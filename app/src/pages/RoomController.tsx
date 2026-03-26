@@ -117,6 +117,7 @@ const RoomController = () => {
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const focusProxyRef = useRef<HTMLTextAreaElement | null>(null);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
 
@@ -238,6 +239,8 @@ const RoomController = () => {
       return;
     }
 
+    // Transfer focus from proxy to real textarea (works on Safari because
+    // the proxy already holds the user-gesture focus grant)
     requestAnimationFrame(() => {
       composerInputRef.current?.focus();
     });
@@ -727,6 +730,8 @@ const RoomController = () => {
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
+    // Focus proxy textarea synchronously to keep Safari's user-gesture trust
+    focusProxyRef.current?.focus();
     setReplyToId(messageId ?? null);
     setSelectedId(null);
     setShowComposer(true);
@@ -807,6 +812,7 @@ const RoomController = () => {
   if (roomState === 'PARTICIPANT') {
     return (
       <main className="app-shell relative text-[#171613] md:px-4 md:py-4 lg:px-6">
+        <textarea ref={focusProxyRef} aria-hidden="true" className="fixed -left-[9999px] top-0 h-0 w-0 opacity-0" tabIndex={-1} />
         <div className="relative mx-auto flex h-full w-full max-w-[1320px] flex-col overflow-hidden bg-[#f4efe4] md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_90px_rgba(23,22,19,0.16)]">
           <div className="relative">
             <div
