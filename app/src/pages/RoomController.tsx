@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import {
   decryptText,
   deriveKnockKey,
@@ -111,6 +112,8 @@ const RoomController = () => {
   const [connection, setConnection] = useState<'idle' | 'connected' | 'error'>('idle');
   const [autoScroll, setAutoScroll] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasCompanion, setHasCompanion] = useState(false);
+  const [emptyQrSrc, setEmptyQrSrc] = useState<string>('');
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -118,6 +121,19 @@ const RoomController = () => {
   const knockKeyRef = useRef<CryptoKey | null>(null);
 
   const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
+  const showEmptyState = messages.length === 0 && !hasCompanion && roomState === 'PARTICIPANT';
+
+  useEffect(() => {
+    if (!showEmptyState || !shareUrl) {
+      return;
+    }
+    let active = true;
+    QRCode.toDataURL(shareUrl, { width: 240, margin: 1 }).then((url: string) => {
+      if (active) setEmptyQrSrc(url);
+    });
+    return () => { active = false; };
+  }, [showEmptyState, shareUrl]);
+
   const visibleMessages = useMemo(() => [...messages].sort((a, b) => b.timestamp - a.timestamp), [messages]);
   const activeMessage = useMemo(() => messages.find((entry) => entry.id === selectedId) ?? null, [messages, selectedId]);
   const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
@@ -435,6 +451,9 @@ const RoomController = () => {
             }
           }
           const direction = tokenHash && payload.from === tokenHash ? 'out' : 'in';
+          if (direction === 'in') {
+            setHasCompanion(true);
+          }
           const messageRecord: ChatMessage = {
             id: msgId,
             room_hash: roomHash,
@@ -561,6 +580,7 @@ const RoomController = () => {
           'X-Chat-Token': token
         }
       });
+      setHasCompanion(true);
       setKnocks((prev) => prev.filter((item) => item.id !== knockId));
     },
     [roomHash, token]
@@ -896,7 +916,39 @@ const RoomController = () => {
                 <span className="text-xs text-[#7a7266]">{visibleMessages.length} card{visibleMessages.length === 1 ? '' : 's'}</span>
               </div>
 
-              {visibleMessages.length === 0 && (
+              {showEmptyState && (
+                <div className="rounded-[30px] border border-dashed border-[#cdbfa8] bg-[#faf5eb] px-5 py-8 text-center shadow-[0_14px_30px_rgba(23,22,19,0.04)] sm:px-8 lg:px-10 lg:py-12">
+                  <p className="text-xl font-semibold text-[#171613] sm:text-2xl">Invite someone</p>
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-[#5d564d] sm:text-base">
+                    Share this link to invite someone into the room. Anyone with the link can request to join.
+                  </p>
+
+                  <div className="mx-auto mt-6 max-w-sm">
+                    <div className="flex items-center gap-2 rounded-xl border border-[#d5c8b2] bg-white px-4 py-3">
+                      <p className="min-w-0 flex-1 truncate text-left text-xs text-[#5d564d]">{shareUrl}</p>
+                      <button
+                        className="shrink-0 rounded-full border border-[#171613] bg-[#171613] px-4 py-1.5 text-xs font-semibold text-[#f6f0e8]"
+                        onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
+                        type="button"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+
+                  {emptyQrSrc && (
+                    <div className="mt-6 flex justify-center">
+                      <img src={emptyQrSrc} alt="Room QR code" className="h-40 w-40 rounded-xl sm:h-48 sm:w-48" />
+                    </div>
+                  )}
+
+                  <p className="mt-6 text-xs text-[#8d816c]">
+                    Or compose a message to get started.
+                  </p>
+                </div>
+              )}
+
+              {!showEmptyState && visibleMessages.length === 0 && (
                 <div className="rounded-[30px] border border-dashed border-[#cdbfa8] bg-[#faf5eb] px-5 py-10 text-center shadow-[0_14px_30px_rgba(23,22,19,0.04)] sm:px-8 lg:px-10 lg:py-14">
                   <p className="text-base font-semibold text-[#171613] sm:text-xl">Inbox empty</p>
                   <p className="mt-2 text-sm leading-7 text-[#5d564d] sm:text-base">
@@ -1487,6 +1539,12 @@ const RoomController = () => {
           <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
             <h1 className="text-3xl font-semibold">Room unavailable</h1>
             <p className="mt-3 text-[#3a362f]">This room was disbanded or no longer exists.</p>
+            <a
+              className="mt-6 inline-block rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+              href="/rooms"
+            >
+              Your rooms
+            </a>
           </div>
         )}
       </div>
