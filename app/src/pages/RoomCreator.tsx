@@ -30,7 +30,7 @@ const RoomCreator = () => {
           setToken(hash, data.participant_token);
         }
 
-        window.location.href = `/${secret}`;
+        window.location.href = `/#/${secret}`;
       } catch (err) {
         setStatus('error');
         setError(err instanceof Error ? err.message : 'Unable to create room');

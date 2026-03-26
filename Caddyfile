@@ -29,6 +29,12 @@
 		file_server
 	}
 
+	# Legacy path-based room URLs → redirect to hash-based
+	@roomsecret path_regexp secret ^/([A-Za-z0-9_-]{20,})$
+	handle @roomsecret {
+		redir /#/{re.secret.1} 302
+	}
+
 	# React app (rooms)
 	handle {
 		root * /app/public

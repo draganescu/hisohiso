@@ -118,7 +118,7 @@ const RoomController = () => {
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
 
-  const shareUrl = useMemo(() => `${window.location.origin}/${roomSecret}`, [roomSecret]);
+  const shareUrl = useMemo(() => `${window.location.origin}/#/${roomSecret}`, [roomSecret]);
   const visibleMessages = useMemo(() => [...messages].sort((a, b) => b.timestamp - a.timestamp), [messages]);
   const activeMessage = useMemo(() => messages.find((entry) => entry.id === selectedId) ?? null, [messages, selectedId]);
   const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
@@ -1363,7 +1363,7 @@ const RoomController = () => {
               </div>
               <p className="mt-2 text-xs text-[#3a362f]">Messages stay on this device only.</p>
 
-              <a className="mt-4 inline-block text-sm underline" href="/rooms">
+              <a className="mt-4 inline-block text-sm underline" href="/#/rooms">
                 Your rooms
               </a>
 
@@ -1546,7 +1546,7 @@ const RoomController = () => {
             </div>
             <p className="mt-2 text-xs text-[#3a362f]">Messages stay on this device only.</p>
 
-            <a className="mt-4 inline-block text-sm underline" href="/rooms">
+            <a className="mt-4 inline-block text-sm underline" href="/#/rooms">
               Your rooms
             </a>
 

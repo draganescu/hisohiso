@@ -12,7 +12,7 @@ const LandingPage = () => {
           </p>
           <a
             className="mt-8 inline-flex items-center justify-center rounded-full border-2 border-[#171613] bg-[#171613] px-6 py-3 font-semibold tracking-wide text-[#f6f0e8] transition hover:border-[#b43d1f] hover:bg-[#d64f2a]"
-            href="/new"
+            href="/#/new"
           >
             Start a room
           </a>
