@@ -131,10 +131,18 @@ const RoomsPage = () => {
   return (
     <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
-        <header>
-          <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Hisohiso</p>
-          <h1 className="mt-3 text-3xl font-semibold">Your rooms</h1>
-          <p className="mt-2 text-sm text-[#3a362f]">Stored locally on this device only.</p>
+        <header className="flex items-start justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Hisohiso</p>
+            <h1 className="mt-3 text-3xl font-semibold">Your rooms</h1>
+            <p className="mt-2 text-sm text-[#3a362f]">Stored locally on this device only.</p>
+          </div>
+          <a
+            className="mt-4 shrink-0 rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+            href="/new"
+          >
+            Start a room
+          </a>
         </header>
 
         <section className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 shadow-[0_10px_24px_rgba(23,22,19,0.1)]">
