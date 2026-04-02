@@ -1,99 +1,85 @@
 # Hisohiso
 
-Minimal encrypted room chat with no accounts, no cloud message history, and URL-based room sharing.
+Minimal encrypted room chat. No accounts, no cloud history, no tracking.
 
-## Benefits
+## How it works
 
-- Private by default: chat messages are encrypted in the browser before they leave the device.
-- Low metadata surface: server routes ciphertext and room events, not readable chat content.
-- No account friction: create a room and share a link.
-- Local-first history: messages are stored in local IndexedDB on each device.
-- Stronger join proof: knocks are encrypted with `room secret + shared passphrase`, so knowing only the URL is not enough to produce a valid knock.
-- Fast teardown: disbanding a room removes it server-side and clients wipe local room data when room removal is detected.
+- Create a room, get a link. Share it with whoever you want.
+- Room secrets live in the URL hash fragment (`/room#SECRET`) — never sent to the server, never in logs.
+- Messages are encrypted in the browser (AES-256-GCM) before leaving the device.
+- The server only routes ciphertext and room events.
+- Message history lives in local IndexedDB on each device.
+- Join knocks are encrypted with `room secret + optional passphrase`.
+- Anyone can disband a room — server deletes it, all clients wipe local data.
+- Installable as a PWA. QR code scanning to join rooms on mobile.
 
-## How This Can Be Used
+## Use cases
 
-- Ad-hoc private team discussions.
+- Ad-hoc private discussions.
 - Temporary incident-response rooms.
-- Family or friend group chat without account onboarding.
-- One-off coordination threads where room links can be rotated/disbanded quickly.
-- Self-hosted encrypted room chat inside an internal network.
+- Group chat without account onboarding.
+- Self-hosted encrypted chat on an internal network.
 
-## Architecture (Short)
+## Architecture
 
-- Frontend: React + Vite (`app/`)
-- Backend API: PHP (`server/index.php`)
-- Realtime events: Mercure (SSE)
-- Reverse proxy/runtime: FrankenPHP + Caddy
-- Storage:
-  - Server: SQLite for room/token/presence metadata (`/data/chat.sqlite`)
-  - Client: IndexedDB for local message history
+- **Frontend**: React + Vite (`app/`)
+- **Backend API**: PHP (`server/index.php`)
+- **Realtime**: Mercure (SSE)
+- **Runtime**: FrankenPHP + Caddy
+- **Server storage**: SQLite — room/token/presence metadata only (`/data/chat.sqlite`)
+- **Client storage**: IndexedDB — encrypted message history
 
-## Easy Setup (Local, Recommended)
+## Local setup
 
-### Prerequisites
-
-- Docker + Docker Compose
-
-### Start
+Requires Docker + Docker Compose.
 
 ```bash
 ./run-local.sh
 ```
 
-Or:
+App runs at `http://localhost:8087`.
 
-```bash
-docker compose up --build
-```
+Stop with `docker compose down`.
 
-App URL:
+## Production setup
 
-```text
-http://localhost:8087
-```
-
-### Stop
-
-```bash
-docker compose down
-```
-
-## Production Setup
-
-1. Create env file from template:
+1. Copy and fill in env values:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Set real values in `.env`:
-- `SERVER_NAME`
-- `MERCURE_PUBLISHER_JWT_KEY`
-- `MERCURE_SUBSCRIBER_JWT_KEY`
-- `MERCURE_HUB_URL`
+Set `SERVER_NAME`, `MERCURE_PUBLISHER_JWT_KEY`, `MERCURE_SUBSCRIBER_JWT_KEY`, `MERCURE_HUB_URL`.
 
-3. Run compose with production overrides:
+2. Run:
 
 ```bash
 docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 ```
 
-## Security Notes
+## Security notes
 
-- Treat the room URL as sensitive.
-- Use a strong shared passphrase for join knocks.
+- The room secret is in the hash fragment — it never appears in HTTP requests, server logs, or Referer headers.
+- Old path-based URLs (`/SECRET`) are 302-redirected to `/room#SECRET` via Caddy.
+- Use a shared passphrase for stronger knock encryption.
 - If a room is compromised, disband and create a new one.
-- Message history is local to each device; clearing browser storage removes local history.
+- Clearing browser storage removes local message history.
 
-## Project Structure
+## Project structure
 
 ```text
-app/                React client
-server/             PHP API
-public/             Landing page assets
+app/                React client (Vite + Tailwind)
+server/             PHP API (single-file)
+public/             Static landing page
+data/               SQLite database (created at runtime)
+Caddyfile           Reverse proxy config
+Dockerfile          Multi-stage build
 compose.yaml        Local container setup
 compose.prod.yaml   Production override
 run-local.sh        Local startup helper
-about.md            Protocol and UX notes
+LICENSE             GPLv3
 ```
+
+## License
+
+GPLv3. See [LICENSE](LICENSE).
