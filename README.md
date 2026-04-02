@@ -60,7 +60,6 @@ docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 ## Security notes
 
 - The room secret is in the hash fragment — it never appears in HTTP requests, server logs, or Referer headers.
-- Old path-based URLs (`/SECRET`) are 302-redirected to `/room#SECRET` via Caddy.
 - Use a shared passphrase for stronger knock encryption.
 - If a room is compromised, disband and create a new one.
 - Clearing browser storage removes local message history.
