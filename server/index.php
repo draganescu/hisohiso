@@ -83,6 +83,28 @@ function touch_presence(string $room_hash, string $token): void
     ]);
 }
 
+if ($path === '/api/stats' && $method === 'GET') {
+    $pdo = db();
+    $cutoff = time() - 45;
+    $pdo->prepare('DELETE FROM presence WHERE last_seen < :cutoff')->execute([':cutoff' => $cutoff]);
+
+    $total_rooms = (int) $pdo->query('SELECT COUNT(*) FROM rooms')->fetchColumn();
+
+    $stmt = $pdo->prepare('SELECT COUNT(DISTINCT room_hash) FROM presence WHERE last_seen >= :cutoff');
+    $stmt->execute([':cutoff' => $cutoff]);
+    $active_rooms = (int) $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM presence WHERE last_seen >= :cutoff');
+    $stmt->execute([':cutoff' => $cutoff]);
+    $active_people = (int) $stmt->fetchColumn();
+
+    json_response([
+        'total_rooms' => $total_rooms,
+        'active_rooms' => $active_rooms,
+        'active_people' => $active_people,
+    ]);
+}
+
 if ($path === '/api/rooms' && $method === 'POST') {
     $body = read_json_body();
     $room_hash = $body['room_hash'] ?? null;

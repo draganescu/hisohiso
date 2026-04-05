@@ -48,6 +48,7 @@
         <p class="eyebrow">Hisohiso</p>
         <h1>Fuck your bubble color.</h1>
         <p class="lead">Just chat. No accounts. No tracking. No feeds. No blue vs green.</p>
+        <p class="stats" id="stats"></p>
         <div class="hero-actions">
           <a class="cta" href="/new">Start a room</a>
           <a class="link" href="/rooms">Your rooms</a>
@@ -112,5 +113,20 @@
         <p style="margin-top: 8px;"><a href="/security" class="link">How it works</a></p>
       </footer>
     </main>
+    <script>
+      fetch('/api/stats')
+        .then(r => r.json())
+        .then(d => {
+          const parts = [];
+          if (d.active_rooms > 0) parts.push(d.active_rooms + ' active room' + (d.active_rooms !== 1 ? 's' : ''));
+          if (d.active_people > 0) parts.push(d.active_people + ' ' + (d.active_people !== 1 ? 'people' : 'person') + ' talking');
+          if (parts.length > 0) {
+            document.getElementById('stats').textContent = parts.join(' · ') + ' right now';
+          } else if (d.total_rooms > 0) {
+            document.getElementById('stats').textContent = d.total_rooms + ' room' + (d.total_rooms !== 1 ? 's' : '') + ' created';
+          }
+        })
+        .catch(() => {});
+    </script>
   </body>
 </html>

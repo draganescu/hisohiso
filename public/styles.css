@@ -63,6 +63,14 @@ p {
   color: var(--ink);
 }
 
+.stats {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  margin-top: 12px;
+  letter-spacing: 0.02em;
+  min-height: 1.4em;
+}
+
 .cta {
   display: inline-flex;
   align-items: center;
