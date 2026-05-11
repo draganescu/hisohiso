@@ -4,7 +4,6 @@ import { spawnAgent } from '../lib/agent-process.js';
 import { startPresence } from '../lib/presence.js';
 import { subscribeToRoom } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
-import { sha256Hex } from '../lib/crypto.js';
 import qrTerminal from 'qrcode-terminal';
 
 export const wrap = async (command: string[]): Promise<void> => {
@@ -56,14 +55,11 @@ export const wrap = async (command: string[]): Promise<void> => {
       },
     });
 
-    // Handle Ctrl+C during waiting
     const cleanup = async () => {
       console.log('\nCancelled. Cleaning up...');
       sse.close();
       presence.stop();
-      try {
-        await api.disbandRoom(config.server, room.roomHash, room.participantToken);
-      } catch { /* best effort */ }
+      try { await api.disbandRoom(config.server, room.roomHash, room.participantToken); } catch { /* */ }
       process.exit(0);
     };
     process.on('SIGINT', cleanup);
@@ -71,10 +67,14 @@ export const wrap = async (command: string[]): Promise<void> => {
 
   // Phone is in. Spawn the agent.
   console.log(`Spawning: ${cmd} ${args.join(' ')}`);
-  const agent = await spawnAgent(cmd, args);
+  const agent = await spawnAgent(cmd, args, { injectPreamble: false });
   console.log(`Agent running (PID: ${agent.pid}). Bridging...\n`);
 
-  // Bridge agent to room
+  // Close stdin so one-shot commands (like claude -p) get EOF and run.
+  // Interactive commands (cat, bash) will exit on EOF — use daemon mode for those.
+  agent.closeStdin();
+
+  // Bridge agent stdout -> room
   const bridge = await bridgeAgentToRoom(
     agent,
     config.server,

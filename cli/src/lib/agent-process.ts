@@ -5,20 +5,32 @@ import { getPreamble } from './preamble.js';
 
 export type AgentHandle = {
   writeStdin: (data: string) => void;
+  closeStdin: () => void;
   onLine: (callback: (line: string, isStderr: boolean) => void) => void;
   onExit: Promise<{ code: number | null; signal: string | null }>;
   kill: () => void;
   pid: number | undefined;
 };
 
+export type SpawnOptions = {
+  preambleAgent?: string;
+  env?: Record<string, string>;
+  injectPreamble?: boolean;
+  shellCommand?: boolean;
+};
+
 export const spawnAgent = async (
   command: string,
   args: string[] = [],
-  options?: { preambleAgent?: string; env?: Record<string, string> }
+  options?: SpawnOptions
 ): Promise<AgentHandle> => {
+  // shellCommand: true means command is a shell string (from registry).
+  // false/default: command + args are passed directly (preserves spaces in args).
+  const useShell = options?.shellCommand ?? false;
+
   const child: ChildProcess = spawn(command, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
-    shell: true,
+    shell: useShell,
     env: { ...process.env, ...options?.env },
   });
 
@@ -37,9 +49,11 @@ export const spawnAgent = async (
   setupLineReader(child.stdout, false);
   setupLineReader(child.stderr, true);
 
-  // Inject preamble
-  const preamble = await getPreamble(options?.preambleAgent);
-  child.stdin?.write(preamble + '\n');
+  // Optionally inject preamble to stdin
+  if (options?.injectPreamble !== false) {
+    const preamble = await getPreamble(options?.preambleAgent);
+    child.stdin?.write(preamble + '\n');
+  }
 
   const exitPromise = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
     child.on('exit', (code, signal) => {
@@ -50,6 +64,9 @@ export const spawnAgent = async (
   return {
     writeStdin: (data: string) => {
       child.stdin?.write(data);
+    },
+    closeStdin: () => {
+      child.stdin?.end();
     },
     onLine: (callback) => {
       lineCallbacks.push(callback);

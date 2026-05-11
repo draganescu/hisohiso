@@ -74,7 +74,10 @@ export class AgentManager {
     }));
 
     // Spawn agent process
-    const agent = await spawnAgent(entry.command, [], { preambleAgent: entry.mode !== 'default' ? entry.mode : undefined });
+    const agent = await spawnAgent(entry.command, [], {
+      shellCommand: true,
+      preambleAgent: entry.mode !== 'default' ? entry.mode : undefined,
+    });
 
     if (initialMessage) {
       agent.writeStdin(`[FROM USER] ${initialMessage}\n`);
