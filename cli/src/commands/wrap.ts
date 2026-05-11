@@ -95,10 +95,6 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     });
   });
 
-  // Send welcome
-  await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey,
-    `Connected to ${agentName}. Send a message to start.`);
-
   const ownTokenHash = await sha256Hex(room.participantToken);
   let running = false;
 
@@ -132,8 +128,6 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
       }
 
       running = true;
-      await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey,
-        '...');
 
       // Run the agent with the user's message
       const args = [...profile.args, text];
