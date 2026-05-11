@@ -1,5 +1,7 @@
 /data
 /app/node_modules
 /app/dist
+/cli/node_modules
+/cli/dist
 .DS_Store
 .env

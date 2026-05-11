@@ -1,0 +1,86 @@
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+const CONFIG_DIR = join(homedir(), '.hisohiso');
+const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+const REGISTRY_FILE = join(CONFIG_DIR, 'registry.json');
+const ROOMS_FILE = join(CONFIG_DIR, 'rooms.json');
+const PID_FILE = join(CONFIG_DIR, 'daemon.pid');
+const LOGS_DIR = join(CONFIG_DIR, 'logs');
+
+export { CONFIG_DIR, CONFIG_FILE, REGISTRY_FILE, ROOMS_FILE, PID_FILE, LOGS_DIR };
+
+export type Config = {
+  server: string;
+  controlRoomSecret: string;
+  controlRoomHash: string;
+  participantToken: string;
+  controlRoomPassword: string;
+};
+
+export type RegisteredAgent = {
+  name: string;
+  command: string;
+  mode: string;
+};
+
+export type ActiveRoom = {
+  agentId: string;
+  name: string;
+  roomHash: string;
+  roomSecret: string;
+  pid: number;
+};
+
+export const ensureConfigDir = async (): Promise<void> => {
+  await mkdir(CONFIG_DIR, { recursive: true });
+  await mkdir(LOGS_DIR, { recursive: true });
+};
+
+export const configExists = async (): Promise<boolean> => {
+  try {
+    await access(CONFIG_FILE);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const loadConfig = async (): Promise<Config> => {
+  const raw = await readFile(CONFIG_FILE, 'utf-8');
+  return JSON.parse(raw) as Config;
+};
+
+export const saveConfig = async (config: Config): Promise<void> => {
+  await ensureConfigDir();
+  await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+};
+
+export const loadRegistry = async (): Promise<RegisteredAgent[]> => {
+  try {
+    const raw = await readFile(REGISTRY_FILE, 'utf-8');
+    return JSON.parse(raw) as RegisteredAgent[];
+  } catch {
+    return [];
+  }
+};
+
+export const saveRegistry = async (agents: RegisteredAgent[]): Promise<void> => {
+  await ensureConfigDir();
+  await writeFile(REGISTRY_FILE, JSON.stringify(agents, null, 2) + '\n', 'utf-8');
+};
+
+export const loadActiveRooms = async (): Promise<ActiveRoom[]> => {
+  try {
+    const raw = await readFile(ROOMS_FILE, 'utf-8');
+    return JSON.parse(raw) as ActiveRoom[];
+  } catch {
+    return [];
+  }
+};
+
+export const saveActiveRooms = async (rooms: ActiveRoom[]): Promise<void> => {
+  await ensureConfigDir();
+  await writeFile(ROOMS_FILE, JSON.stringify(rooms, null, 2) + '\n', 'utf-8');
+};
