@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
 import { isDaemonRunning, readPid, removePid } from '../daemon/pid.js';
 import { configExists } from '../lib/config.js';
+import { runDaemon } from '../daemon/daemon-main.js';
 
 export const daemonStart = async (): Promise<void> => {
   if (!(await configExists())) {
@@ -14,36 +14,9 @@ export const daemonStart = async (): Promise<void> => {
     return;
   }
 
-  console.log('Starting daemon...');
-
-  // Re-invoke ourselves with a hidden subcommand.
-  // Works for both `npx tsx src/index.ts` and compiled binary.
-  const execPath = process.argv[0]!;
-  const execArgs = process.argv.slice(1);
-
-  // Find where "daemon" "start" appears in argv and replace with "daemon" "_run"
-  const daemonIdx = execArgs.indexOf('daemon');
-  const runArgs = daemonIdx >= 0
-    ? [...execArgs.slice(0, daemonIdx), 'daemon', '_run']
-    : [...execArgs.slice(0, -1), 'daemon', '_run'];
-
-  const child = spawn(execPath, runArgs, {
-    detached: true,
-    stdio: 'ignore',
-  });
-
-  child.unref();
-
-  // Give it a moment to start and write PID
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-
-  if (await isDaemonRunning()) {
-    const pid = await readPid();
-    console.log(`Daemon started (PID: ${pid}).`);
-  } else {
-    console.error('Daemon failed to start. Check logs.');
-    process.exit(1);
-  }
+  // Runs in foreground: shows QR for phone to join, then enters main loop.
+  // Use a process manager (systemd, launchd, screen, tmux) to background it.
+  await runDaemon();
 };
 
 export const daemonStop = async (): Promise<void> => {

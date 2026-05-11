@@ -1,8 +1,11 @@
 import { loadConfig, configExists } from '../lib/config.js';
 import { createRoomAndJoin, encryptAndSend, bridgeAgentToRoom } from '../lib/room-bridge.js';
 import { spawnAgent } from '../lib/agent-process.js';
-import { deriveMessageKey } from '../lib/crypto.js';
 import { startPresence } from '../lib/presence.js';
+import { subscribeToRoom } from '../lib/sse-client.js';
+import * as api from '../lib/api-client.js';
+import { sha256Hex } from '../lib/crypto.js';
+import qrTerminal from 'qrcode-terminal';
 
 export const wrap = async (command: string[]): Promise<void> => {
   if (!(await configExists())) {
@@ -17,43 +20,59 @@ export const wrap = async (command: string[]): Promise<void> => {
     process.exit(1);
   }
 
-  console.log(`Creating room for: ${cmd} ${args.join(' ')}`);
-
   // Create agent room
   const password = '';
   const room = await createRoomAndJoin(config.server, password);
 
-  console.log(`Room created. Hash: ${room.roomHash.slice(0, 12)}...`);
+  // Show QR code for the room
+  const joinUrl = `${config.server}/room#${room.roomSecret}`;
+  console.log(`\nScan to connect to ${cmd}:\n`);
+  qrTerminal.generate(joinUrl, { small: true }, (code: string) => {
+    console.log(code);
+  });
+  console.log(`\nOr open: ${joinUrl}\n`);
+  console.log('Waiting for phone to join...');
 
-  // Notify control room about the new agent room
-  const controlKey = await deriveMessageKey(config.controlRoomSecret, config.controlRoomPassword);
-  const controlPresence = startPresence(config.server, config.controlRoomHash, config.participantToken);
+  // Start presence so the room shows as active
+  const presence = startPresence(config.server, room.roomHash, room.participantToken);
 
-  try {
-    await encryptAndSend(
-      config.server,
-      config.controlRoomHash,
-      config.participantToken,
-      controlKey,
-      JSON.stringify({
-        proto: 'hisohiso-ctl',
-        v: 1,
-        cmd: 'spawned',
-        agentId: room.roomHash.slice(0, 12),
-        agent: cmd,
-        roomSecret: room.roomSecret,
-      })
-    );
-  } catch {
-    // Control room notification is best-effort
-  }
+  // Wait for phone to knock and auto-approve
+  await new Promise<void>((resolve, reject) => {
+    const sse = subscribeToRoom(config.server, room.roomHash, {
+      onKnock: async () => {
+        console.log('Phone is joining... approving.');
+        try {
+          await api.approveKnock(config.server, room.roomHash, room.participantToken);
+          console.log('Phone connected.');
+          sse.close();
+          resolve();
+        } catch (err) {
+          sse.close();
+          reject(err);
+        }
+      },
+      onError: (err) => {
+        console.error('SSE error:', err);
+      },
+    });
 
+    // Handle Ctrl+C during waiting
+    const cleanup = async () => {
+      console.log('\nCancelled. Cleaning up...');
+      sse.close();
+      presence.stop();
+      try {
+        await api.disbandRoom(config.server, room.roomHash, room.participantToken);
+      } catch { /* best effort */ }
+      process.exit(0);
+    };
+    process.on('SIGINT', cleanup);
+  });
+
+  // Phone is in. Spawn the agent.
   console.log(`Spawning: ${cmd} ${args.join(' ')}`);
-
-  // Spawn the agent
   const agent = await spawnAgent(cmd, args);
-
-  console.log(`Agent running (PID: ${agent.pid}). Bridging to room...`);
+  console.log(`Agent running (PID: ${agent.pid}). Bridging...\n`);
 
   // Bridge agent to room
   const bridge = await bridgeAgentToRoom(
@@ -73,7 +92,7 @@ export const wrap = async (command: string[]): Promise<void> => {
 
   // Wait for agent to exit
   const exit = await agent.onExit;
-  console.log(`Agent exited with code ${exit.code}`);
+  console.log(`\nAgent exited with code ${exit.code}`);
 
   // Send exit status to room
   try {
@@ -82,20 +101,12 @@ export const wrap = async (command: string[]): Promise<void> => {
       room.roomHash,
       room.participantToken,
       room.messageKey,
-      JSON.stringify({
-        proto: 'hisohiso-ctl',
-        v: 1,
-        cmd: 'exited',
-        agentId: room.roomHash.slice(0, 12),
-        exitCode: exit.code,
-      })
+      `Agent exited with code ${exit.code}.`
     );
-  } catch {
-    // Best effort
-  }
+  } catch { /* best effort */ }
 
   // Cleanup
   bridge.close();
-  controlPresence.stop();
+  presence.stop();
   process.exit(exit.code ?? 1);
 };

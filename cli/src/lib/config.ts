@@ -13,6 +13,9 @@ export { CONFIG_DIR, CONFIG_FILE, REGISTRY_FILE, ROOMS_FILE, PID_FILE, LOGS_DIR 
 
 export type Config = {
   server: string;
+};
+
+export type DaemonState = {
   controlRoomSecret: string;
   controlRoomHash: string;
   participantToken: string;
@@ -55,6 +58,18 @@ export const loadConfig = async (): Promise<Config> => {
 export const saveConfig = async (config: Config): Promise<void> => {
   await ensureConfigDir();
   await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+};
+
+const DAEMON_STATE_FILE = join(CONFIG_DIR, 'daemon-state.json');
+
+export const loadDaemonState = async (): Promise<DaemonState> => {
+  const raw = await readFile(DAEMON_STATE_FILE, 'utf-8');
+  return JSON.parse(raw) as DaemonState;
+};
+
+export const saveDaemonState = async (state: DaemonState): Promise<void> => {
+  await ensureConfigDir();
+  await writeFile(DAEMON_STATE_FILE, JSON.stringify(state, null, 2) + '\n', 'utf-8');
 };
 
 export const loadRegistry = async (): Promise<RegisteredAgent[]> => {

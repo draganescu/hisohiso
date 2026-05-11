@@ -1,19 +1,31 @@
-import { loadConfig, loadActiveRooms } from '../lib/config.js';
-import { deriveMessageKey, sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
+import { loadConfig, loadActiveRooms, loadDaemonState, saveDaemonState, type DaemonState } from '../lib/config.js';
+import {
+  generateRoomSecret,
+  deriveRoomHash,
+  deriveMessageKey,
+  sha256Hex,
+  decryptText,
+  type EncryptedPayload,
+} from '../lib/crypto.js';
+import * as api from '../lib/api-client.js';
 import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import { startPresence } from '../lib/presence.js';
 import { encryptAndSend } from '../lib/room-bridge.js';
 import { decodeControlMessage, type ControlCommand } from '../lib/control-protocol.js';
 import { AgentManager } from './agent-manager.js';
 import { writePid, removePid } from './pid.js';
+import qrTerminal from 'qrcode-terminal';
 
 export const runDaemon = async (): Promise<void> => {
   const config = await loadConfig();
-  const { server, controlRoomHash, controlRoomSecret, participantToken, controlRoomPassword } = config;
+  const { server } = config;
+
+  // Create control room, show QR, wait for phone to join
+  const { state, messageKey } = await setupControlRoom(server);
+  const { controlRoomHash, controlRoomSecret, participantToken, controlRoomPassword } = state;
 
   await writePid(process.pid);
 
-  const messageKey = await deriveMessageKey(controlRoomSecret, controlRoomPassword);
   const ownTokenHash = await sha256Hex(participantToken);
 
   const manager = new AgentManager(
@@ -32,32 +44,13 @@ export const runDaemon = async (): Promise<void> => {
   if (previousRooms.length > 0) {
     console.log(`Found ${previousRooms.length} previously active room(s). Agents are lost after restart.`);
     await encryptAndSend(
-      server,
-      controlRoomHash,
-      participantToken,
-      messageKey,
-      JSON.stringify({
-        proto: 'hisohiso-ctl',
-        v: 1,
-        cmd: 'daemon-status',
-        message: `Daemon restarted. ${previousRooms.length} previous agent(s) were lost.`,
-      })
+      server, controlRoomHash, participantToken, messageKey,
+      `Daemon restarted. ${previousRooms.length} previous agent(s) were lost.`
     );
   }
 
   // Send daemon online status
-  await encryptAndSend(
-    server,
-    controlRoomHash,
-    participantToken,
-    messageKey,
-    JSON.stringify({
-      proto: 'hisohiso-ctl',
-      v: 1,
-      cmd: 'daemon-status',
-      message: 'Daemon online.',
-    })
-  );
+  await encryptAndSend(server, controlRoomHash, participantToken, messageKey, 'Daemon online.');
 
   console.log('Daemon running. Listening on control room...');
 
@@ -102,22 +95,82 @@ export const runDaemon = async (): Promise<void> => {
     await manager.killAll();
     await removePid();
     await encryptAndSend(
-      server,
-      controlRoomHash,
-      participantToken,
-      messageKey,
-      JSON.stringify({
-        proto: 'hisohiso-ctl',
-        v: 1,
-        cmd: 'daemon-status',
-        message: 'Daemon stopped.',
-      })
+      server, controlRoomHash, participantToken, messageKey,
+      'Daemon stopped.'
     ).catch(() => {});
     process.exit(0);
   };
 
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+};
+
+const setupControlRoom = async (server: string): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
+  const password = '';
+  const controlRoomSecret = generateRoomSecret();
+  const controlRoomHash = await deriveRoomHash(controlRoomSecret);
+
+  console.log('Creating control room...');
+  const result = await api.createRoom(server, controlRoomHash);
+  if (!result.participant_token) {
+    console.error('Failed to create control room.');
+    process.exit(1);
+  }
+  const participantToken = result.participant_token;
+  const messageKey = await deriveMessageKey(controlRoomSecret, password);
+
+  // Start presence so room shows as active
+  const tempPresence = startPresence(server, controlRoomHash, participantToken);
+
+  // Show QR
+  const joinUrl = `${server}/room#${controlRoomSecret}`;
+  console.log('\nScan to connect your phone to the daemon:\n');
+  qrTerminal.generate(joinUrl, { small: true }, (code: string) => {
+    console.log(code);
+  });
+  console.log(`\nOr open: ${joinUrl}\n`);
+  console.log('Waiting for phone to join...');
+
+  // Wait for knock and auto-approve
+  await new Promise<void>((resolve, reject) => {
+    const sse = subscribeToRoom(server, controlRoomHash, {
+      onKnock: async () => {
+        console.log('Phone is joining... approving.');
+        try {
+          await api.approveKnock(server, controlRoomHash, participantToken);
+          console.log('Phone connected to control room.');
+          sse.close();
+          resolve();
+        } catch (err) {
+          sse.close();
+          reject(err);
+        }
+      },
+      onError: (err) => {
+        console.error('SSE error:', err);
+      },
+    });
+
+    process.on('SIGINT', async () => {
+      console.log('\nCancelled. Cleaning up...');
+      sse.close();
+      tempPresence.stop();
+      try { await api.disbandRoom(server, controlRoomHash, participantToken); } catch { /* */ }
+      process.exit(0);
+    });
+  });
+
+  tempPresence.stop();
+
+  const state: DaemonState = {
+    controlRoomSecret,
+    controlRoomHash,
+    participantToken,
+    controlRoomPassword: password,
+  };
+  await saveDaemonState(state);
+
+  return { state, messageKey };
 };
 
 const handleControlCommand = async (
@@ -128,8 +181,8 @@ const handleControlCommand = async (
   token: string,
   messageKey: CryptoKey
 ): Promise<void> => {
-  const reply = async (msg: Record<string, unknown>) => {
-    await encryptAndSend(server, controlRoomHash, token, messageKey, JSON.stringify(msg));
+  const reply = async (text: string) => {
+    await encryptAndSend(server, controlRoomHash, token, messageKey, text);
   };
 
   try {
@@ -147,12 +200,9 @@ const handleControlCommand = async (
       }
       case 'list': {
         const agents = manager.listRunning();
-        await reply({
-          proto: 'hisohiso-ctl',
-          v: 1,
-          cmd: 'list-reply',
-          agents,
-        });
+        await reply(JSON.stringify({
+          proto: 'hisohiso-ctl', v: 1, cmd: 'list-reply', agents,
+        }));
         break;
       }
       case 'input': {
@@ -163,12 +213,8 @@ const handleControlCommand = async (
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Command error: ${message}`);
-    await reply({
-      proto: 'hisohiso-ctl',
-      v: 1,
-      cmd: 'error',
-      message,
-    });
+    await reply(JSON.stringify({
+      proto: 'hisohiso-ctl', v: 1, cmd: 'error', message,
+    }));
   }
 };
-
