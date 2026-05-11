@@ -12,27 +12,9 @@ import {
 import * as api from './api-client.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from './sse-client.js';
 import { startPresence, type PresenceHandle } from './presence.js';
-import { parseLine, type ParsedLine, type InboundMessage, formatInboundForStdin } from './convention-parser.js';
+import { parseLine, type ParsedLine } from './convention-parser.js';
 import { type AgentHandle } from './agent-process.js';
 import { decodeControlMessage } from './control-protocol.js';
-
-export type RoomBridgeOptions = {
-  server: string;
-  roomSecret?: string;
-  password?: string;
-  onParsedLine?: (parsed: ParsedLine) => void;
-  onInbound?: (text: string) => void;
-};
-
-export type RoomBridge = {
-  roomSecret: string;
-  roomHash: string;
-  participantToken: string;
-  sse: SSESubscription;
-  presence: PresenceHandle;
-  sendText: (text: string) => Promise<void>;
-  close: () => void;
-};
 
 const FLUSH_INTERVAL_MS = 500;
 const FLUSH_MAX_LINES = 50;
@@ -87,8 +69,8 @@ export const bridgeAgentToRoom = async (
     chatBuffer = [];
     try {
       await encryptAndSend(server, roomHash, token, messageKey, text);
-    } catch {
-      // Non-fatal: message lost
+    } catch (err) {
+      console.error('[bridge] failed to send chat buffer:', err);
     }
   };
 
@@ -118,7 +100,6 @@ export const bridgeAgentToRoom = async (
       if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
       await flushChatBuffer();
 
-      // Send tagged message with metadata
       const msgId = base64UrlEncode(randomBytes(12));
       const msgPayload: Record<string, unknown> = {
         text: parsed.text,
@@ -131,8 +112,8 @@ export const bridgeAgentToRoom = async (
       const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, JSON.stringify(msgPayload));
       try {
         await api.sendMessage(server, roomHash, token, msgId, JSON.stringify(encrypted));
-      } catch {
-        // Non-fatal
+      } catch (err) {
+        console.error('[bridge] failed to send tagged message:', err);
       }
     }
   });
@@ -152,23 +133,29 @@ export const bridgeAgentToRoom = async (
         const parsed = JSON.parse(decrypted) as { text: string; handle?: string; tag?: string };
         const text = parsed.text;
 
+        console.error(`[bridge] inbound from phone: ${text.slice(0, 80)}`);
         options?.onInbound?.(text);
 
         // Check if it's a control message (shouldn't be in agent rooms, but handle gracefully)
         const ctrl = decodeControlMessage(text);
         if (ctrl) return;
 
-        // Determine how to feed to agent stdin
-        // Simple heuristic: if the text is "yes" or "no", send directly (response to ASK)
+        // Feed to agent stdin
         const lower = text.toLowerCase().trim();
         if (lower === 'yes' || lower === 'no') {
           agent.writeStdin(`${lower}\n`);
         } else {
           agent.writeStdin(`[FROM USER] ${text}\n`);
         }
-      } catch {
-        // Decryption failed — ignore
+      } catch (err) {
+        console.error('[bridge] failed to process inbound message:', err);
       }
+    },
+    onOpen: () => {
+      console.error('[bridge] SSE connected to room');
+    },
+    onError: (err) => {
+      console.error('[bridge] SSE error:', err);
     },
   });
 

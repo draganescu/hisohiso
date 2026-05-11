@@ -37,19 +37,21 @@ export const subscribeToRoom = (server: string, roomHash: string, handlers: SSEH
         case 'approve': handlers.onApprove?.(data); break;
         case 'reject': handlers.onReject?.(data); break;
         case 'destroy': handlers.onDestroy?.(data); break;
+        default: console.error('[sse] unknown event type:', data.type);
       }
-    } catch {
-      // ignore malformed events
+    } catch (err) {
+      console.error('[sse] failed to parse event:', err, 'raw:', event.data);
     }
   };
 
+  // Mercure sends named SSE events (event: chat, event: knock, etc.)
   es.addEventListener('chat', dispatch);
   es.addEventListener('knock', dispatch);
   es.addEventListener('approve', dispatch);
   es.addEventListener('reject', dispatch);
   es.addEventListener('destroy', dispatch);
 
-  // Mercure also sends unnamed events for some configurations
+  // Some Mercure configs also send unnamed events
   es.onmessage = dispatch;
 
   es.onopen = () => handlers.onOpen?.();
