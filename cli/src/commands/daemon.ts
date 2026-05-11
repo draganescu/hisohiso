@@ -1,10 +1,6 @@
-import { fork } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { isDaemonRunning, readPid, removePid } from '../daemon/pid.js';
 import { configExists } from '../lib/config.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const daemonStart = async (): Promise<void> => {
   if (!(await configExists())) {
@@ -20,17 +16,26 @@ export const daemonStart = async (): Promise<void> => {
 
   console.log('Starting daemon...');
 
-  const daemonScript = join(__dirname, '..', 'daemon', 'daemon-main.js');
-  const child = fork(daemonScript, [], {
+  // Re-invoke ourselves with a hidden subcommand.
+  // Works for both `npx tsx src/index.ts` and compiled binary.
+  const execPath = process.argv[0]!;
+  const execArgs = process.argv.slice(1);
+
+  // Find where "daemon" "start" appears in argv and replace with "daemon" "_run"
+  const daemonIdx = execArgs.indexOf('daemon');
+  const runArgs = daemonIdx >= 0
+    ? [...execArgs.slice(0, daemonIdx), 'daemon', '_run']
+    : [...execArgs.slice(0, -1), 'daemon', '_run'];
+
+  const child = spawn(execPath, runArgs, {
     detached: true,
     stdio: 'ignore',
-    execArgv: [],
   });
 
   child.unref();
 
   // Give it a moment to start and write PID
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 
   if (await isDaemonRunning()) {
     const pid = await readPid();

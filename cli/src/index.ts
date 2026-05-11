@@ -5,6 +5,7 @@ import { pair } from './commands/pair.js';
 import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
+import { runDaemon } from './daemon/daemon-main.js';
 
 const program = new Command();
 
@@ -68,5 +69,12 @@ daemon
   .command('list')
   .description('List registered agents')
   .action(list);
+
+// Hidden subcommand: daemon re-invokes itself with `daemon _run`
+daemon
+  .command('_run', { hidden: true })
+  .action(async () => {
+    await runDaemon();
+  });
 
 program.parse();

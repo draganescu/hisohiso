@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "bun build --compile src/index.ts --outfile dist/hisohiso",
+    "build:all": "bun build --compile --target=bun-darwin-arm64 src/index.ts --outfile dist/hisohiso-darwin-arm64 && bun build --compile --target=bun-darwin-x64 src/index.ts --outfile dist/hisohiso-darwin-x64 && bun build --compile --target=bun-linux-x64 src/index.ts --outfile dist/hisohiso-linux-x64 && bun build --compile --target=bun-linux-arm64 src/index.ts --outfile dist/hisohiso-linux-arm64",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

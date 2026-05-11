@@ -172,8 +172,3 @@ const handleControlCommand = async (
   }
 };
 
-// Self-invoke when run as forked process
-runDaemon().catch((err) => {
-  console.error('Daemon fatal error:', err);
-  process.exit(1);
-});
