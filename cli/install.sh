@@ -53,7 +53,7 @@ main() {
       ;;
   esac
 
-  printf "\nDone. Run: hisohiso pair --server https://hisohiso.org\n"
+  printf "\nDone. Run: hisohiso wrap claude\n"
 }
 
 detect_os() {
