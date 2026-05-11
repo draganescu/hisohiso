@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { pair } from './commands/pair.js';
 import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
+import { saveConfig, ensureConfigDir } from './lib/config.js';
+import { listAgents } from './lib/agents.js';
+
 const program = new Command();
 
 program
@@ -13,19 +15,38 @@ program
   .version('0.1.0');
 
 program
-  .command('pair')
-  .description('Pair this machine with your phone')
-  .requiredOption('--server <url>', 'Hisohiso server URL')
-  .action(async (opts: { server: string }) => {
-    await pair(opts.server);
+  .command('wrap')
+  .description('Bridge an agent to your phone. Built-in agents: ' + Object.keys(listAgents()).join(', '))
+  .argument('<agent>', 'Agent name (claude, aider, codex, bash, ...) or custom command after --')
+  .action(async (agent: string, _opts: unknown, cmd: Command) => {
+    // Check if there are extra args after -- (custom command)
+    const extraArgs = cmd.args.slice(1);
+    if (extraArgs.length > 0) {
+      await wrap(agent, [agent, ...extraArgs]);
+    } else {
+      await wrap(agent);
+    }
   });
 
 program
-  .command('wrap')
-  .description('One-shot: spawn a command and bridge its stdio to a Hisohiso room')
-  .argument('<command...>', 'Command and arguments to run')
-  .action(async (command: string[]) => {
-    await wrap(command);
+  .command('server')
+  .description('Set a custom server (default: hisohiso.org)')
+  .argument('<url>', 'Server URL')
+  .action(async (url: string) => {
+    await ensureConfigDir();
+    await saveConfig({ server: url });
+    console.log(`Server set to ${url}`);
+  });
+
+program
+  .command('agents')
+  .description('List built-in agent profiles')
+  .action(() => {
+    console.log('Built-in agents:\n');
+    for (const [name, agent] of Object.entries(listAgents())) {
+      console.log(`  ${name.padEnd(10)} ${agent.description}`);
+      console.log(`  ${' '.repeat(10)} → ${agent.command} ${agent.args.join(' ')} <message>\n`);
+    }
   });
 
 const daemon = program

@@ -1,4 +1,4 @@
-import { loadConfig, loadActiveRooms, loadDaemonState, saveDaemonState, type DaemonState } from '../lib/config.js';
+import { getServer, loadActiveRooms, saveDaemonState, type DaemonState } from '../lib/config.js';
 import {
   generateRoomSecret,
   deriveRoomHash,
@@ -17,8 +17,7 @@ import { writePid, removePid } from './pid.js';
 import qrTerminal from 'qrcode-terminal';
 
 export const runDaemon = async (): Promise<void> => {
-  const config = await loadConfig();
-  const { server } = config;
+  const server = await getServer();
 
   // Create control room, show QR, wait for phone to join
   const { state, messageKey } = await setupControlRoom(server);

@@ -9,7 +9,9 @@ const ROOMS_FILE = join(CONFIG_DIR, 'rooms.json');
 const PID_FILE = join(CONFIG_DIR, 'daemon.pid');
 const LOGS_DIR = join(CONFIG_DIR, 'logs');
 
-export { CONFIG_DIR, CONFIG_FILE, REGISTRY_FILE, ROOMS_FILE, PID_FILE, LOGS_DIR };
+const DEFAULT_SERVER = 'https://hisohiso.org';
+
+export { CONFIG_DIR, CONFIG_FILE, REGISTRY_FILE, ROOMS_FILE, PID_FILE, LOGS_DIR, DEFAULT_SERVER };
 
 export type Config = {
   server: string;
@@ -41,18 +43,14 @@ export const ensureConfigDir = async (): Promise<void> => {
   await mkdir(LOGS_DIR, { recursive: true });
 };
 
-export const configExists = async (): Promise<boolean> => {
+export const getServer = async (): Promise<string> => {
   try {
-    await access(CONFIG_FILE);
-    return true;
+    const raw = await readFile(CONFIG_FILE, 'utf-8');
+    const config = JSON.parse(raw) as Config;
+    return config.server || DEFAULT_SERVER;
   } catch {
-    return false;
+    return DEFAULT_SERVER;
   }
-};
-
-export const loadConfig = async (): Promise<Config> => {
-  const raw = await readFile(CONFIG_FILE, 'utf-8');
-  return JSON.parse(raw) as Config;
 };
 
 export const saveConfig = async (config: Config): Promise<void> => {

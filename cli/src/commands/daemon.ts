@@ -1,12 +1,9 @@
 import { isDaemonRunning, readPid, removePid } from '../daemon/pid.js';
-import { configExists } from '../lib/config.js';
+import { ensureConfigDir } from '../lib/config.js';
 import { runDaemon } from '../daemon/daemon-main.js';
 
 export const daemonStart = async (): Promise<void> => {
-  if (!(await configExists())) {
-    console.error('Not paired yet. Run: hisohiso pair --server <url>');
-    process.exit(1);
-  }
+  await ensureConfigDir();
 
   if (await isDaemonRunning()) {
     const pid = await readPid();
