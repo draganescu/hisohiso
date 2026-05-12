@@ -1011,17 +1011,15 @@ const RoomController = () => {
                         {getMessagePreview(msg.content)}
                       </p>
                       {msg.action?.type === 'join-room' && (
-                        <span
-                          className={`mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold ${
+                        <a
+                          href={`/room#${msg.action.roomSecret}`}
+                          className={`mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold no-underline ${
                             isMine ? 'bg-white/20 text-white' : 'bg-[#d9592f] text-white'
                           }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.location.href = `/room#${msg.action!.roomSecret}`;
-                          }}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {msg.action.label} &rarr;
-                        </span>
+                        </a>
                       )}
                       <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
                     </button>

@@ -257,6 +257,8 @@ const RoomsPage = () => {
         <a className="text-sm underline" href="/">
           Back to landing
         </a>
+
+        <p className="mt-8 text-center text-[10px] tracking-[0.2em] text-[#b0a898]">v0.57</p>
       </div>
     </main>
   );
