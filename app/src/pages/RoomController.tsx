@@ -26,7 +26,7 @@ import {
   updateRoomHandle
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
-import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage } from '../lib/db';
+import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import QrModal from '../components/QrModal';
 
 type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED';
@@ -440,14 +440,18 @@ const RoomController = () => {
           const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
           let messageText = plaintext;
           let messageHandle: string | null = null;
+          let messageAction: MessageAction | null = null;
           if (plaintext.trim().startsWith('{')) {
             try {
-              const obj = JSON.parse(plaintext) as { text?: string; handle?: string | null };
+              const obj = JSON.parse(plaintext) as { text?: string; handle?: string | null; action?: MessageAction };
               if (typeof obj.text === 'string') {
                 messageText = obj.text;
               }
               if (typeof obj.handle === 'string') {
                 messageHandle = obj.handle;
+              }
+              if (obj.action && typeof obj.action === 'object' && obj.action.type === 'join-room' && typeof obj.action.roomSecret === 'string') {
+                messageAction = obj.action;
               }
             } catch {
               messageText = plaintext;
@@ -465,7 +469,8 @@ const RoomController = () => {
             type: 'chat',
             direction,
             from: payload.from ?? null,
-            handle: messageHandle
+            handle: messageHandle,
+            action: messageAction
           };
           persistMessage(messageRecord);
           setMessages((prev) => {
@@ -1005,6 +1010,19 @@ const RoomController = () => {
                       >
                         {getMessagePreview(msg.content)}
                       </p>
+                      {msg.action?.type === 'join-room' && (
+                        <span
+                          className={`mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold ${
+                            isMine ? 'bg-white/20 text-white' : 'bg-[#d9592f] text-white'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.href = `/room#${msg.action!.roomSecret}`;
+                          }}
+                        >
+                          {msg.action.label} &rarr;
+                        </span>
+                      )}
                       <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
                     </button>
                   );
@@ -1201,6 +1219,14 @@ const RoomController = () => {
                   </div>
 
                   <div className="mt-6 whitespace-pre-wrap text-[15px] leading-7 sm:text-[17px] sm:leading-8">{activeMessage.content}</div>
+                  {activeMessage.action?.type === 'join-room' && (
+                    <a
+                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white no-underline"
+                      href={`/room#${activeMessage.action.roomSecret}`}
+                    >
+                      {activeMessage.action.label} &rarr;
+                    </a>
+                  )}
                 </article>
 
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row">

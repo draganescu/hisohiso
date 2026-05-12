@@ -1,24 +1,28 @@
-import { spawnAgent, type AgentHandle } from '../lib/agent-process.js';
-import { createRoomAndJoin, encryptAndSend, bridgeAgentToRoom } from '../lib/room-bridge.js';
-import { deriveMessageKey } from '../lib/crypto.js';
-import { loadRegistry, loadActiveRooms, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
-import { parseLine } from '../lib/convention-parser.js';
-import type { SSESubscription } from '../lib/sse-client.js';
-import type { PresenceHandle } from '../lib/presence.js';
+import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
+import { deriveMessageKey, sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
+import { runCommand, parseJsonOutput } from '../lib/agent-process.js';
+import { getAgent, type AgentProfile } from '../lib/agents.js';
+import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
+import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
+import { startPresence, type PresenceHandle } from '../lib/presence.js';
+import * as api from '../lib/api-client.js';
 
-type RunningAgent = {
+type AgentSession = {
   agentId: string;
   name: string;
+  profile: AgentProfile;
   roomHash: string;
   roomSecret: string;
-  agent: AgentHandle;
-  bridge: { sse: SSESubscription; presence: PresenceHandle; close: () => void };
-  messageKey: CryptoKey;
   participantToken: string;
+  messageKey: CryptoKey;
+  sessionId: string | null;
+  running: boolean;
+  sse: SSESubscription;
+  presence: PresenceHandle;
 };
 
 export class AgentManager {
-  private agents = new Map<string, RunningAgent>();
+  private sessions = new Map<string, AgentSession>();
   private server: string;
   private controlRoomHash: string;
   private controlToken: string;
@@ -47,139 +51,194 @@ export class AgentManager {
     return this.controlKey;
   }
 
-  private async sendControlMessage(text: string): Promise<void> {
+  private async sendControlMessage(text: string, options?: SendOptions): Promise<void> {
     const key = await this.getControlKey();
-    await encryptAndSend(this.server, this.controlRoomHash, this.controlToken, key, text);
+    await encryptAndSend(this.server, this.controlRoomHash, this.controlToken, key, text, {
+      handle: 'hisohiso-daemon',
+      ...options,
+    });
   }
 
-  async spawn(agentName: string, initialMessage?: string): Promise<string> {
-    const registry = await loadRegistry();
-    const entry = registry.find((a) => a.name === agentName);
-    if (!entry) {
-      throw new Error(`Agent "${agentName}" is not registered`);
+  async spawn(agentName: string): Promise<{ agentId: string; roomSecret: string }> {
+    // Resolve profile: check built-in agents first, then registry
+    let profile = getAgent(agentName);
+    if (!profile) {
+      const registry = await loadRegistry();
+      const entry = registry.find((a) => a.name === agentName);
+      if (entry) {
+        profile = { command: entry.command, args: [], description: entry.name, mode: 'oneshot' };
+      }
+    }
+    if (!profile) {
+      throw new Error(`Unknown agent "${agentName}". Use "list" to see available agents.`);
     }
 
-    const password = '';
-    const room = await createRoomAndJoin(this.server, password);
+    // Create room for this agent
+    const room = await createRoomAndJoin(this.server, '');
     const agentId = room.roomHash.slice(0, 12);
 
-    // Notify control room
-    await this.sendControlMessage(JSON.stringify({
-      proto: 'hisohiso-ctl',
-      v: 1,
-      cmd: 'spawned',
-      agentId,
-      agent: agentName,
-      roomSecret: room.roomSecret,
-    }));
+    // Start presence
+    const presence = startPresence(this.server, room.roomHash, room.participantToken);
 
-    // Spawn agent process
-    const agent = await spawnAgent(entry.command, [], {
-      shellCommand: true,
-      preambleAgent: entry.mode !== 'default' ? entry.mode : undefined,
-    });
+    // Set up per-message handler for this agent room
+    const ownTokenHash = await sha256Hex(room.participantToken);
 
-    if (initialMessage) {
-      agent.writeStdin(`[FROM USER] ${initialMessage}\n`);
-    }
-
-    // Bridge
-    const bridge = await bridgeAgentToRoom(
-      agent,
-      this.server,
-      room.roomHash,
-      room.participantToken,
-      room.messageKey,
-    );
-
-    const running: RunningAgent = {
+    const session: AgentSession = {
       agentId,
       name: agentName,
+      profile,
       roomHash: room.roomHash,
       roomSecret: room.roomSecret,
-      agent,
-      bridge,
-      messageKey: room.messageKey,
       participantToken: room.participantToken,
+      messageKey: room.messageKey,
+      sessionId: null,
+      running: false,
+      sse: null!,
+      presence,
     };
 
-    this.agents.set(agentId, running);
-    await this.persistRooms();
+    const sse = subscribeToRoom(this.server, room.roomHash, {
+      onKnock: async () => {
+        // Auto-approve phone joining agent room
+        try {
+          await api.approveKnock(this.server, room.roomHash, room.participantToken);
+          console.log(`[${agentName}:${agentId}] Phone joined agent room.`);
+        } catch (err) {
+          console.error(`[${agentName}:${agentId}] Failed to approve knock:`, err);
+        }
+      },
+      onChat: async (event: RoomEvent) => {
+        if (event.from === ownTokenHash) return;
 
-    // Handle exit
-    agent.onExit.then(async (exit) => {
-      try {
-        await encryptAndSend(
-          this.server,
-          room.roomHash,
-          room.participantToken,
-          room.messageKey,
-          `[STATUS] agent exited (code ${exit.code})`
-        );
-        await this.sendControlMessage(JSON.stringify({
-          proto: 'hisohiso-ctl',
-          v: 1,
-          cmd: 'exited',
-          agentId,
-          exitCode: exit.code,
-        }));
-      } catch {
-        // Best effort
-      }
-      bridge.close();
-      this.agents.delete(agentId);
-      await this.persistRooms();
+        // Decrypt inbound message
+        let text: string;
+        try {
+          const encPayload = typeof event.body.encrypted_payload === 'string'
+            ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
+            : event.body.encrypted_payload as EncryptedPayload;
+          const msgId = (event.body.msg_id as string) || '';
+          const decrypted = await decryptText(room.messageKey, room.roomHash, 'chat', msgId, encPayload);
+          const parsed = JSON.parse(decrypted) as { text: string };
+          text = parsed.text;
+        } catch (err) {
+          console.error(`[${agentName}:${agentId}] Failed to decrypt:`, err);
+          return;
+        }
+
+        console.log(`[${agentName}:${agentId}] <- ${text}`);
+
+        if (session.running) {
+          await encryptAndSend(
+            this.server, room.roomHash, room.participantToken, room.messageKey,
+            'Still running previous command. Please wait.'
+          );
+          return;
+        }
+
+        session.running = true;
+
+        try {
+          // Build args — session mode adds --resume
+          const args = [...session.profile.args];
+          if (session.profile.mode === 'session' && session.sessionId) {
+            args.push('--resume', session.sessionId);
+          }
+          args.push(text);
+
+          console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`);
+
+          const result = await runCommand(session.profile.command, args);
+
+          let output: string;
+          if (session.profile.mode === 'session') {
+            const parsed = parseJsonOutput(result.stdout);
+            if (parsed.sessionId) {
+              session.sessionId = parsed.sessionId;
+            }
+            output = (parsed.text || result.stderr || '(no output)').trim();
+          } else {
+            output = (result.stdout || result.stderr || '(no output)').trim();
+          }
+
+          console.log(`[${agentName}:${agentId}] -> ${output.slice(0, 120)}${output.length > 120 ? '...' : ''}`);
+
+          // Send output back — split if too long
+          const MAX_MSG = 4000;
+          if (output.length <= MAX_MSG) {
+            await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, output);
+          } else {
+            for (let i = 0; i < output.length; i += MAX_MSG) {
+              const chunk = output.slice(i, i + MAX_MSG);
+              await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, chunk);
+            }
+          }
+
+          if (result.code !== 0 && result.stderr) {
+            await encryptAndSend(
+              this.server, room.roomHash, room.participantToken, room.messageKey,
+              `(exit code ${result.code})`
+            );
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[${agentName}:${agentId}] Error:`, msg);
+          await encryptAndSend(
+            this.server, room.roomHash, room.participantToken, room.messageKey,
+            `Error: ${msg}`
+          ).catch(() => {});
+        }
+
+        session.running = false;
+      },
+      onOpen: () => {
+        console.log(`[${agentName}:${agentId}] SSE connected.`);
+      },
+      onError: (err) => {
+        console.error(`[${agentName}:${agentId}] SSE error:`, err);
+      },
     });
 
-    return agentId;
+    session.sse = sse;
+    this.sessions.set(agentId, session);
+    await this.persistRooms();
+
+    return { agentId, roomSecret: room.roomSecret };
   }
 
   async kill(agentId: string): Promise<void> {
-    const running = this.agents.get(agentId);
-    if (!running) {
-      throw new Error(`No running agent with ID "${agentId}"`);
+    const session = this.sessions.get(agentId);
+    if (!session) {
+      throw new Error(`No agent with ID "${agentId}"`);
     }
-    running.agent.kill();
+    session.sse.close();
+    session.presence.stop();
+    this.sessions.delete(agentId);
+    await this.persistRooms();
   }
 
-  async sendInput(agentId: string, text: string): Promise<void> {
-    const running = this.agents.get(agentId);
-    if (!running) {
-      throw new Error(`No running agent with ID "${agentId}"`);
-    }
-    // Determine input type
-    const lower = text.toLowerCase().trim();
-    if (lower === 'yes' || lower === 'no') {
-      running.agent.writeStdin(`${lower}\n`);
-    } else {
-      running.agent.writeStdin(`[FROM USER] ${text}\n`);
-    }
-  }
-
-  listRunning(): Array<{ agentId: string; name: string; status: string }> {
-    return Array.from(this.agents.values()).map((a) => ({
-      agentId: a.agentId,
-      name: a.name,
-      status: 'running',
+  listRunning(): Array<{ agentId: string; name: string }> {
+    return Array.from(this.sessions.values()).map((s) => ({
+      agentId: s.agentId,
+      name: s.name,
     }));
   }
 
   async killAll(): Promise<void> {
-    for (const [, running] of this.agents) {
-      running.agent.kill();
-      running.bridge.close();
+    for (const [, session] of this.sessions) {
+      session.sse.close();
+      session.presence.stop();
     }
-    this.agents.clear();
+    this.sessions.clear();
     await this.persistRooms();
   }
 
   private async persistRooms(): Promise<void> {
-    const rooms: ActiveRoom[] = Array.from(this.agents.values()).map((a) => ({
-      agentId: a.agentId,
-      name: a.name,
-      roomHash: a.roomHash,
-      roomSecret: a.roomSecret,
-      pid: a.agent.pid ?? 0,
+    const rooms: ActiveRoom[] = Array.from(this.sessions.values()).map((s) => ({
+      agentId: s.agentId,
+      name: s.name,
+      roomHash: s.roomHash,
+      roomSecret: s.roomSecret,
+      pid: 0,
     }));
     await saveActiveRooms(rooms);
   }

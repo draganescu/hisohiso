@@ -1,5 +1,11 @@
 import Dexie, { type Table } from 'dexie';
 
+export type MessageAction = {
+  type: 'join-room';
+  roomSecret: string;
+  label: string;
+};
+
 export type ChatMessage = {
   id: string;
   room_hash: string;
@@ -9,6 +15,7 @@ export type ChatMessage = {
   direction: 'in' | 'out';
   from?: string | null;
   handle?: string | null;
+  action?: MessageAction | null;
 };
 
 class ChatDatabase extends Dexie {

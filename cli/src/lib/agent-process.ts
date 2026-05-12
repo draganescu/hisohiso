@@ -19,6 +19,41 @@ export type SpawnOptions = {
   shellCommand?: boolean;
 };
 
+export const runCommand = (command: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> => {
+  return new Promise((resolve) => {
+    const child: ChildProcess = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+    child.on('exit', (code) => {
+      resolve({ stdout, stderr, code });
+    });
+
+    child.on('error', (err) => {
+      resolve({ stdout, stderr: err.message, code: 1 });
+    });
+  });
+};
+
+export const parseJsonOutput = (stdout: string): { text: string; sessionId: string | null } => {
+  try {
+    const json = JSON.parse(stdout.trim()) as Record<string, unknown>;
+    return {
+      text: (json.result as string) ?? stdout.trim(),
+      sessionId: (json.session_id as string) ?? null,
+    };
+  } catch {
+    return { text: stdout.trim() || '(no output)', sessionId: null };
+  }
+};
+
 export const spawnAgent = async (
   command: string,
   args: string[] = [],

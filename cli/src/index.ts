@@ -44,8 +44,9 @@ program
   .action(() => {
     console.log('Built-in agents:\n');
     for (const [name, agent] of Object.entries(listAgents())) {
-      console.log(`  ${name.padEnd(10)} ${agent.description}`);
-      console.log(`  ${' '.repeat(10)} → ${agent.command} ${agent.args.join(' ')} <message>\n`);
+      const mode = agent.mode === 'session' ? ' [session]' : '';
+      console.log(`  ${name.padEnd(14)} ${agent.description}${mode}`);
+      console.log(`  ${' '.repeat(14)} → ${agent.command} ${agent.args.join(' ')} <message>\n`);
     }
   });
 

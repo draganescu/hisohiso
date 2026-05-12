@@ -33,15 +33,25 @@ export const createRoomAndJoin = async (
   return { roomSecret, roomHash, participantToken: result.participant_token, messageKey };
 };
 
+export type SendOptions = {
+  handle?: string;
+  action?: { type: string; roomSecret: string; label: string };
+};
+
 export const encryptAndSend = async (
   server: string,
   roomHash: string,
   token: string,
   messageKey: CryptoKey,
-  text: string
+  text: string,
+  options?: SendOptions
 ): Promise<void> => {
   const msgId = base64UrlEncode(randomBytes(12));
-  const payload = JSON.stringify({ text, handle: 'hisohiso-cli' });
+  const payloadObj: Record<string, unknown> = { text, handle: options?.handle ?? 'hisohiso-cli' };
+  if (options?.action) {
+    payloadObj.action = options.action;
+  }
+  const payload = JSON.stringify(payloadObj);
   const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, payload);
   await api.sendMessage(server, roomHash, token, msgId, JSON.stringify(encrypted));
 };

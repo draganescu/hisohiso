@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { getServer, ensureConfigDir } from '../lib/config.js';
 import { createRoomAndJoin, encryptAndSend } from '../lib/room-bridge.js';
 import { startPresence } from '../lib/presence.js';
@@ -6,30 +5,8 @@ import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
 import { sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
+import { runCommand, parseJsonOutput } from '../lib/agent-process.js';
 import qrTerminal from 'qrcode-terminal';
-
-const runCommand = (command: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> => {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-
-    child.on('exit', (code) => {
-      resolve({ stdout, stderr, code });
-    });
-
-    child.on('error', (err) => {
-      resolve({ stdout, stderr: err.message, code: 1 });
-    });
-  });
-};
 
 export const wrap = async (agentName: string, customCommand?: string[]): Promise<void> => {
   await ensureConfigDir();
@@ -42,14 +19,14 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     // Custom command: hisohiso wrap -- mycmd --flag
     // Message gets appended as last arg
     const [cmd, ...args] = customCommand;
-    profile = { command: cmd!, args, description: 'custom command' };
+    profile = { command: cmd!, args, description: 'custom command', mode: 'oneshot' };
   } else {
     const builtin = getAgent(agentName);
     if (!builtin) {
       console.error(`Unknown agent: "${agentName}"\n`);
       console.log('Built-in agents:');
       for (const [name, a] of Object.entries(listAgents())) {
-        console.log(`  ${name.padEnd(10)} ${a.description}`);
+        console.log(`  ${name.padEnd(14)} ${a.description}`);
       }
       console.log(`\nOr use a custom command: hisohiso wrap -- <command> [args...]`);
       process.exit(1);
@@ -97,8 +74,10 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
   const ownTokenHash = await sha256Hex(room.participantToken);
   let running = false;
+  let sessionId: string | null = null;
 
-  console.log(`Listening. Messages from phone → ${profile.command} ${profile.args.join(' ')} <message>\n`);
+  const modeLabel = profile.mode === 'session' ? ' (session)' : '';
+  console.log(`Listening${modeLabel}. Messages from phone → ${profile.command} ${profile.args.join(' ')} <message>\n`);
 
   // Message loop: phone message → run agent → send output
   const sse = subscribeToRoom(server, room.roomHash, {
@@ -129,13 +108,29 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       running = true;
 
-      // Run the agent with the user's message
-      const args = [...profile.args, text];
+      // Build args — session mode adds --resume for subsequent messages
+      const args = [...profile.args];
+      if (profile.mode === 'session' && sessionId) {
+        args.push('--resume', sessionId);
+      }
+      args.push(text);
+
       console.log(`  $ ${profile.command} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`);
 
       const result = await runCommand(profile.command, args);
 
-      const output = (result.stdout || result.stderr || '(no output)').trim();
+      let output: string;
+      if (profile.mode === 'session') {
+        const parsed = parseJsonOutput(result.stdout);
+        if (parsed.sessionId) {
+          sessionId = parsed.sessionId;
+          console.log(`  [session: ${sessionId}]`);
+        }
+        output = (parsed.text || result.stderr || '(no output)').trim();
+      } else {
+        output = (result.stdout || result.stderr || '(no output)').trim();
+      }
+
       console.log(`→ ${output.slice(0, 120)}${output.length > 120 ? '...' : ''}\n`);
 
       // Send output back to room — split into chunks if too long

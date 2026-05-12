@@ -11,9 +11,10 @@ import * as api from '../lib/api-client.js';
 import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import { startPresence } from '../lib/presence.js';
 import { encryptAndSend } from '../lib/room-bridge.js';
-import { decodeControlMessage, type ControlCommand } from '../lib/control-protocol.js';
 import { AgentManager } from './agent-manager.js';
 import { writePid, removePid } from './pid.js';
+import { listAgents } from '../lib/agents.js';
+import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
 
 export const runDaemon = async (): Promise<void> => {
@@ -41,15 +42,19 @@ export const runDaemon = async (): Promise<void> => {
   // Check for previously active rooms (daemon restart recovery)
   const previousRooms = await loadActiveRooms();
   if (previousRooms.length > 0) {
-    console.log(`Found ${previousRooms.length} previously active room(s). Agents are lost after restart.`);
+    console.log(`Found ${previousRooms.length} previously active room(s). Sessions lost after restart.`);
     await encryptAndSend(
       server, controlRoomHash, participantToken, messageKey,
-      `Daemon restarted. ${previousRooms.length} previous agent(s) were lost.`
+      `Daemon restarted. ${previousRooms.length} previous session(s) were lost.`,
+      { handle: 'hisohiso-daemon' }
     );
   }
 
-  // Send daemon online status
-  await encryptAndSend(server, controlRoomHash, participantToken, messageKey, 'Daemon online.');
+  // Send daemon online status with help
+  await encryptAndSend(server, controlRoomHash, participantToken, messageKey,
+    'Daemon online. Type an agent name to start a session (e.g. "claude", "bash"). Type "list" to see running agents or "help" for all commands.',
+    { handle: 'hisohiso-daemon' }
+  );
 
   console.log('Daemon running. Listening on control room...');
 
@@ -65,15 +70,12 @@ export const runDaemon = async (): Promise<void> => {
         const msgId = (event.body.msg_id as string) || '';
         const decrypted = await decryptText(messageKey, controlRoomHash, 'chat', msgId, encPayload);
         const parsed = JSON.parse(decrypted) as { text: string };
-        const text = parsed.text;
+        const text = parsed.text.trim();
+        const lower = text.toLowerCase();
 
-        const ctrl = decodeControlMessage(text);
-        if (!ctrl) {
-          console.log(`Chat from phone: ${text}`);
-          return;
-        }
+        console.log(`Control: ${text}`);
 
-        await handleControlCommand(ctrl as ControlCommand, manager, server, controlRoomHash, participantToken, messageKey);
+        await handleCommand(lower, text, manager, server, controlRoomHash, participantToken, messageKey);
       } catch (err) {
         console.error('Failed to process message:', err);
       }
@@ -95,13 +97,85 @@ export const runDaemon = async (): Promise<void> => {
     await removePid();
     await encryptAndSend(
       server, controlRoomHash, participantToken, messageKey,
-      'Daemon stopped.'
+      'Daemon stopped.',
+      { handle: 'hisohiso-daemon' }
     ).catch(() => {});
     process.exit(0);
   };
 
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+};
+
+const handleCommand = async (
+  lower: string,
+  original: string,
+  manager: AgentManager,
+  server: string,
+  controlRoomHash: string,
+  token: string,
+  messageKey: CryptoKey
+): Promise<void> => {
+  const reply = async (text: string, action?: { type: string; roomSecret: string; label: string }) => {
+    await encryptAndSend(server, controlRoomHash, token, messageKey, text, {
+      handle: 'hisohiso-daemon',
+      action,
+    });
+  };
+
+  try {
+    // "list" — show running agents
+    if (lower === 'list') {
+      const agents = manager.listRunning();
+      if (agents.length === 0) {
+        await reply('No agents running.');
+      } else {
+        const lines = agents.map((a) => `${a.name} (${a.agentId})`);
+        await reply(`Running agents:\n${lines.join('\n')}`);
+      }
+      return;
+    }
+
+    // "kill <id>" — stop an agent
+    if (lower.startsWith('kill ')) {
+      const id = lower.slice(5).trim();
+      await manager.kill(id);
+      await reply(`Agent ${id} stopped.`);
+      return;
+    }
+
+    // "help" — show available commands
+    if (lower === 'help') {
+      const builtIn = Object.keys(listAgents());
+      const registry = await loadRegistry();
+      const registered = registry.map((r) => r.name);
+      const all = [...new Set([...builtIn, ...registered])];
+      await reply(
+        `Commands:\n` +
+        `  <agent>  — Start a session (${all.join(', ')})\n` +
+        `  list     — Show running agents\n` +
+        `  kill <id> — Stop an agent\n` +
+        `  help     — This message`
+      );
+      return;
+    }
+
+    // Anything else — treat as agent name to spawn
+    const agentName = lower.replace(/^spawn\s+/, ''); // allow "spawn claude" or just "claude"
+    console.log(`Spawning agent: ${agentName}`);
+    const { agentId, roomSecret } = await manager.spawn(agentName);
+    console.log(`Agent spawned: ${agentName} (${agentId})`);
+
+    await reply(`${original} session ready.`, {
+      type: 'join-room',
+      roomSecret,
+      label: `Join ${original}`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Command error: ${message}`);
+    await reply(`Error: ${message}`);
+  }
 };
 
 const setupControlRoom = async (server: string): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
@@ -170,50 +244,4 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
   await saveDaemonState(state);
 
   return { state, messageKey };
-};
-
-const handleControlCommand = async (
-  cmd: ControlCommand,
-  manager: AgentManager,
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  const reply = async (text: string) => {
-    await encryptAndSend(server, controlRoomHash, token, messageKey, text);
-  };
-
-  try {
-    switch (cmd.cmd) {
-      case 'spawn': {
-        console.log(`Spawning agent: ${cmd.agent}`);
-        const agentId = await manager.spawn(cmd.agent, cmd.initialMessage);
-        console.log(`Agent spawned: ${agentId}`);
-        break;
-      }
-      case 'kill': {
-        console.log(`Killing agent: ${cmd.agentId}`);
-        await manager.kill(cmd.agentId);
-        break;
-      }
-      case 'list': {
-        const agents = manager.listRunning();
-        await reply(JSON.stringify({
-          proto: 'hisohiso-ctl', v: 1, cmd: 'list-reply', agents,
-        }));
-        break;
-      }
-      case 'input': {
-        await manager.sendInput(cmd.agentId, cmd.text);
-        break;
-      }
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`Command error: ${message}`);
-    await reply(JSON.stringify({
-      proto: 'hisohiso-ctl', v: 1, cmd: 'error', message,
-    }));
-  }
 };
