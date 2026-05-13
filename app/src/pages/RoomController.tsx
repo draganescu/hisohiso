@@ -17,13 +17,18 @@ import {
   clearToken,
   getHandle,
   getRoomPassword,
+  getRoomColor,
+  getRoomNickname,
   getToken,
+  listRooms,
   setHandle,
   setRoomPassword,
   setToken,
   upsertRoom,
   removeRoom,
-  updateRoomHandle
+  updateRoomHandle,
+  updateRoomNickname,
+  type StoredRoom
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
@@ -101,8 +106,12 @@ const RoomController = () => {
   const [showHelp, setShowHelp] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
+  const [showSwitcher, setShowSwitcher] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [headerCondensed, setHeaderCondensed] = useState(false);
+  const [roomNickname, setRoomNickname] = useState<string>('');
+  const [roomColor, setRoomColor] = useState<string>('#ccc');
+  const [allRooms, setAllRooms] = useState<StoredRoom[]>([]);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
@@ -273,6 +282,8 @@ const RoomController = () => {
         const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
         setRoomPasswordState(savedRoomPassword ?? '');
+        setRoomColor(getRoomColor(hash));
+        setRoomNickname(getRoomNickname(hash) ?? '');
 
         const existingToken = getToken(hash);
         if (existingToken) {
@@ -747,6 +758,11 @@ const RoomController = () => {
     setReplyToId(null);
   }, []);
 
+  const openSwitcher = useCallback(() => {
+    setAllRooms(listRooms());
+    setShowSwitcher(true);
+  }, []);
+
   useEffect(() => {
     if (roomState !== 'PARTICIPANT') {
       return;
@@ -833,7 +849,23 @@ const RoomController = () => {
                 }`}
               >
                 <p className="text-[11px] uppercase tracking-[0.35em] text-[#6a6358]">Hisohiso Mail</p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Inbox</h1>
+                <div className="mt-2 flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={openSwitcher}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition hover:scale-110"
+                    style={{ backgroundColor: roomColor }}
+                    aria-label="Switch rooms"
+                    title="Switch rooms"
+                  >
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+                      <path d="M2 4h12M2 8h12M2 12h12" />
+                    </svg>
+                  </button>
+                  <h1 className="truncate text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+                    {roomNickname || 'Inbox'}
+                  </h1>
+                </div>
                 <p className="mt-1 text-sm text-[#5a5349] sm:text-base">
                   {connection === 'connected' ? 'Live room' : connection === 'error' ? 'Reconnecting…' : 'Connecting…'}
                 </p>
@@ -1135,7 +1167,23 @@ const RoomController = () => {
               <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
                   <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Sender</p>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room name</p>
+                    <input
+                      className="mt-2 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base font-semibold shadow-inner"
+                      placeholder="Give this room a name"
+                      value={roomNickname}
+                      onChange={(e) => {
+                        setRoomNickname(e.target.value);
+                        if (roomHash) {
+                          updateRoomNickname(roomHash, e.target.value);
+                        }
+                      }}
+                    />
+                    <p className="mt-2 text-xs leading-5 text-[#6a6358]">
+                      Stored locally. Helps you tell rooms apart.
+                    </p>
+
+                    <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Sender</p>
                     <p className="mt-2 text-lg font-semibold">{handle || 'No sender set yet'}</p>
                     <p className="mt-3 text-sm leading-7 text-[#5d564d]">
                       Use <span className="font-semibold">/iam name</span> in the composer to change the sender label shown on your cards.
@@ -1481,6 +1529,83 @@ const RoomController = () => {
                 >
                   Disband room
                 </button>
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {showSwitcher && (
+          <div className="fixed inset-0 z-40 bg-black/40">
+            <div
+              className="absolute inset-0"
+              onClick={() => setShowSwitcher(false)}
+              onKeyDown={() => setShowSwitcher(false)}
+              role="button"
+              tabIndex={0}
+            />
+            <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
+              <div className="flex items-center justify-between border-b border-[#1716131f] px-5 py-4">
+                <h2 className="text-lg font-semibold">Rooms</h2>
+                <button className="text-sm underline" onClick={() => setShowSwitcher(false)} type="button">
+                  Close
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-3 py-3">
+                {allRooms.length === 0 && (
+                  <p className="px-2 py-4 text-sm text-[#6a6358]">No rooms yet.</p>
+                )}
+                <div className="flex flex-col gap-1">
+                  {allRooms.map((r) => {
+                    const isCurrent = r.roomHash === roomHash;
+                    return (
+                      <a
+                        key={r.roomHash}
+                        href={`/room#${r.roomSecret}`}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left no-underline transition-colors ${
+                          isCurrent
+                            ? 'bg-[#171613] text-[#f6f0e8]'
+                            : 'text-[#171613] hover:bg-[#ebe4d7]'
+                        }`}
+                      >
+                        <div
+                          className="h-4 w-4 shrink-0 rounded-full"
+                          style={{ backgroundColor: r.color || '#ccc' }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">
+                            {r.nickname || 'Unnamed room'}
+                          </p>
+                          {r.handle && (
+                            <p className={`truncate text-xs ${isCurrent ? 'text-[#d2ddf5]' : 'text-[#8d816c]'}`}>
+                              {r.handle}
+                            </p>
+                          )}
+                        </div>
+                        {isCurrent && (
+                          <div className="h-2 w-2 shrink-0 rounded-full bg-[#d9592f]" />
+                        )}
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="border-t border-[#1716131f] px-5 py-4">
+                <div className="flex flex-col gap-2">
+                  <a
+                    href="/new"
+                    className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-center text-xs font-semibold text-[#f6f0e8] no-underline"
+                  >
+                    Start a room
+                  </a>
+                  <a
+                    href="/rooms"
+                    className="rounded-full border-2 border-[#171613] px-4 py-2 text-center text-xs font-semibold no-underline"
+                  >
+                    All rooms
+                  </a>
+                </div>
               </div>
             </aside>
           </div>

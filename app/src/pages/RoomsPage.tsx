@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
-import { getToken, listRooms, removeRoom, type StoredRoom } from '../lib/storage';
+import { getToken, listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -33,6 +33,8 @@ const RoomsPage = () => {
   const [joinError, setJoinError] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState('');
+  const [editingHash, setEditingHash] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -216,38 +218,92 @@ const RoomsPage = () => {
           <div className="flex flex-col gap-4">
             {rooms.map((room) => {
               const hasToken = !!getToken(room.roomHash);
+              const isEditing = editingHash === room.roomHash;
+              const displayName = room.nickname || 'Unnamed room';
+              const relativeTime = (() => {
+                const seconds = Math.floor(Date.now() / 1000) - room.lastSeen;
+                if (seconds < 60) return 'just now';
+                if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+                if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+                if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+                return new Date(room.lastSeen * 1000).toLocaleDateString();
+              })();
               return (
                 <div
                   key={room.roomHash}
-                  className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 shadow-[0_10px_24px_rgba(23,22,19,0.1)]"
+                  className="flex overflow-hidden rounded-2xl border border-[#1716132e] bg-[#f7f2e6] shadow-[0_10px_24px_rgba(23,22,19,0.1)]"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[#3a362f]">
-                        {hasToken ? 'Participant' : 'Link saved'}
-                      </p>
-                      <p className="mt-2 text-sm text-[#3a362f]">{room.handle ? `Handle: ${room.handle}` : 'No handle set'}</p>
-                      <p className="mt-2 text-xs text-[#6a6358]">
-                        Last opened {new Date(room.lastSeen * 1000).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <a
-                        className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-xs font-semibold text-[#f6f0e8]"
-                        href={`/room#${room.roomSecret}`}
-                      >
-                        Open
-                      </a>
-                      <button
-                        className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold"
-                        onClick={() => handleForget(room.roomHash)}
-                        type="button"
-                      >
-                        Forget
-                      </button>
+                  <div className="w-1.5 shrink-0" style={{ backgroundColor: room.color || '#ccc' }} />
+                  <div className="flex-1 p-5 sm:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: room.color || '#ccc' }} />
+                          {isEditing ? (
+                            <input
+                              className="min-w-0 flex-1 rounded-lg border border-[#17161333] bg-white/80 px-2 py-1 text-lg font-semibold"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => {
+                                updateRoomNickname(room.roomHash, editValue.trim());
+                                setEditingHash(null);
+                                setRooms(listRooms());
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updateRoomNickname(room.roomHash, editValue.trim());
+                                  setEditingHash(null);
+                                  setRooms(listRooms());
+                                }
+                                if (e.key === 'Escape') {
+                                  setEditingHash(null);
+                                }
+                              }}
+                              autoFocus
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="min-w-0 truncate text-lg font-semibold hover:underline"
+                              onClick={() => {
+                                setEditingHash(room.roomHash);
+                                setEditValue(room.nickname || '');
+                              }}
+                              title="Click to rename"
+                            >
+                              {displayName}
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[#6a6358]">
+                          <span className="uppercase tracking-[0.15em]">{hasToken ? 'Participant' : 'Link saved'}</span>
+                          {room.handle && (
+                            <>
+                              <span className="text-[#cdbfa8]">&middot;</span>
+                              <span>{room.handle}</span>
+                            </>
+                          )}
+                          <span className="text-[#cdbfa8]">&middot;</span>
+                          <span>{relativeTime}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <a
+                          className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-xs font-semibold text-[#f6f0e8]"
+                          href={`/room#${room.roomSecret}`}
+                        >
+                          Open
+                        </a>
+                        <button
+                          className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold"
+                          onClick={() => handleForget(room.roomHash)}
+                          type="button"
+                        >
+                          Forget
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <p className="mt-4 break-all text-xs text-[#3a362f]">{room.roomSecret}</p>
                 </div>
               );
             })}

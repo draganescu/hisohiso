@@ -45,6 +45,32 @@ export type StoredRoom = {
   roomSecret: string;
   lastSeen: number;
   handle?: string | null;
+  nickname?: string | null;
+  color?: string;
+};
+
+const generatePastelColor = (): string => {
+  const hue = Math.floor(Math.random() * 360);
+  const saturation = 50 + Math.floor(Math.random() * 20); // 50-70%
+  const lightness = 75 + Math.floor(Math.random() * 10); // 75-85%
+  // Convert HSL to hex
+  const h = hue / 360;
+  const s = saturation / 100;
+  const l = lightness / 100;
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = Math.round(hue2rgb(p, q, h + 1 / 3) * 255);
+  const g = Math.round(hue2rgb(p, q, h) * 255);
+  const b = Math.round(hue2rgb(p, q, h - 1 / 3) * 255);
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 };
 
 const roomsKey = 'hisohiso.rooms';
@@ -81,7 +107,8 @@ export const upsertRoom = (roomHash: string, roomSecret: string, handle?: string
       roomHash,
       roomSecret,
       lastSeen: now,
-      handle: typeof handle === 'string' ? handle : null
+      handle: typeof handle === 'string' ? handle : null,
+      color: generatePastelColor()
     });
   }
   rooms.sort((a, b) => b.lastSeen - a.lastSeen);
@@ -90,6 +117,16 @@ export const upsertRoom = (roomHash: string, roomSecret: string, handle?: string
 
 export const listRooms = (): StoredRoom[] => {
   const rooms = readRooms();
+  let dirty = false;
+  for (const room of rooms) {
+    if (!room.color) {
+      room.color = generatePastelColor();
+      dirty = true;
+    }
+  }
+  if (dirty) {
+    writeRooms(rooms);
+  }
   return rooms.sort((a, b) => b.lastSeen - a.lastSeen);
 };
 
@@ -106,4 +143,32 @@ export const updateRoomHandle = (roomHash: string, handle: string): void => {
     existing.lastSeen = Math.floor(Date.now() / 1000);
     writeRooms(rooms);
   }
+};
+
+export const updateRoomNickname = (roomHash: string, nickname: string): void => {
+  const rooms = readRooms();
+  const existing = rooms.find((room) => room.roomHash === roomHash);
+  if (existing) {
+    existing.nickname = nickname || null;
+    writeRooms(rooms);
+  }
+};
+
+export const getRoomColor = (roomHash: string): string => {
+  const rooms = readRooms();
+  const existing = rooms.find((room) => room.roomHash === roomHash);
+  if (existing) {
+    if (!existing.color) {
+      existing.color = generatePastelColor();
+      writeRooms(rooms);
+    }
+    return existing.color;
+  }
+  return generatePastelColor();
+};
+
+export const getRoomNickname = (roomHash: string): string | null => {
+  const rooms = readRooms();
+  const existing = rooms.find((room) => room.roomHash === roomHash);
+  return existing?.nickname ?? null;
 };
