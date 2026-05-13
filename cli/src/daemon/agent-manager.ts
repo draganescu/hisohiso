@@ -97,6 +97,9 @@ export class AgentManager {
       presence,
     };
 
+    let resolveSseReady: () => void;
+    const sseReady = new Promise<void>((resolve) => { resolveSseReady = resolve; });
+
     const sse = subscribeToRoom(this.server, room.roomHash, {
       onKnock: async () => {
         // Auto-approve phone joining agent room
@@ -106,6 +109,14 @@ export class AgentManager {
         } catch (err) {
           console.error(`[${agentName}:${agentId}] Failed to approve knock:`, err);
         }
+      },
+      onDestroy: () => {
+        console.log(`[${agentName}:${agentId}] Room destroyed. Cleaning up.`);
+        session.sse.close();
+        session.presence.stop();
+        this.sessions.delete(agentId);
+        void this.persistRooms();
+        void this.sendControlMessage(`${agentName} (${agentId}) session ended — room was closed.`);
       },
       onChat: async (event: RoomEvent) => {
         if (event.from === ownTokenHash) return;
@@ -192,6 +203,7 @@ export class AgentManager {
       },
       onOpen: () => {
         console.log(`[${agentName}:${agentId}] SSE connected.`);
+        resolveSseReady();
       },
       onError: (err) => {
         console.error(`[${agentName}:${agentId}] SSE error:`, err);
@@ -200,6 +212,10 @@ export class AgentManager {
 
     session.sse = sse;
     this.sessions.set(agentId, session);
+
+    // Wait for SSE to connect before returning — ensures knock listener
+    // is active before the join button is sent to the phone
+    await sseReady;
     await this.persistRooms();
 
     return { agentId, roomSecret: room.roomSecret };

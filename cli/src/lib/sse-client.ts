@@ -55,7 +55,13 @@ export const subscribeToRoom = (server: string, roomHash: string, handlers: SSEH
   es.onmessage = dispatch;
 
   es.onopen = () => handlers.onOpen?.();
-  es.onerror = (err: Event) => handlers.onError?.(err);
+  es.onerror = () => {
+    // EventSource fires error on every reconnect attempt — this is normal.
+    // Only surface it if the connection is fully closed (readyState === 2).
+    if (es.readyState === 2) {
+      handlers.onError?.('SSE connection closed');
+    }
+  };
 
   return {
     close: () => es.close(),

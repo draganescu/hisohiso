@@ -153,14 +153,15 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     },
     onDestroy: () => {
       console.log('Room destroyed. Exiting.');
+      sse.close();
       presence.stop();
       process.exit(0);
     },
     onOpen: () => {
-      console.error('[bridge] SSE connected');
+      console.log('[bridge] SSE connected');
     },
     onError: (err) => {
-      console.error('[bridge] SSE error:', err);
+      console.error('[bridge] SSE error:', typeof err === 'string' ? err : 'reconnecting...');
     },
   });
 

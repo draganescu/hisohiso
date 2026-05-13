@@ -81,7 +81,7 @@ export const runDaemon = async (): Promise<void> => {
       }
     },
     onError: (err) => {
-      console.error('Control room SSE error:', err);
+      console.error('Control room SSE error:', typeof err === 'string' ? err : 'reconnecting...');
     },
     onOpen: () => {
       console.log('Control room SSE connected.');
@@ -220,7 +220,7 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
         }
       },
       onError: (err) => {
-        console.error('SSE error:', err);
+        console.error('SSE error:', typeof err === 'string' ? err : 'reconnecting...');
       },
     });
 
