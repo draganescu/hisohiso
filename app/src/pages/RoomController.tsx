@@ -1559,10 +1559,18 @@ const RoomController = () => {
                   {allRooms.map((r) => {
                     const isCurrent = r.roomHash === roomHash;
                     return (
-                      <a
+                      <button
                         key={r.roomHash}
-                        href={`/room#${r.roomSecret}`}
-                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left no-underline transition-colors ${
+                        type="button"
+                        onClick={() => {
+                          if (isCurrent) {
+                            setShowSwitcher(false);
+                            return;
+                          }
+                          window.location.hash = `#${r.roomSecret}`;
+                          window.location.reload();
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
                           isCurrent
                             ? 'bg-[#171613] text-[#f6f0e8]'
                             : 'text-[#171613] hover:bg-[#ebe4d7]'
@@ -1585,7 +1593,7 @@ const RoomController = () => {
                         {isCurrent && (
                           <div className="h-2 w-2 shrink-0 rounded-full bg-[#d9592f]" />
                         )}
-                      </a>
+                      </button>
                     );
                   })}
                 </div>
