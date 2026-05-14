@@ -1605,7 +1605,7 @@ const RoomController = () => {
               role="button"
               tabIndex={0}
             />
-            <aside className="absolute right-0 top-0 h-full w-80 max-w-full border-l border-[#1716132e] bg-[#f7f2e6] p-6 shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
+            <aside className="drawer-right absolute right-0 top-0 h-full w-80 max-w-full border-l border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Room menu</h2>
                 <button className="text-sm underline" onClick={() => setShowMenu(false)} type="button">
@@ -1665,7 +1665,7 @@ const RoomController = () => {
               role="button"
               tabIndex={0}
             />
-            <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
+            <aside className="drawer-left absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
               <div className="flex items-center justify-between border-b border-[#1716131f] px-5 py-4">
                 <h2 className="text-lg font-semibold">Rooms</h2>
                 <button className="text-sm underline" onClick={() => setShowSwitcher(false)} type="button">
@@ -1875,7 +1875,7 @@ const RoomController = () => {
             role="button"
             tabIndex={0}
           />
-          <aside className="absolute right-0 top-0 h-full w-80 max-w-full border-l border-[#1716132e] bg-[#f7f2e6] p-6 shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
+          <aside className="drawer-right absolute right-0 top-0 h-full w-80 max-w-full border-l border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Room menu</h2>
               <button
