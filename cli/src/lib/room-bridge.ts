@@ -21,11 +21,12 @@ const FLUSH_MAX_LINES = 50;
 
 export const createRoomAndJoin = async (
   server: string,
-  password = ''
+  password = '',
+  opts?: { catchUp?: boolean }
 ): Promise<{ roomSecret: string; roomHash: string; participantToken: string; messageKey: CryptoKey }> => {
   const roomSecret = generateRoomSecret();
   const roomHash = await deriveRoomHash(roomSecret);
-  const result = await api.createRoom(server, roomHash);
+  const result = await api.createRoom(server, roomHash, opts);
   if (!result.participant_token) {
     throw new Error('Failed to create room: no token returned');
   }

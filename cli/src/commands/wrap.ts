@@ -34,9 +34,9 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     profile = builtin;
   }
 
-  // Create room
+  // Create room — catch-up on so the phone sees agent output even after closing the app.
   const password = '';
-  const room = await createRoomAndJoin(server, password);
+  const room = await createRoomAndJoin(server, password, { catchUp: true });
 
   const joinUrl = `${server}/room#${room.roomSecret}`;
   console.log(`\nScan to connect (${agentName}):\n`);

@@ -184,7 +184,7 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
   const controlRoomHash = await deriveRoomHash(controlRoomSecret);
 
   console.log('Creating control room...');
-  const result = await api.createRoom(server, controlRoomHash);
+  const result = await api.createRoom(server, controlRoomHash, { catchUp: true });
   if (!result.participant_token) {
     console.error('Failed to create control room.');
     process.exit(1);
