@@ -3,16 +3,20 @@ import type { ConfirmDangerBlock as ConfirmDangerBlockType } from '../../lib/blo
 
 interface Props {
   block: ConfirmDangerBlockType;
-  onRespond: (blockId: string, type: string, value: boolean) => void;
+  onSelect: (blockId: string, type: string, value: boolean) => void;
+  submitted: boolean;
 }
 
-export const ConfirmDangerBlockView = ({ block, onRespond }: Props) => {
-  const [submitted, setSubmitted] = useState<boolean | null>(null);
+export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) => {
+  const [selected, setSelected] = useState<boolean | null>(null);
   const [holdProgress, setHoldProgress] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Once selected locally, lock immediately (auto-submit blocks don't wait for Send)
+  const isLocked = submitted || selected !== null;
+
   const startHold = useCallback(() => {
-    if (submitted !== null) return;
+    if (isLocked) return;
     setHoldProgress(0);
     let p = 0;
     holdTimer.current = setInterval(() => {
@@ -20,21 +24,21 @@ export const ConfirmDangerBlockView = ({ block, onRespond }: Props) => {
       setHoldProgress(p);
       if (p >= 100) {
         if (holdTimer.current) clearInterval(holdTimer.current);
-        setSubmitted(true);
-        onRespond(block.id, 'confirm-danger', true);
+        setSelected(true);
+        onSelect(block.id, 'confirm-danger', true);
       }
     }, 20);
-  }, [submitted, block.id, onRespond]);
+  }, [isLocked, block.id, onSelect]);
 
   const endHold = useCallback(() => {
     if (holdTimer.current) clearInterval(holdTimer.current);
-    if (submitted === null) setHoldProgress(0);
-  }, [submitted]);
+    if (selected === null) setHoldProgress(0);
+  }, [selected]);
 
   const cancel = () => {
-    if (submitted !== null) return;
-    setSubmitted(false);
-    onRespond(block.id, 'confirm-danger', false);
+    if (isLocked) return;
+    setSelected(false);
+    onSelect(block.id, 'confirm-danger', false);
   };
 
   return (
@@ -50,7 +54,7 @@ export const ConfirmDangerBlockView = ({ block, onRespond }: Props) => {
           </pre>
         )}
       </div>
-      {submitted === null && (
+      {!isLocked && (
         <div className="flex gap-2 border-t border-red-200 px-4 py-3">
           <button
             type="button"
@@ -76,10 +80,10 @@ export const ConfirmDangerBlockView = ({ block, onRespond }: Props) => {
           </button>
         </div>
       )}
-      {submitted === true && (
+      {isLocked && selected === true && (
         <div className="border-t border-red-200 px-4 py-2 text-sm font-medium text-red-700">Confirmed</div>
       )}
-      {submitted === false && (
+      {isLocked && selected === false && (
         <div className="border-t border-red-200 px-4 py-2 text-sm font-medium text-[#8d816c]">Cancelled</div>
       )}
     </div>

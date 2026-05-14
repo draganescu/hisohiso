@@ -3,7 +3,8 @@ import type { RunCommandBlock as RunCommandBlockType } from '../../lib/blocks';
 
 interface Props {
   block: RunCommandBlockType;
-  onRespond: (blockId: string, type: string, value: string) => void;
+  onSelect: (blockId: string, type: string, value: string | null) => void;
+  submitted: boolean;
 }
 
 const riskColor = {
@@ -12,21 +13,22 @@ const riskColor = {
   dangerous: 'bg-red-600',
 };
 
-export const RunCommandBlockView = ({ block, onRespond }: Props) => {
-  const [submitted, setSubmitted] = useState<string | null>(null);
+export const RunCommandBlockView = ({ block, onSelect, submitted }: Props) => {
+  const [selected, setSelected] = useState<string | null>(null);
   const [holdProgress, setHoldProgress] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const risk = block.risk || 'safe';
   const needsHold = risk === 'dangerous';
 
+  // For dangerous: hold completes → auto-submitted by BlockRenderer
   const doRun = useCallback(() => {
-    if (submitted) return;
-    setSubmitted('run');
-    onRespond(block.id, 'run-command', 'run');
-  }, [submitted, block.id, onRespond]);
+    if (submitted || selected) return;
+    setSelected('run');
+    onSelect(block.id, 'run-command', 'run');
+  }, [submitted, selected, block.id, onSelect]);
 
   const startHold = useCallback(() => {
-    if (submitted) return;
+    if (submitted || selected) return;
     setHoldProgress(0);
     let p = 0;
     holdTimer.current = setInterval(() => {
@@ -37,18 +39,37 @@ export const RunCommandBlockView = ({ block, onRespond }: Props) => {
         doRun();
       }
     }, 20);
-  }, [submitted, doRun]);
+  }, [submitted, selected, doRun]);
 
   const endHold = useCallback(() => {
     if (holdTimer.current) clearInterval(holdTimer.current);
-    if (!submitted) setHoldProgress(0);
-  }, [submitted]);
+    if (!selected) setHoldProgress(0);
+  }, [selected]);
 
-  const skip = () => {
+  // For safe/moderate: tap to toggle selection
+  const selectRun = () => {
     if (submitted) return;
-    setSubmitted('skip');
-    onRespond(block.id, 'run-command', 'skip');
+    if (selected === 'run') {
+      setSelected(null);
+      onSelect(block.id, 'run-command', null);
+    } else {
+      setSelected('run');
+      onSelect(block.id, 'run-command', 'run');
+    }
   };
+
+  const selectSkip = () => {
+    if (submitted) return;
+    if (selected === 'skip') {
+      setSelected(null);
+      onSelect(block.id, 'run-command', null);
+    } else {
+      setSelected('skip');
+      onSelect(block.id, 'run-command', 'skip');
+    }
+  };
+
+  const isLocked = submitted || (needsHold && selected !== null);
 
   return (
     <div className="mt-3 overflow-hidden rounded-2xl border border-[#333] bg-[#1b1b1b]">
@@ -56,7 +77,7 @@ export const RunCommandBlockView = ({ block, onRespond }: Props) => {
         <div className="border-b border-[#333] px-4 py-2 text-sm text-[#aaa]">{block.description}</div>
       )}
       <div className="px-4 py-3 font-mono text-sm text-[#ccc]">$ {block.command}</div>
-      {!submitted && (
+      {!isLocked && (
         <div className="flex gap-2 border-t border-[#333] px-4 py-3">
           {needsHold ? (
             <button
@@ -74,20 +95,30 @@ export const RunCommandBlockView = ({ block, onRespond }: Props) => {
           ) : (
             <button
               type="button"
-              onClick={doRun}
-              className={`rounded-full px-5 py-2 text-sm font-semibold text-white ${riskColor[risk]}`}
+              onClick={selectRun}
+              className={`rounded-full px-5 py-2 text-sm font-semibold text-white transition ${
+                selected === 'run' ? `${riskColor[risk]} ring-2 ring-white ring-offset-2 ring-offset-[#1b1b1b]` : riskColor[risk]
+              }`}
             >
               Run
             </button>
           )}
-          <button type="button" onClick={skip} className="rounded-full border border-[#555] px-5 py-2 text-sm font-medium text-[#aaa]">
+          <button
+            type="button"
+            onClick={selectSkip}
+            className={`rounded-full border px-5 py-2 text-sm font-medium transition ${
+              selected === 'skip'
+                ? 'border-white bg-[#555] text-white'
+                : 'border-[#555] text-[#aaa]'
+            }`}
+          >
             Skip
           </button>
         </div>
       )}
-      {submitted && (
-        <div className={`border-t border-[#333] px-4 py-2 text-sm font-medium ${submitted === 'run' ? 'text-green-400' : 'text-[#888]'}`}>
-          {submitted === 'run' ? 'Running...' : 'Skipped'}
+      {isLocked && selected && (
+        <div className={`border-t border-[#333] px-4 py-2 text-sm font-medium ${selected === 'run' ? 'text-green-400' : 'text-[#888]'}`}>
+          {selected === 'run' ? 'Running...' : 'Skipped'}
         </div>
       )}
     </div>

@@ -3,35 +3,34 @@ import type { SortableBlock as SortableBlockType } from '../../lib/blocks';
 
 interface Props {
   block: SortableBlockType;
-  onRespond: (blockId: string, type: string, value: string[]) => void;
+  onSelect: (blockId: string, type: string, value: string[]) => void;
+  submitted: boolean;
 }
 
-export const SortableBlockView = ({ block, onRespond }: Props) => {
+export const SortableBlockView = ({ block, onSelect, submitted }: Props) => {
   const [items, setItems] = useState(block.items.map((i) => ({ ...i })));
-  const [submitted, setSubmitted] = useState(false);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartY = useRef(0);
   const touchCurrentIdx = useRef<number | null>(null);
 
-  const submit = () => {
-    if (submitted) return;
-    setSubmitted(true);
-    onRespond(block.id, 'sortable', items.map((i) => i.value));
+  const updateOrder = (newItems: typeof items) => {
+    setItems(newItems);
+    onSelect(block.id, 'sortable', newItems.map((i) => i.value));
   };
 
   const moveUp = (idx: number) => {
     if (submitted || idx === 0) return;
     const next = [...items];
     [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-    setItems(next);
+    updateOrder(next);
   };
 
   const moveDown = (idx: number) => {
     if (submitted || idx === items.length - 1) return;
     const next = [...items];
     [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-    setItems(next);
+    updateOrder(next);
   };
 
   const getIdxFromY = useCallback((clientY: number): number | null => {
@@ -63,10 +62,11 @@ export const SortableBlockView = ({ block, onRespond }: Props) => {
         next.splice(overIdx, 0, moved);
         touchCurrentIdx.current = overIdx;
         setDraggingIdx(overIdx);
+        onSelect(block.id, 'sortable', next.map((i) => i.value));
         return next;
       });
     }
-  }, [getIdxFromY]);
+  }, [getIdxFromY, block.id, onSelect]);
 
   const onTouchEnd = useCallback(() => {
     touchCurrentIdx.current = null;
@@ -110,15 +110,6 @@ export const SortableBlockView = ({ block, onRespond }: Props) => {
           </div>
         ))}
       </div>
-      {!submitted && (
-        <button
-          type="button"
-          onClick={submit}
-          className="mt-3 rounded-full bg-[#d9592f] px-5 py-2 text-sm font-semibold text-white"
-        >
-          {block.confirm_label || 'Confirm order'}
-        </button>
-      )}
     </div>
   );
 };

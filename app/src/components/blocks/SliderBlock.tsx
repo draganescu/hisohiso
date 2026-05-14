@@ -3,21 +3,21 @@ import type { SliderBlock as SliderBlockType } from '../../lib/blocks';
 
 interface Props {
   block: SliderBlockType;
-  onRespond: (blockId: string, type: string, value: number) => void;
+  onSelect: (blockId: string, type: string, value: number) => void;
+  submitted: boolean;
 }
 
-export const SliderBlockView = ({ block, onRespond }: Props) => {
+export const SliderBlockView = ({ block, onSelect, submitted }: Props) => {
   const [value, setValue] = useState(block.default ?? Math.round((block.min.value + block.max.value) / 2));
-  const [submitted, setSubmitted] = useState(false);
 
   const step = block.steps
     ? (block.max.value - block.min.value) / block.steps
     : 1;
 
-  const submit = () => {
+  const onChange = (newValue: number) => {
     if (submitted) return;
-    setSubmitted(true);
-    onRespond(block.id, 'slider', value);
+    setValue(newValue);
+    onSelect(block.id, 'slider', newValue);
   };
 
   return (
@@ -31,7 +31,7 @@ export const SliderBlockView = ({ block, onRespond }: Props) => {
           step={step}
           value={value}
           disabled={submitted}
-          onChange={(e) => setValue(Number(e.target.value))}
+          onChange={(e) => onChange(Number(e.target.value))}
           className="w-full accent-[#d9592f]"
         />
         <div className="mt-1 flex justify-between text-xs text-[#8d816c]">
@@ -40,15 +40,6 @@ export const SliderBlockView = ({ block, onRespond }: Props) => {
           <span>{block.max.label}</span>
         </div>
       </div>
-      {!submitted && (
-        <button
-          type="button"
-          onClick={submit}
-          className="mt-3 rounded-full bg-[#d9592f] px-5 py-2 text-sm font-semibold text-white"
-        >
-          Confirm
-        </button>
-      )}
     </div>
   );
 };

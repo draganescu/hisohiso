@@ -1,4 +1,5 @@
-import type { Block } from '../../lib/blocks';
+import { useState, useCallback } from 'react';
+import type { Block, RunCommandBlock as RunCommandBlockType } from '../../lib/blocks';
 import { ConfidenceDot } from './ConfidenceDot';
 import { ButtonsBlockView } from './ButtonsBlock';
 import { SwipeBlockView } from './SwipeBlock';
@@ -22,85 +23,143 @@ import { CarouselBlockView } from './CarouselBlock';
 import { LinkPreviewBlockView } from './LinkPreviewBlock';
 
 type RespondFn = (blockId: string, type: string, value: unknown) => void;
+type PendingSelection = { type: string; value: unknown };
 
 interface Props {
   blocks: Block[];
   onRespond: RespondFn;
 }
 
-const renderBlock = (block: Block, onRespond: RespondFn) => {
-  switch (block.type) {
-    case 'buttons':
-      return <ButtonsBlockView block={block} onRespond={onRespond as never} />;
-    case 'swipe':
-      return <SwipeBlockView block={block} onRespond={onRespond as never} />;
-    case 'slider':
-      return <SliderBlockView block={block} onRespond={onRespond as never} />;
-    case 'checklist':
-      return <ChecklistBlockView block={block} onRespond={onRespond as never} />;
-    case 'sortable':
-      return <SortableBlockView block={block} onRespond={onRespond as never} />;
-    case 'diff':
-      return <DiffBlockView block={block} />;
-    case 'file-tree':
-      return <FileTreeBlockView block={block} />;
-    case 'terminal':
-      return <TerminalBlockView block={block} />;
-    case 'progress':
-      return <ProgressBlockView block={block} />;
-    case 'code':
-      return <CodeBlockView block={block} />;
-    case 'before-after':
-      return <BeforeAfterBlockView block={block} />;
-    case 'error':
-      return <ErrorBlockView block={block} />;
-    case 'confirm-danger':
-      return <ConfirmDangerBlockView block={block} onRespond={onRespond as never} />;
-    case 'commit':
-      return <CommitBlockView block={block} onRespond={onRespond as never} />;
-    case 'run-command':
-      return <RunCommandBlockView block={block} onRespond={onRespond as never} />;
-    case 'thinking':
-      return <ThinkingBlockView block={block} />;
-    case 'cost':
-      return <CostBlockView block={block} />;
-    case 'file-peek':
-      return <FilePeekBlockView block={block} />;
-    case 'carousel':
-      return <CarouselBlockView block={block} />;
-    case 'link-preview':
-      return <LinkPreviewBlockView block={block} />;
-    default:
-      return null;
-  }
+/** Blocks that auto-submit on selection (have their own safety mechanisms) */
+const isAutoSubmit = (block: Block): boolean => {
+  if (block.type === 'confirm-danger') return true;
+  if (block.type === 'run-command' && (block as RunCommandBlockType).risk === 'dangerous') return true;
+  return false;
 };
 
-export const BlockRenderer = ({ blocks, onRespond }: Props) => (
-  <div className="space-y-1">
-    {blocks.map((block, i) => {
-      if (!block || typeof block !== 'object' || !block.type) return null;
-      let content: React.ReactNode;
-      try {
-        content = renderBlock(block, onRespond);
-      } catch {
-        content = (
-          <div className="rounded-xl border border-dashed border-[#d5c8b2] bg-[#faf5eb] px-4 py-2 text-xs text-[#8d816c]">
-            Could not render {block.type} block
+export const BlockRenderer = ({ blocks, onRespond }: Props) => {
+  const [pending, setPending] = useState<Map<string, PendingSelection>>(new Map());
+  const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+
+  const handleSelect = useCallback((blockId: string, type: string, value: unknown) => {
+    // Auto-submit blocks with built-in safety (confirm-danger, dangerous run-command)
+    const block = blocks.find(b => b.id === blockId);
+    if (block && isAutoSubmit(block)) {
+      onRespond(blockId, type, value);
+      setSubmittedIds(prev => new Set([...prev, blockId]));
+      return;
+    }
+
+    // null value means deselect
+    if (value === null) {
+      setPending(prev => {
+        const next = new Map(prev);
+        next.delete(blockId);
+        return next;
+      });
+    } else {
+      setPending(prev => new Map(prev).set(blockId, { type, value }));
+    }
+  }, [blocks, onRespond]);
+
+  const submitAll = useCallback(() => {
+    if (pending.size === 0) return;
+    for (const [blockId, { type, value }] of pending) {
+      onRespond(blockId, type, value);
+    }
+    setSubmittedIds(prev => {
+      const next = new Set(prev);
+      for (const blockId of pending.keys()) next.add(blockId);
+      return next;
+    });
+    setPending(new Map());
+  }, [pending, onRespond]);
+
+  const renderBlock = (block: Block) => {
+    const isSubmitted = block.id ? submittedIds.has(block.id) : false;
+
+    switch (block.type) {
+      case 'buttons':
+        return <ButtonsBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'swipe':
+        return <SwipeBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'slider':
+        return <SliderBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'checklist':
+        return <ChecklistBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'sortable':
+        return <SortableBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'confirm-danger':
+        return <ConfirmDangerBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'commit':
+        return <CommitBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'run-command':
+        return <RunCommandBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
+      case 'diff':
+        return <DiffBlockView block={block} />;
+      case 'file-tree':
+        return <FileTreeBlockView block={block} />;
+      case 'terminal':
+        return <TerminalBlockView block={block} />;
+      case 'progress':
+        return <ProgressBlockView block={block} />;
+      case 'code':
+        return <CodeBlockView block={block} />;
+      case 'before-after':
+        return <BeforeAfterBlockView block={block} />;
+      case 'error':
+        return <ErrorBlockView block={block} />;
+      case 'thinking':
+        return <ThinkingBlockView block={block} />;
+      case 'cost':
+        return <CostBlockView block={block} />;
+      case 'file-peek':
+        return <FilePeekBlockView block={block} />;
+      case 'carousel':
+        return <CarouselBlockView block={block} />;
+      case 'link-preview':
+        return <LinkPreviewBlockView block={block} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      {blocks.map((block, i) => {
+        if (!block || typeof block !== 'object' || !block.type) return null;
+        let content: React.ReactNode;
+        try {
+          content = renderBlock(block);
+        } catch {
+          content = (
+            <div className="rounded-xl border border-dashed border-[#d5c8b2] bg-[#faf5eb] px-4 py-2 text-xs text-[#8d816c]">
+              Could not render {block.type} block
+            </div>
+          );
+        }
+        if (!content) return null;
+        return (
+          <div key={block.id ?? i}>
+            {block.confidence && (
+              <div className="mb-1 flex items-center gap-1.5">
+                <ConfidenceDot level={block.confidence} />
+                <span className="text-[11px] text-[#8d816c]">{block.confidence} confidence</span>
+              </div>
+            )}
+            {content}
           </div>
         );
-      }
-      if (!content) return null;
-      return (
-        <div key={block.id ?? i}>
-          {block.confidence && (
-            <div className="mb-1 flex items-center gap-1.5">
-              <ConfidenceDot level={block.confidence} />
-              <span className="text-[11px] text-[#8d816c]">{block.confidence} confidence</span>
-            </div>
-          )}
-          {content}
-        </div>
-      );
-    })}
-  </div>
-);
+      })}
+      {pending.size > 0 && (
+        <button
+          type="button"
+          onClick={submitAll}
+          className="mt-4 w-full rounded-full bg-[#d9592f] py-3 text-sm font-semibold text-white active:bg-[#c04d27]"
+        >
+          Send{pending.size > 1 ? ` (${pending.size})` : ''}
+        </button>
+      )}
+    </div>
+  );
+};

@@ -3,24 +3,20 @@ import type { ChecklistBlock as ChecklistBlockType } from '../../lib/blocks';
 
 interface Props {
   block: ChecklistBlockType;
-  onRespond: (blockId: string, type: string, value: string[]) => void;
+  onSelect: (blockId: string, type: string, value: string[] | null) => void;
+  submitted: boolean;
 }
 
-export const ChecklistBlockView = ({ block, onRespond }: Props) => {
+export const ChecklistBlockView = ({ block, onSelect, submitted }: Props) => {
   const [checked, setChecked] = useState<string[]>(
     block.items.filter((i) => i.checked).map((i) => i.value)
   );
-  const [submitted, setSubmitted] = useState(false);
 
   const toggle = (value: string) => {
     if (submitted) return;
-    setChecked((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
-  };
-
-  const submit = () => {
-    if (submitted) return;
-    setSubmitted(true);
-    onRespond(block.id, 'checklist', checked);
+    const next = checked.includes(value) ? checked.filter((v) => v !== value) : [...checked, value];
+    setChecked(next);
+    onSelect(block.id, 'checklist', next.length > 0 ? next : null);
   };
 
   return (
@@ -51,15 +47,6 @@ export const ChecklistBlockView = ({ block, onRespond }: Props) => {
           </label>
         ))}
       </div>
-      {!submitted && (
-        <button
-          type="button"
-          onClick={submit}
-          className="mt-3 rounded-full bg-[#d9592f] px-5 py-2 text-sm font-semibold text-white"
-        >
-          {block.confirm_label || 'Confirm'}
-        </button>
-      )}
     </div>
   );
 };

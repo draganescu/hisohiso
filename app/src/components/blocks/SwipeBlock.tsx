@@ -3,12 +3,13 @@ import type { SwipeBlock as SwipeBlockType } from '../../lib/blocks';
 
 interface Props {
   block: SwipeBlockType;
-  onRespond: (blockId: string, type: string, value: string) => void;
+  onSelect: (blockId: string, type: string, value: string | null) => void;
+  submitted: boolean;
 }
 
-export const SwipeBlockView = ({ block, onRespond }: Props) => {
+export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
   const [index, setIndex] = useState(0);
-  const [submitted, setSubmitted] = useState<string | null>(null);
+  const [selectedValue, setSelectedValue] = useState<string | null>(null);
   const [swipeX, setSwipeX] = useState(0);
   const startX = useRef(0);
   const dragging = useRef(false);
@@ -16,13 +17,18 @@ export const SwipeBlockView = ({ block, onRespond }: Props) => {
   const card = block.cards[index];
   if (!card) return null;
 
-  const accept = () => {
+  const select = () => {
     if (submitted) return;
-    setSubmitted(card.value);
-    onRespond(block.id, 'swipe', card.value);
+    if (selectedValue === card.value) {
+      setSelectedValue(null);
+      onSelect(block.id, 'swipe', null);
+    } else {
+      setSelectedValue(card.value);
+      onSelect(block.id, 'swipe', card.value);
+    }
   };
 
-  const reject = () => {
+  const nextCard = () => {
     if (submitted) return;
     if (index < block.cards.length - 1) {
       setIndex(index + 1);
@@ -43,12 +49,19 @@ export const SwipeBlockView = ({ block, onRespond }: Props) => {
 
   const onTouchEnd = () => {
     dragging.current = false;
-    if (swipeX > 80) accept();
-    else if (swipeX < -80) reject();
+    if (swipeX > 80) select();
+    else if (swipeX < -80) nextCard();
     setSwipeX(0);
   };
 
-  const bgTint = swipeX > 40 ? 'border-green-400' : swipeX < -40 ? 'border-red-400' : 'border-[#d5c8b2]';
+  const isCardSelected = selectedValue === card.value;
+  const bgTint = isCardSelected
+    ? 'border-green-400'
+    : swipeX > 40
+    ? 'border-green-400'
+    : swipeX < -40
+    ? 'border-red-400'
+    : 'border-[#d5c8b2]';
 
   return (
     <div className="mt-3">
@@ -90,23 +103,28 @@ export const SwipeBlockView = ({ block, onRespond }: Props) => {
         <div className="mt-3 flex justify-center gap-6">
           <button
             type="button"
-            onClick={reject}
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-red-300 bg-red-50 text-xl text-red-500 active:bg-red-100"
+            onClick={nextCard}
+            disabled={index >= block.cards.length - 1}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-red-300 bg-red-50 text-xl text-red-500 active:bg-red-100 disabled:opacity-30"
           >
-            ✕
+            &#10005;
           </button>
           <button
             type="button"
-            onClick={accept}
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-green-300 bg-green-50 text-xl text-green-600 active:bg-green-100"
+            onClick={select}
+            className={`flex h-12 w-12 items-center justify-center rounded-full border text-xl transition ${
+              isCardSelected
+                ? 'border-green-500 bg-green-500 text-white'
+                : 'border-green-300 bg-green-50 text-green-600 active:bg-green-100'
+            }`}
           >
-            ✓
+            &#10003;
           </button>
         </div>
       )}
-      {submitted && (
-        <p className="mt-2 text-center text-sm font-medium text-green-700">
-          Selected: {block.cards.find((c) => c.value === submitted)?.title}
+      {selectedValue && (
+        <p className={`mt-2 text-center text-sm font-medium ${submitted ? 'text-green-700' : 'text-[#8d816c]'}`}>
+          Selected: {block.cards.find((c) => c.value === selectedValue)?.title}
         </p>
       )}
     </div>
