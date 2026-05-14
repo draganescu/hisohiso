@@ -124,9 +124,29 @@ Again: `claude` is the supported one. The others ship for tinkering.
 
 ## Releases
 
-The CLI is versioned with git tags (e.g. `v0.3.6`). The "Build CLI vX.Y.Z
-binaries" commits attach prebuilt platform binaries to that tag, and the
-GitHub Release for that tag exposes them via `install.sh`.
+The CLI is versioned with git tags (e.g. `v0.3.6`). `install.sh` downloads
+from `releases/latest/download/`, so a **GitHub Release with assets** has to
+exist for the tag — a plain `git tag` is not enough.
+
+The release flow:
+
+```sh
+cd cli
+bun run build:all                       # rebuild all four binaries
+git add -f dist/hisohiso-*              # binaries are .gitignored; force-add
+git commit -m "Build CLI v0.3.7 binaries"
+git tag v0.3.7
+git push origin main v0.3.7
+bun run release v0.3.7                  # creates the GitHub Release + assets
+```
+
+`bun run release` calls `scripts/release.sh` which verifies the binaries
+exist, the tag exists locally and on origin, `gh` is authenticated, and
+the release doesn't already exist. Custom notes:
+
+```sh
+RELEASE_NOTES="Fixes #42; adds X" bun run release v0.3.7
+```
 
 ## Source
 
