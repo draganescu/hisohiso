@@ -110,12 +110,14 @@ const extractCompleteBlocks = (jsonText: string): unknown[] | null => {
 };
 
 /**
- * Find the JSON portion of the output, stripping code fences & preamble text.
- * Returns the original text unchanged if no block JSON pattern is found.
+ * Find the JSON portion of the output, stripping code fences, preamble, and
+ * trailing junk (e.g. extra `]}` that Claude sometimes appends).
+ * Uses brace-depth tracking to find the true end of the JSON object.
+ * Returns null if no block JSON pattern (`{"text":`) is found.
  */
-const extractJsonContent = (text: string): string => {
+const extractJsonContent = (text: string): string | null => {
   const jsonMatch = text.match(/\{[\s]*"text"\s*:/);
-  if (!jsonMatch || jsonMatch.index === undefined) return text;
+  if (!jsonMatch || jsonMatch.index === undefined) return null;
 
   let jsonPart = text.substring(jsonMatch.index);
 
@@ -123,6 +125,28 @@ const extractJsonContent = (text: string): string => {
   jsonPart = jsonPart.replace(/\n\s*```[\s\S]*$/, '');
   jsonPart = jsonPart.replace(/```\s*$/, '');
 
+  // Track brace depth to find the matching closing } for the opening {.
+  // This strips trailing junk like extra ]} that Claude sometimes emits.
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < jsonPart.length; i++) {
+    const ch = jsonPart[i]!;
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return jsonPart.substring(0, i + 1);
+    }
+  }
+
+  // No matching brace found — JSON is truncated, return as-is for salvage path
   return jsonPart;
 };
 
@@ -136,9 +160,9 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
     }
   } catch { /* not valid JSON, try extraction */ }
 
-  // Extract JSON portion — strips code fences, preamble, trailing text
+  // Extract JSON portion — strips code fences, preamble, trailing junk
   const jsonPart = extractJsonContent(text);
-  if (jsonPart === text) return { text, blocks: null };
+  if (!jsonPart) return { text, blocks: null };
 
   // Try parsing the cleaned JSON
   try {
