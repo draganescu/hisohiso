@@ -1085,11 +1085,18 @@ const RoomController = () => {
                   const isMine = msg.direction === 'out' && !isSystem;
 
                   return (
-                    <button
+                    <div
                       key={msg.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedId(msg.id)}
-                      className={`w-full rounded-[30px] border p-5 text-left shadow-[0_18px_36px_rgba(23,22,19,0.08)] transition hover:-translate-y-[1px] sm:p-6 lg:max-w-[min(100%,58rem)] ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedId(msg.id);
+                        }
+                      }}
+                      className={`w-full cursor-pointer rounded-[30px] border p-5 text-left shadow-[0_18px_36px_rgba(23,22,19,0.08)] transition hover:-translate-y-[1px] sm:p-6 lg:max-w-[min(100%,58rem)] ${
                         isSystem
                           ? 'border-[#e0d2bc] bg-[#fff7ea] text-[#3f3529]'
                           : isMine
@@ -1147,7 +1154,7 @@ const RoomController = () => {
                         </a>
                       )}
                       <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
