@@ -41,15 +41,23 @@ type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DES
 type RoomLookupResponse = {
   status: 'exists';
   has_participants: boolean;
+  catch_up_enabled?: boolean;
 };
 
 type RoomEvent = {
   v: number;
-  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy';
+  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy' | 'settings';
   room_hash: string;
   from?: string | null;
   ts: number;
   body: Record<string, unknown>;
+};
+
+type OutboxMessage = {
+  msg_id: string;
+  ts: number;
+  sender_hash: string | null;
+  encrypted_payload: string;
 };
 
 type KnockRequest = {
@@ -143,6 +151,8 @@ const RoomController = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasCompanion, setHasCompanion] = useState(false);
   const [emptyQrSrc, setEmptyQrSrc] = useState<string>('');
+  const [catchUpEnabled, setCatchUpEnabled] = useState(false);
+  const [catchUpBusy, setCatchUpBusy] = useState(false);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -201,6 +211,65 @@ const RoomController = () => {
   const persistMessage = useCallback((record: ChatMessage) => {
     void saveMessage(record).catch(() => undefined);
   }, []);
+
+  const ingestEncryptedChat = useCallback(async (
+    msgId: string,
+    ts: number,
+    from: string | null,
+    rawPayload: unknown
+  ) => {
+    if (!cryptoKey || !roomHash || !msgId || !rawPayload) return;
+    const parsed: EncryptedPayload =
+      typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
+    const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
+    let messageText = plaintext;
+    let messageHandle: string | null = null;
+    let messageAction: MessageAction | null = null;
+    let messageBlocks: Block[] | null = null;
+    let messageBlockResponse: BlockResponse | null = null;
+    if (plaintext.trim().startsWith('{')) {
+      try {
+        const obj = JSON.parse(plaintext) as {
+          text?: string;
+          handle?: string | null;
+          action?: MessageAction;
+          blocks?: Block[];
+          block_response?: BlockResponse;
+        };
+        if (typeof obj.text === 'string') messageText = obj.text;
+        if (typeof obj.handle === 'string') messageHandle = obj.handle;
+        if (obj.action && typeof obj.action === 'object' && obj.action.type === 'join-room' && typeof obj.action.roomSecret === 'string') {
+          messageAction = obj.action;
+        }
+        if (Array.isArray(obj.blocks) && obj.blocks.length > 0) messageBlocks = obj.blocks;
+        if (obj.block_response && typeof obj.block_response === 'object' && obj.block_response.block_id) {
+          messageBlockResponse = obj.block_response;
+        }
+      } catch {
+        messageText = plaintext;
+      }
+    }
+    const direction = tokenHash && from === tokenHash ? 'out' : 'in';
+    if (direction === 'in') setHasCompanion(true);
+    const messageRecord: ChatMessage = {
+      id: msgId,
+      room_hash: roomHash,
+      timestamp: ts,
+      content: messageText,
+      type: 'chat',
+      direction,
+      from: from ?? null,
+      handle: messageHandle,
+      action: messageAction,
+      blocks: messageBlocks,
+      block_response: messageBlockResponse
+    };
+    persistMessage(messageRecord);
+    setMessages((prev) => {
+      if (prev.find((item) => item.id === msgId)) return prev;
+      return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
+    });
+  }, [cryptoKey, roomHash, tokenHash, persistMessage]);
 
   useEffect(() => {
     let active = true;
@@ -401,6 +470,22 @@ const RoomController = () => {
   }, [roomState]);
 
   useEffect(() => {
+    if (!roomHash) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/rooms/${roomHash}`);
+        if (!r.ok || cancelled) return;
+        const data = (await r.json()) as RoomLookupResponse;
+        if (!cancelled) setCatchUpEnabled(!!data.catch_up_enabled);
+      } catch {
+        // non-fatal; toggle stays at last known state
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [roomHash]);
+
+  useEffect(() => {
     if (!roomHash || roomState === 'DESTROYED') {
       return;
     }
@@ -466,77 +551,48 @@ const RoomController = () => {
           if (!rawPayload || !msgId) {
             return;
           }
-          const parsed: EncryptedPayload =
-            typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
-          const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
-          let messageText = plaintext;
-          let messageHandle: string | null = null;
-          let messageAction: MessageAction | null = null;
-          let messageBlocks: Block[] | null = null;
-          let messageBlockResponse: BlockResponse | null = null;
-          if (plaintext.trim().startsWith('{')) {
-            try {
-              const obj = JSON.parse(plaintext) as {
-                text?: string;
-                handle?: string | null;
-                action?: MessageAction;
-                blocks?: Block[];
-                block_response?: BlockResponse;
-              };
-              if (typeof obj.text === 'string') {
-                messageText = obj.text;
-              }
-              if (typeof obj.handle === 'string') {
-                messageHandle = obj.handle;
-              }
-              if (obj.action && typeof obj.action === 'object' && obj.action.type === 'join-room' && typeof obj.action.roomSecret === 'string') {
-                messageAction = obj.action;
-              }
-              if (Array.isArray(obj.blocks) && obj.blocks.length > 0) {
-                messageBlocks = obj.blocks;
-              }
-              if (obj.block_response && typeof obj.block_response === 'object' && obj.block_response.block_id) {
-                messageBlockResponse = obj.block_response;
-              }
-            } catch {
-              messageText = plaintext;
-            }
+          await ingestEncryptedChat(msgId, payload.ts, payload.from ?? null, rawPayload);
+        }
+
+        if (payload.type === 'settings') {
+          const next = payload.body?.catch_up_enabled;
+          if (typeof next === 'boolean') {
+            setCatchUpEnabled(next);
           }
-          const direction = tokenHash && payload.from === tokenHash ? 'out' : 'in';
-          if (direction === 'in') {
-            setHasCompanion(true);
-          }
-          const messageRecord: ChatMessage = {
-            id: msgId,
-            room_hash: roomHash,
-            timestamp: payload.ts,
-            content: messageText,
-            type: 'chat',
-            direction,
-            from: payload.from ?? null,
-            handle: messageHandle,
-            action: messageAction,
-            blocks: messageBlocks,
-            block_response: messageBlockResponse
-          };
-          persistMessage(messageRecord);
-          setMessages((prev) => {
-            if (prev.find((item) => item.id === msgId)) {
-              return prev;
-            }
-            return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
-          });
         }
       } catch (err) {
         return;
       }
     };
 
-    const eventTypes: RoomEvent['type'][] = ['chat', 'knock', 'approve', 'reject', 'destroy'];
+    const eventTypes: RoomEvent['type'][] = ['chat', 'knock', 'approve', 'reject', 'destroy', 'settings'];
     eventTypes.forEach((type) => source.addEventListener(type, handleEvent));
 
     source.onopen = () => {
       setConnection('connected');
+      // Pull anything we missed while disconnected. Server returns [] when
+      // catch_up_enabled is off, so this is safe to call unconditionally.
+      if (token && cryptoKey && roomState === 'PARTICIPANT') {
+        void (async () => {
+          try {
+            const localRows = await loadMessages(roomHash);
+            const localMax = localRows.reduce(
+              (max, m) => (m.timestamp > max ? m.timestamp : max),
+              0
+            );
+            const r = await fetch(`/api/rooms/${roomHash}/outbox?since_ts=${localMax}`, {
+              headers: { 'X-Chat-Token': token }
+            });
+            if (!r.ok) return;
+            const data = (await r.json()) as { messages: OutboxMessage[] };
+            for (const m of data.messages) {
+              await ingestEncryptedChat(m.msg_id, m.ts, m.sender_hash, m.encrypted_payload);
+            }
+          } catch {
+            // non-fatal
+          }
+        })();
+      }
     };
 
     source.onerror = () => {
@@ -547,7 +603,7 @@ const RoomController = () => {
       eventTypes.forEach((type) => source.removeEventListener(type, handleEvent));
       source.close();
     };
-  }, [roomHash, roomState, cryptoKey, token, tokenHash, wipeLocalRoom, persistMessage]);
+  }, [roomHash, roomState, cryptoKey, token, tokenHash, wipeLocalRoom, ingestEncryptedChat]);
 
   useEffect(() => {
     if (roomState !== 'PARTICIPANT' || !token || !roomHash) {
@@ -812,6 +868,27 @@ const RoomController = () => {
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(shareUrl);
   }, [shareUrl]);
+
+  const handleToggleCatchUp = useCallback(async () => {
+    if (!roomHash || !token || catchUpBusy) return;
+    const next = !catchUpEnabled;
+    setCatchUpBusy(true);
+    setCatchUpEnabled(next); // optimistic; settings Mercure event will reconfirm
+    try {
+      const r = await fetch(`/api/rooms/${roomHash}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Chat-Token': token },
+        body: JSON.stringify({ catch_up_enabled: next })
+      });
+      if (!r.ok) {
+        setCatchUpEnabled(!next);
+      }
+    } catch {
+      setCatchUpEnabled(!next);
+    } finally {
+      setCatchUpBusy(false);
+    }
+  }, [roomHash, token, catchUpEnabled, catchUpBusy]);
 
   const handleDeleteMessage = useCallback(async (id: string) => {
     await deleteMessage(id);
@@ -1641,6 +1718,26 @@ const RoomController = () => {
                 >
                   Show QR
                 </button>
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">Offline catch-up</p>
+                    <p className="mt-1 text-xs text-[#3a362f]">
+                      Server keeps encrypted messages for 24h so devices that were closed can catch up. Turning off wipes them.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={catchUpEnabled}
+                    disabled={catchUpBusy || !token}
+                    onClick={() => void handleToggleCatchUp()}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${catchUpEnabled ? 'bg-[#d9592f]' : 'bg-[#1716133d]'} ${catchUpBusy || !token ? 'opacity-50' : ''}`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${catchUpEnabled ? 'translate-x-5' : 'translate-x-0.5'}`}
+                    />
+                  </button>
+                </div>
                 <button
                   className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
                   onClick={() => {
@@ -1915,6 +2012,26 @@ const RoomController = () => {
               >
                 Show QR
               </button>
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Offline catch-up</p>
+                  <p className="mt-1 text-xs text-[#3a362f]">
+                    Server keeps encrypted messages for 24h so devices that were closed can catch up. Turning off wipes them.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={catchUpEnabled}
+                  disabled={catchUpBusy || !token}
+                  onClick={() => void handleToggleCatchUp()}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${catchUpEnabled ? 'bg-[#d9592f]' : 'bg-[#1716133d]'} ${catchUpBusy || !token ? 'opacity-50' : ''}`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${catchUpEnabled ? 'translate-x-5' : 'translate-x-0.5'}`}
+                  />
+                </button>
+              </div>
               <button
                 className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
                 onClick={() => {

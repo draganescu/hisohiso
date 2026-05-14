@@ -13,6 +13,21 @@ Minimal encrypted room chat. No accounts, no cloud history, no tracking.
 - Anyone can disband a room — server deletes it, all clients wipe local data.
 - Installable as a PWA. QR code scanning to join rooms on mobile.
 
+### Offline catch-up (opt-in)
+
+Rooms can optionally turn on an encrypted server-side outbox so devices that
+were closed when a message was sent can still receive it on next open.
+
+- Off by default for rooms created in the web app. Anyone in the room can flip
+  the toggle from the room menu.
+- On by default for rooms created by the `hisohiso` CLI (agent + control
+  rooms), since those typically run while the operator is offline.
+- The outbox is one isolated SQLite file per room at `/data/rooms/<hash>.sqlite`.
+  It stores only ciphertext (the same `encrypted_payload` blob clients send to
+  `/message`); the server cannot read message contents.
+- Retention: up to 500 newest messages or 24h, whichever comes first.
+- Turning catch-up off, or disbanding the room, deletes the file immediately.
+
 ## Use cases
 
 - Ad-hoc private discussions.

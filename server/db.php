@@ -25,8 +25,21 @@ function db(): PDO
     $pdo->exec('CREATE TABLE IF NOT EXISTS rooms (
         room_hash TEXT PRIMARY KEY,
         created_at INTEGER NOT NULL,
-        last_activity_at INTEGER NOT NULL
+        last_activity_at INTEGER NOT NULL,
+        catch_up_enabled INTEGER NOT NULL DEFAULT 0
     );');
+
+    // Migrate existing rooms tables that pre-date catch_up_enabled.
+    $has_catch_up = false;
+    foreach ($pdo->query('PRAGMA table_info(rooms)') as $col) {
+        if (($col['name'] ?? '') === 'catch_up_enabled') {
+            $has_catch_up = true;
+            break;
+        }
+    }
+    if (!$has_catch_up) {
+        $pdo->exec('ALTER TABLE rooms ADD COLUMN catch_up_enabled INTEGER NOT NULL DEFAULT 0');
+    }
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS participants (
         token_hash TEXT PRIMARY KEY,

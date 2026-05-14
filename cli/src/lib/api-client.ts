@@ -29,8 +29,14 @@ const jsonPost = async (url: string, body: Record<string, unknown>, token?: stri
   });
 };
 
-export const createRoom = async (server: string, roomHash: string): Promise<CreateRoomResponse> => {
-  const res = await jsonPost(`${server}/api/rooms`, { room_hash: roomHash });
+export const createRoom = async (
+  server: string,
+  roomHash: string,
+  opts?: { catchUp?: boolean }
+): Promise<CreateRoomResponse> => {
+  const body: Record<string, unknown> = { room_hash: roomHash };
+  if (opts?.catchUp !== undefined) body.catch_up = opts.catchUp;
+  const res = await jsonPost(`${server}/api/rooms`, body);
   if (!res.ok) throw new Error(`createRoom failed: ${res.status}`);
   return res.json() as Promise<CreateRoomResponse>;
 };

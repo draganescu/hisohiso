@@ -73,8 +73,9 @@ export class AgentManager {
       throw new Error(`Unknown agent "${agentName}". Use "list" to see available agents.`);
     }
 
-    // Create room for this agent
-    const room = await createRoomAndJoin(this.server, '');
+    // Create room for this agent — catch-up on by default so the phone can
+    // open the room later and see anything the agent emitted while it was closed.
+    const room = await createRoomAndJoin(this.server, '', { catchUp: true });
     const agentId = room.roomHash.slice(0, 12);
 
     // Start presence
