@@ -1105,7 +1105,7 @@ const RoomController = () => {
           <div
             ref={listRef}
             onScroll={handleScroll}
-            className={`flex-1 overflow-y-auto px-4 pb-40 transition-[padding] duration-300 ease-out chat-scroll sm:px-6 lg:px-8 lg:pb-44 ${
+            className={`flex-1 overflow-x-hidden overflow-y-auto px-4 pb-40 transition-[padding] duration-300 ease-out chat-scroll sm:px-6 lg:px-8 lg:pb-44 ${
               headerCondensed ? 'pt-16 sm:pt-[4.5rem] lg:pt-20' : 'pt-5 sm:pt-6 lg:pt-7'
             }`}
           >
@@ -1185,8 +1185,8 @@ const RoomController = () => {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className={`text-sm font-semibold ${isMine ? 'text-white' : 'text-[#171613]'}`}>{getMessageLabel(msg)}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-sm font-semibold ${isMine ? 'text-white' : 'text-[#171613]'}`}>{getMessageLabel(msg)}</p>
                           <p className={`mt-1 text-[11px] uppercase tracking-[0.22em] ${isMine ? 'text-[#d2ddf5]' : 'text-[#8d816c]'}`}>
                             {isSystem ? 'Room event' : isMine ? 'Sent from this device' : 'Incoming message'}
                           </p>
@@ -1202,7 +1202,7 @@ const RoomController = () => {
                         </div>
                       </div>
                       <p
-                        className={`mt-4 whitespace-pre-line text-base leading-7 sm:text-lg ${
+                        className={`mt-4 whitespace-pre-line break-words text-base leading-7 sm:text-lg ${
                           isMine ? 'text-[#f8f4ec]' : 'text-[#2f2a24]'
                         }`}
                       >
