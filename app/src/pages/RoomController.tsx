@@ -1271,7 +1271,7 @@ const RoomController = () => {
         <QrModal open={showQr} onClose={() => setShowQr(false)} value={shareUrl} />
 
         {showQueue && (
-          <div className="fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 py-6 text-[#171613] md:px-5">
+          <div className="overlay-safe-top fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 pb-6 text-[#171613] md:px-5">
             <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-[34px] border border-[#1716131f] bg-[#f4efe4] shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
               <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4 sm:px-6">
                 <div>
@@ -1336,7 +1336,7 @@ const RoomController = () => {
         )}
 
         {showHelp && (
-          <div className="fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 py-6 text-[#171613] md:px-5">
+          <div className="overlay-safe-top fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 pb-6 text-[#171613] md:px-5">
             <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-[34px] border border-[#1716131f] bg-[#f4efe4] shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
               <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4 sm:px-6">
                 <div>
