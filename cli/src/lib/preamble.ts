@@ -107,9 +107,15 @@ status: "done" | "active" | "pending" | "failed"
 {"type": "code", "file": "src/foo.ts", "language": "typescript", "start_line": 42, "content": "code here", "highlight_lines": [44]}
 \`\`\`
 
-**before-after** — Flip between old/new code
+**before-after** — Flip between old/new code. BOTH "before" AND "after" keys are required.
 \`\`\`json
-{"type": "before-after", "file": "src/foo.ts", "language": "typescript", "before": {"label": "Before", "content": "old code"}, "after": {"label": "After", "content": "new code"}}
+{
+  "type": "before-after",
+  "file": "src/foo.ts",
+  "language": "typescript",
+  "before": {"label": "Before", "content": "const x = getData();"},
+  "after": {"label": "After", "content": "const x = await getData();"}
+}
 \`\`\`
 
 **error** — Error display

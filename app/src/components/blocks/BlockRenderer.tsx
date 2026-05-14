@@ -78,7 +78,17 @@ const renderBlock = (block: Block, onRespond: RespondFn) => {
 export const BlockRenderer = ({ blocks, onRespond }: Props) => (
   <div className="space-y-1">
     {blocks.map((block, i) => {
-      const content = renderBlock(block, onRespond);
+      if (!block || typeof block !== 'object' || !block.type) return null;
+      let content: React.ReactNode;
+      try {
+        content = renderBlock(block, onRespond);
+      } catch {
+        content = (
+          <div className="rounded-xl border border-dashed border-[#d5c8b2] bg-[#faf5eb] px-4 py-2 text-xs text-[#8d816c]">
+            Could not render {block.type} block
+          </div>
+        );
+      }
       if (!content) return null;
       return (
         <div key={block.id ?? i}>
