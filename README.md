@@ -43,6 +43,7 @@ were closed when a message was sent can still receive it on next open.
 - **Runtime**: FrankenPHP + Caddy
 - **Server storage**: SQLite — room/token/presence metadata only (`/data/chat.sqlite`)
 - **Client storage**: IndexedDB — encrypted message history
+- **Terminal bridge**: `hisohiso` CLI (`cli/`) — bridges a terminal AI agent to a hisohiso room. Currently supports **Claude** only. See [cli/README.md](cli/README.md).
 
 ## Local setup
 
@@ -84,6 +85,7 @@ docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 ```text
 app/                React client (Vite + Tailwind)
 server/             PHP API (single-file)
+cli/                hisohiso CLI — terminal agent bridge (see cli/README.md)
 public/             Static landing page
 data/               SQLite database (created at runtime)
 Caddyfile           Reverse proxy config
