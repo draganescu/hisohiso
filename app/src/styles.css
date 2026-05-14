@@ -101,6 +101,10 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+.overlay-safe-top {
+  padding-top: max(1.5rem, env(safe-area-inset-top));
+}
+
 @media (pointer: coarse) {
   input,
   textarea,
