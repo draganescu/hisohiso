@@ -79,6 +79,24 @@ const getMessagePreview = (content: string): string => {
   return compact.length > 160 ? `${compact.slice(0, 157)}...` : compact;
 };
 
+const formatBlockResponse = (msg: ChatMessage): string | null => {
+  const br = msg.block_response;
+  if (!br) return null;
+  const val = br.value;
+  const label = Array.isArray(val) ? val.join(', ') : String(val);
+  switch (br.type) {
+    case 'buttons': return `Selected: ${label}`;
+    case 'swipe': return `Chose: ${label}`;
+    case 'slider': return `Set to: ${label}`;
+    case 'checklist': return `Checked: ${label}`;
+    case 'sortable': return `Order: ${label}`;
+    case 'confirm-danger': return val ? 'Confirmed' : 'Cancelled';
+    case 'commit': return label === 'commit' ? 'Committed' : label === 'edit' ? 'Editing' : 'Cancelled';
+    case 'run-command': return label === 'run' ? 'Running command' : 'Skipped';
+    default: return label;
+  }
+};
+
 const getMessageLabel = (message: ChatMessage): string => {
   if (message.type === 'system') {
     return 'System';
@@ -1101,7 +1119,12 @@ const RoomController = () => {
                           isMine ? 'text-[#f8f4ec]' : 'text-[#2f2a24]'
                         }`}
                       >
-                        {getMessagePreview(msg.content)}
+                        {msg.block_response ? (
+                          <span className="flex items-center gap-2">
+                            <span className={`inline-block h-2 w-2 rounded-full ${isMine ? 'bg-[#d2ddf5]' : 'bg-[#d9592f]'}`} />
+                            {formatBlockResponse(msg) || getMessagePreview(msg.content)}
+                          </span>
+                        ) : getMessagePreview(msg.content)}
                       </p>
                       {msg.blocks && msg.blocks.length > 0 && (
                         <span
@@ -1334,7 +1357,11 @@ const RoomController = () => {
                     </div>
                   </div>
 
-                  <div className="mt-6 whitespace-pre-wrap text-[15px] leading-7 sm:text-[17px] sm:leading-8">{activeMessage.content}</div>
+                  <div className="mt-6 whitespace-pre-wrap text-[15px] leading-7 sm:text-[17px] sm:leading-8">
+                    {activeMessage.block_response
+                      ? formatBlockResponse(activeMessage) || activeMessage.content
+                      : activeMessage.content}
+                  </div>
                   {activeMessage.blocks && activeMessage.blocks.length > 0 && (
                     <div className="mt-4">
                       <BlockRenderer blocks={activeMessage.blocks} onRespond={sendBlockResponse} />
