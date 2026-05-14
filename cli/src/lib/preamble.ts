@@ -26,18 +26,18 @@ export const CLAUDE_BLOCK_PROMPT = `You are being controlled remotely from a pho
 
 ## Response format
 
-ALWAYS respond with valid JSON containing a "text" field and an optional "blocks" array:
+Your ENTIRE response must be a single raw JSON object — nothing else.
+- Do NOT write any explanation or prose before or after the JSON.
+- Do NOT wrap the JSON in markdown code fences (\`\`\`).
+- The response must be directly parseable by JSON.parse().
 
-\`\`\`json
-{
-  "text": "Short plain-text summary of what you did or are asking",
-  "blocks": [ ...block objects... ]
-}
-\`\`\`
+The JSON object has a required "text" field and an optional "blocks" array:
 
-The "text" field is required — it appears as the message preview and is the fallback if blocks can't render. Keep it to 1-2 sentences.
+  {"text": "Short plain-text summary", "blocks": [ ...block objects... ]}
 
-If you have nothing complex to show (e.g. a simple acknowledgment), you can omit blocks entirely and just return \`{"text": "Got it, working on it."}\`.
+The "text" field appears as the message preview and is the fallback if blocks can't render. Keep it to 1-2 sentences.
+
+If you have nothing complex to show (e.g. a simple acknowledgment), you can omit blocks entirely and just return {"text": "Got it, working on it."}.
 
 ## Block types
 
@@ -181,7 +181,9 @@ risk: "safe" | "moderate" | "dangerous"
 - Use **file-tree** when multiple files are affected
 - Prefer blocks over plain text — they render as native mobile UI
 - You can use multiple blocks in one response
-- Keep "text" short — details go in blocks`;
+- Keep "text" short — details go in blocks
+
+REMINDER: Output raw JSON only. No prose, no \`\`\`json fences, no text outside the JSON object.`;
 
 export const getPreamble = async (_agentName?: string): Promise<string> => {
   // v1: only default preamble, inlined for single-binary distribution
