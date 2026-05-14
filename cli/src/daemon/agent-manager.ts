@@ -177,8 +177,8 @@ export class AgentManager {
 
           // Try to parse block-structured output
           const blockParsed = parseBlockOutput(output);
-          const sendText = blockParsed.blocks ? blockParsed.text : output;
-          const sendBlocks = blockParsed.blocks ?? undefined;
+          const sendText = blockParsed?.text ?? output;
+          const sendBlocks = blockParsed?.blocks ?? undefined;
 
           console.log(`[${agentName}:${agentId}] -> ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}`);
 

@@ -137,8 +137,8 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       // Try to parse block-structured output from Claude
       const blockParsed = parseBlockOutput(output);
-      const sendText = blockParsed.blocks ? blockParsed.text : output;
-      const sendBlocks = blockParsed.blocks ?? undefined;
+      const sendText = blockParsed?.text ?? output;
+      const sendBlocks = blockParsed?.blocks ?? undefined;
 
       console.log(`→ ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}\n`);
 

@@ -150,7 +150,12 @@ const extractJsonContent = (text: string): string | null => {
   return jsonPart;
 };
 
-export const parseBlockOutput = (text: string): { text: string; blocks: unknown[] | null } => {
+/**
+ * Returns `null` when no block-style JSON envelope could be detected, so the
+ * caller can fall back to the raw output. Returns `{ text, blocks }` whenever
+ * a `"text"` field was extracted, even if there are no blocks attached.
+ */
+export const parseBlockOutput = (text: string): { text: string; blocks: unknown[] | null } | null => {
   // Happy path: entire text is valid block JSON
   try {
     const obj = JSON.parse(text) as Record<string, unknown>;
@@ -162,7 +167,7 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
 
   // Extract JSON portion — strips code fences, preamble, trailing junk
   const jsonPart = extractJsonContent(text);
-  if (!jsonPart) return { text, blocks: null };
+  if (!jsonPart) return null;
 
   // Try parsing the cleaned JSON
   try {
@@ -175,13 +180,13 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
 
   // JSON is truncated — extract text field and any complete blocks
   const textFieldMatch = jsonPart.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-  if (!textFieldMatch) return { text, blocks: null };
+  if (!textFieldMatch) return null;
 
   let extracted: string;
   try {
     extracted = JSON.parse(`"${textFieldMatch[1]}"`) as string;
   } catch {
-    return { text, blocks: null };
+    return null;
   }
 
   const blocks = extractCompleteBlocks(jsonPart);
