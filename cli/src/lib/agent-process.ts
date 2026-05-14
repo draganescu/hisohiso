@@ -54,15 +54,103 @@ export const parseJsonOutput = (stdout: string): { text: string; sessionId: stri
   }
 };
 
+/**
+ * Extract complete top-level JSON objects from a potentially truncated "blocks" array.
+ * Tracks brace depth and string state to find complete block boundaries.
+ */
+const extractCompleteBlocks = (jsonText: string): unknown[] | null => {
+  const match = jsonText.match(/"blocks"\s*:\s*\[/);
+  if (!match || match.index === undefined) return null;
+
+  const arrayStart = match.index + match[0].length;
+  const blocks: unknown[] = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let blockStart = -1;
+
+  for (let i = arrayStart; i < jsonText.length; i++) {
+    const ch = jsonText[i]!;
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (inString) {
+      if (ch === '\\') {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    // Not in string
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === '{') {
+      if (depth === 0) blockStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && blockStart >= 0) {
+        const blockStr = jsonText.substring(blockStart, i + 1);
+        try {
+          blocks.push(JSON.parse(blockStr));
+        } catch { /* skip malformed block */ }
+        blockStart = -1;
+      }
+    } else if (ch === ']' && depth === 0) {
+      break;
+    }
+  }
+
+  return blocks.length > 0 ? blocks : null;
+};
+
 export const parseBlockOutput = (text: string): { text: string; blocks: unknown[] | null } => {
+  // Happy path: entire text is valid block JSON
   try {
     const obj = JSON.parse(text) as Record<string, unknown>;
     if (typeof obj.text === 'string') {
       const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
       return { text: obj.text, blocks };
     }
-  } catch { /* not block JSON, fall through */ }
-  return { text, blocks: null };
+  } catch { /* not valid JSON, try extraction */ }
+
+  // Look for block JSON object within text (handles preamble text or truncation)
+  const match = text.match(/\{[\s]*"text"\s*:/);
+  if (!match || match.index === undefined) return { text, blocks: null };
+
+  const jsonStart = match.index;
+  const jsonPart = text.substring(jsonStart);
+  const preamble = text.substring(0, jsonStart).trim();
+
+  // Try parsing the JSON portion (handles preamble text before valid JSON)
+  try {
+    const obj = JSON.parse(jsonPart) as Record<string, unknown>;
+    if (typeof obj.text === 'string') {
+      const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
+      const fullText = preamble ? `${preamble}\n\n${obj.text}` : obj.text;
+      return { text: fullText, blocks };
+    }
+  } catch { /* JSON is truncated, try to salvage */ }
+
+  // JSON is truncated — extract "text" field and any complete blocks
+  const textFieldMatch = jsonPart.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (!textFieldMatch) return { text, blocks: null };
+
+  let extracted: string;
+  try {
+    extracted = JSON.parse(`"${textFieldMatch[1]}"`) as string;
+  } catch {
+    return { text, blocks: null };
+  }
+
+  const fullText = preamble ? `${preamble}\n\n${extracted}` : extracted;
+  const blocks = extractCompleteBlocks(jsonPart);
+  return { text: fullText, blocks };
 };
 
 export const spawnAgent = async (
