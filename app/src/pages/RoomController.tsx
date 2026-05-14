@@ -1089,7 +1089,10 @@ const RoomController = () => {
                       key={msg.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => setSelectedId(msg.id)}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('a,button')) return;
+                        setSelectedId(msg.id);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
@@ -1143,15 +1146,19 @@ const RoomController = () => {
                         </span>
                       )}
                       {msg.action?.type === 'join-room' && (
-                        <a
-                          href={`/room#${msg.action.roomSecret}`}
-                          className={`mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold no-underline ${
-                            isMine ? 'bg-white/20 text-white' : 'bg-[#d9592f] text-white'
-                          }`}
-                          onClick={(e) => e.stopPropagation()}
+                        <button
+                          type="button"
+                          className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-5 py-2.5 text-sm font-semibold text-white"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (msg.action?.type === 'join-room') {
+                              window.location.hash = `#${msg.action.roomSecret}`;
+                              window.location.reload();
+                            }
+                          }}
                         >
                           {msg.action.label} &rarr;
-                        </a>
+                        </button>
                       )}
                       <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
                     </div>
@@ -1375,12 +1382,18 @@ const RoomController = () => {
                     </div>
                   )}
                   {activeMessage.action?.type === 'join-room' && (
-                    <a
-                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white no-underline"
-                      href={`/room#${activeMessage.action.roomSecret}`}
+                    <button
+                      type="button"
+                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white"
+                      onClick={() => {
+                        if (activeMessage.action?.type === 'join-room') {
+                          window.location.hash = `#${activeMessage.action.roomSecret}`;
+                          window.location.reload();
+                        }
+                      }}
                     >
                       {activeMessage.action.label} &rarr;
-                    </a>
+                    </button>
                   )}
                 </article>
 
