@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import type { Block, BlockResponse } from './blocks';
 
 export type MessageAction = {
   type: 'join-room';
@@ -16,6 +17,8 @@ export type ChatMessage = {
   from?: string | null;
   handle?: string | null;
   action?: MessageAction | null;
+  blocks?: Block[] | null;
+  block_response?: BlockResponse | null;
 };
 
 class ChatDatabase extends Dexie {
@@ -24,6 +27,9 @@ class ChatDatabase extends Dexie {
   constructor() {
     super('hisohiso');
     this.version(1).stores({
+      messages: 'id, room_hash, timestamp, [room_hash+timestamp]'
+    });
+    this.version(2).stores({
       messages: 'id, room_hash, timestamp, [room_hash+timestamp]'
     });
   }

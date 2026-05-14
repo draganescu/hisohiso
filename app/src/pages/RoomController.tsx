@@ -32,6 +32,8 @@ import {
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
+import type { Block, BlockResponse } from '../lib/blocks';
+import { BlockRenderer } from '../components/blocks/BlockRenderer';
 import QrModal from '../components/QrModal';
 
 type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED';
@@ -452,9 +454,17 @@ const RoomController = () => {
           let messageText = plaintext;
           let messageHandle: string | null = null;
           let messageAction: MessageAction | null = null;
+          let messageBlocks: Block[] | null = null;
+          let messageBlockResponse: BlockResponse | null = null;
           if (plaintext.trim().startsWith('{')) {
             try {
-              const obj = JSON.parse(plaintext) as { text?: string; handle?: string | null; action?: MessageAction };
+              const obj = JSON.parse(plaintext) as {
+                text?: string;
+                handle?: string | null;
+                action?: MessageAction;
+                blocks?: Block[];
+                block_response?: BlockResponse;
+              };
               if (typeof obj.text === 'string') {
                 messageText = obj.text;
               }
@@ -463,6 +473,12 @@ const RoomController = () => {
               }
               if (obj.action && typeof obj.action === 'object' && obj.action.type === 'join-room' && typeof obj.action.roomSecret === 'string') {
                 messageAction = obj.action;
+              }
+              if (Array.isArray(obj.blocks) && obj.blocks.length > 0) {
+                messageBlocks = obj.blocks;
+              }
+              if (obj.block_response && typeof obj.block_response === 'object' && obj.block_response.block_id) {
+                messageBlockResponse = obj.block_response;
               }
             } catch {
               messageText = plaintext;
@@ -481,7 +497,9 @@ const RoomController = () => {
             direction,
             from: payload.from ?? null,
             handle: messageHandle,
-            action: messageAction
+            action: messageAction,
+            blocks: messageBlocks,
+            block_response: messageBlockResponse
           };
           persistMessage(messageRecord);
           setMessages((prev) => {
@@ -712,6 +730,49 @@ const RoomController = () => {
       setSelectedId(null);
     }
   }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret, persistMessage]);
+
+  const sendBlockResponse = useCallback(
+    async (blockId: string, blockType: string, value: unknown) => {
+      if (!roomHash || !token || !cryptoKey) return;
+      const label =
+        typeof value === 'string'
+          ? value
+          : Array.isArray(value)
+          ? (value as string[]).join(', ')
+          : String(value);
+      const msgId = base64UrlEncode(randomBytes(12));
+      const payload = JSON.stringify({
+        text: `[${blockType}] ${label}`,
+        handle: handle || null,
+        block_response: { block_id: blockId, type: blockType, value }
+      });
+      const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
+      const response = await fetch(`/api/rooms/${roomHash}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Chat-Token': token },
+        body: JSON.stringify({ msg_id: msgId, encrypted_payload: JSON.stringify(encrypted) })
+      });
+      if (response.ok) {
+        const messageRecord: ChatMessage = {
+          id: msgId,
+          room_hash: roomHash,
+          timestamp: Math.floor(Date.now() / 1000),
+          content: `[${blockType}] ${label}`,
+          type: 'chat',
+          direction: 'out',
+          from: tokenHash,
+          handle: handle || null,
+          block_response: { block_id: blockId, type: blockType, value: value as BlockResponse['value'] }
+        };
+        persistMessage(messageRecord);
+        setMessages((prev) => {
+          if (prev.find((item) => item.id === msgId)) return prev;
+          return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
+        });
+      }
+    },
+    [roomHash, token, cryptoKey, tokenHash, handle, persistMessage]
+  );
 
   const disbandRoom = useCallback(async () => {
     if (!roomHash || !token) {
@@ -1042,6 +1103,15 @@ const RoomController = () => {
                       >
                         {getMessagePreview(msg.content)}
                       </p>
+                      {msg.blocks && msg.blocks.length > 0 && (
+                        <span
+                          className={`mt-2 inline-block rounded-full px-3 py-1 text-[11px] font-semibold ${
+                            isMine ? 'bg-white/10 text-[#d2ddf5]' : 'bg-[#f4ede1] text-[#6a5e4e]'
+                          }`}
+                        >
+                          {msg.blocks.length} interactive {msg.blocks.length === 1 ? 'block' : 'blocks'} — tap to view
+                        </span>
+                      )}
                       {msg.action?.type === 'join-room' && (
                         <a
                           href={`/room#${msg.action.roomSecret}`}
@@ -1265,6 +1335,11 @@ const RoomController = () => {
                   </div>
 
                   <div className="mt-6 whitespace-pre-wrap text-[15px] leading-7 sm:text-[17px] sm:leading-8">{activeMessage.content}</div>
+                  {activeMessage.blocks && activeMessage.blocks.length > 0 && (
+                    <div className="mt-4">
+                      <BlockRenderer blocks={activeMessage.blocks} onRespond={sendBlockResponse} />
+                    </div>
+                  )}
                   {activeMessage.action?.type === 'join-room' && (
                     <a
                       className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white no-underline"

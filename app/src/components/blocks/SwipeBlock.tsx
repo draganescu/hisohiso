@@ -1,0 +1,114 @@
+import { useState, useRef } from 'react';
+import type { SwipeBlock as SwipeBlockType } from '../../lib/blocks';
+
+interface Props {
+  block: SwipeBlockType;
+  onRespond: (blockId: string, type: string, value: string) => void;
+}
+
+export const SwipeBlockView = ({ block, onRespond }: Props) => {
+  const [index, setIndex] = useState(0);
+  const [submitted, setSubmitted] = useState<string | null>(null);
+  const [swipeX, setSwipeX] = useState(0);
+  const startX = useRef(0);
+  const dragging = useRef(false);
+
+  const card = block.cards[index];
+  if (!card) return null;
+
+  const accept = () => {
+    if (submitted) return;
+    setSubmitted(card.value);
+    onRespond(block.id, 'swipe', card.value);
+  };
+
+  const reject = () => {
+    if (submitted) return;
+    if (index < block.cards.length - 1) {
+      setIndex(index + 1);
+      setSwipeX(0);
+    }
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (submitted) return;
+    startX.current = e.touches[0].clientX;
+    dragging.current = true;
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!dragging.current) return;
+    setSwipeX(e.touches[0].clientX - startX.current);
+  };
+
+  const onTouchEnd = () => {
+    dragging.current = false;
+    if (swipeX > 80) accept();
+    else if (swipeX < -80) reject();
+    setSwipeX(0);
+  };
+
+  const bgTint = swipeX > 40 ? 'border-green-400' : swipeX < -40 ? 'border-red-400' : 'border-[#d5c8b2]';
+
+  return (
+    <div className="mt-3">
+      <p className="text-sm font-semibold">{block.prompt}</p>
+      <div className="mt-2 text-xs text-[#8d816c]">
+        {index + 1} / {block.cards.length}
+      </div>
+      <div
+        className={`mt-1 rounded-2xl border-2 bg-[#fdf9f2] p-4 transition-colors ${submitted ? 'border-green-400 opacity-70' : bgTint}`}
+        style={{ transform: `translateX(${swipeX}px)`, transition: dragging.current ? 'none' : 'transform 0.2s' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        <p className="text-base font-semibold text-[#171613]">{card.title}</p>
+        <p className="mt-2 text-sm leading-6 text-[#3f3529]">{card.body}</p>
+        {card.pros && card.pros.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Pros</p>
+            <ul className="mt-1 space-y-1">
+              {card.pros.map((p, i) => (
+                <li key={i} className="text-sm text-[#3f3529]">+ {p}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {card.cons && card.cons.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Cons</p>
+            <ul className="mt-1 space-y-1">
+              {card.cons.map((c, i) => (
+                <li key={i} className="text-sm text-[#3f3529]">- {c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      {!submitted && (
+        <div className="mt-3 flex justify-center gap-6">
+          <button
+            type="button"
+            onClick={reject}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-red-300 bg-red-50 text-xl text-red-500 active:bg-red-100"
+          >
+            ✕
+          </button>
+          <button
+            type="button"
+            onClick={accept}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-green-300 bg-green-50 text-xl text-green-600 active:bg-green-100"
+          >
+            ✓
+          </button>
+        </div>
+      )}
+      {submitted && (
+        <p className="mt-2 text-center text-sm font-medium text-green-700">
+          Selected: {block.cards.find((c) => c.value === submitted)?.title}
+        </p>
+      )}
+    </div>
+  );
+};
