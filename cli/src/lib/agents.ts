@@ -3,20 +3,25 @@ export type AgentProfile = {
   args: string[];
   description: string;
   mode: 'oneshot' | 'session';
+  appendSystemPrompt?: string;
 };
+
+import { CLAUDE_BLOCK_PROMPT } from './preamble.js';
 
 const BUILTIN_AGENTS: Record<string, AgentProfile> = {
   'claude': {
     command: 'claude',
-    args: ['-p', '--output-format', 'json'],
-    description: 'Claude Code session (multi-turn)',
+    args: ['-p', '--output-format', 'json', '--dangerously-skip-permissions'],
+    description: 'Claude Code autonomous session (multi-turn)',
     mode: 'session',
+    appendSystemPrompt: CLAUDE_BLOCK_PROMPT,
   },
   'claude-once': {
     command: 'claude',
-    args: ['-p'],
-    description: 'Claude Code (single question)',
+    args: ['-p', '--dangerously-skip-permissions'],
+    description: 'Claude Code autonomous (single question)',
     mode: 'oneshot',
+    appendSystemPrompt: CLAUDE_BLOCK_PROMPT,
   },
   'aider': {
     command: 'aider',

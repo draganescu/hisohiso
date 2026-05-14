@@ -54,6 +54,17 @@ export const parseJsonOutput = (stdout: string): { text: string; sessionId: stri
   }
 };
 
+export const parseBlockOutput = (text: string): { text: string; blocks: unknown[] | null } => {
+  try {
+    const obj = JSON.parse(text) as Record<string, unknown>;
+    if (typeof obj.text === 'string') {
+      const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
+      return { text: obj.text, blocks };
+    }
+  } catch { /* not block JSON, fall through */ }
+  return { text, blocks: null };
+};
+
 export const spawnAgent = async (
   command: string,
   args: string[] = [],

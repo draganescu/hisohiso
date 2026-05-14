@@ -36,6 +36,7 @@ export const createRoomAndJoin = async (
 export type SendOptions = {
   handle?: string;
   action?: { type: string; roomSecret: string; label: string };
+  blocks?: unknown[];
 };
 
 export const encryptAndSend = async (
@@ -50,6 +51,9 @@ export const encryptAndSend = async (
   const payloadObj: Record<string, unknown> = { text, handle: options?.handle ?? 'hisohiso-cli' };
   if (options?.action) {
     payloadObj.action = options.action;
+  }
+  if (options?.blocks && options.blocks.length > 0) {
+    payloadObj.blocks = options.blocks;
   }
   const payload = JSON.stringify(payloadObj);
   const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, payload);

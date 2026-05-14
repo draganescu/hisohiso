@@ -5,7 +5,7 @@ import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
 import { sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
-import { runCommand, parseJsonOutput } from '../lib/agent-process.js';
+import { runCommand, parseJsonOutput, parseBlockOutput } from '../lib/agent-process.js';
 import qrTerminal from 'qrcode-terminal';
 
 export const wrap = async (agentName: string, customCommand?: string[]): Promise<void> => {
@@ -110,12 +110,16 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       // Build args — session mode adds --resume for subsequent messages
       const args = [...profile.args];
+      if (profile.appendSystemPrompt) {
+        args.push('--append-system-prompt', profile.appendSystemPrompt);
+      }
       if (profile.mode === 'session' && sessionId) {
         args.push('--resume', sessionId);
       }
       args.push(text);
 
-      console.log(`  $ ${profile.command} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`);
+      const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+      console.log(`  $ ${profile.command} ${displayArgs.join(' ')}`);
 
       const result = await runCommand(profile.command, args);
 
@@ -131,16 +135,22 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
         output = (result.stdout || result.stderr || '(no output)').trim();
       }
 
-      console.log(`→ ${output.slice(0, 120)}${output.length > 120 ? '...' : ''}\n`);
+      // Try to parse block-structured output from Claude
+      const blockParsed = parseBlockOutput(output);
+      const sendText = blockParsed.blocks ? blockParsed.text : output;
+      const sendBlocks = blockParsed.blocks ?? undefined;
+
+      console.log(`→ ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}\n`);
 
       // Send output back to room — split into chunks if too long
       const MAX_MSG = 4000;
-      if (output.length <= MAX_MSG) {
-        await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, output);
+      if (sendText.length <= MAX_MSG) {
+        await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, sendText, { blocks: sendBlocks });
       } else {
-        for (let i = 0; i < output.length; i += MAX_MSG) {
-          const chunk = output.slice(i, i + MAX_MSG);
-          await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, chunk);
+        // Can't attach blocks to chunked messages — send blocks with first chunk
+        for (let i = 0; i < sendText.length; i += MAX_MSG) {
+          const chunk = sendText.slice(i, i + MAX_MSG);
+          await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
         }
       }
 

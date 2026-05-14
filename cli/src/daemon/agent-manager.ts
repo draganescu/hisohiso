@@ -1,6 +1,6 @@
 import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
 import { deriveMessageKey, sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
-import { runCommand, parseJsonOutput } from '../lib/agent-process.js';
+import { runCommand, parseJsonOutput, parseBlockOutput } from '../lib/agent-process.js';
 import { getAgent, type AgentProfile } from '../lib/agents.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
@@ -151,12 +151,16 @@ export class AgentManager {
         try {
           // Build args — session mode adds --resume
           const args = [...session.profile.args];
+          if (session.profile.appendSystemPrompt) {
+            args.push('--append-system-prompt', session.profile.appendSystemPrompt);
+          }
           if (session.profile.mode === 'session' && session.sessionId) {
             args.push('--resume', session.sessionId);
           }
           args.push(text);
 
-          console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`);
+          const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+          console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
 
           const result = await runCommand(session.profile.command, args);
 
@@ -171,16 +175,21 @@ export class AgentManager {
             output = (result.stdout || result.stderr || '(no output)').trim();
           }
 
-          console.log(`[${agentName}:${agentId}] -> ${output.slice(0, 120)}${output.length > 120 ? '...' : ''}`);
+          // Try to parse block-structured output
+          const blockParsed = parseBlockOutput(output);
+          const sendText = blockParsed.blocks ? blockParsed.text : output;
+          const sendBlocks = blockParsed.blocks ?? undefined;
+
+          console.log(`[${agentName}:${agentId}] -> ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}`);
 
           // Send output back — split if too long
           const MAX_MSG = 4000;
-          if (output.length <= MAX_MSG) {
-            await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, output);
+          if (sendText.length <= MAX_MSG) {
+            await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, sendText, { blocks: sendBlocks });
           } else {
-            for (let i = 0; i < output.length; i += MAX_MSG) {
-              const chunk = output.slice(i, i + MAX_MSG);
-              await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, chunk);
+            for (let i = 0; i < sendText.length; i += MAX_MSG) {
+              const chunk = sendText.slice(i, i + MAX_MSG);
+              await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
             }
           }
 
