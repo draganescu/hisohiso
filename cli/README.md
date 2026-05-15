@@ -5,12 +5,13 @@ same end-to-end encrypted channel the web app uses. You run the agent in a
 shell; the agent's output streams to a hisohiso room on your phone; what you
 type back from your phone goes into the agent's stdin.
 
-> **Supported agent: Claude (Anthropic Claude Code) only, for now.**
+> **Supported agents: Claude (Anthropic Claude Code) and Codex (OpenAI).**
 >
-> The CLI ships built-in profiles for a few other tools (aider, codex, goose,
-> bash, python), and they may work, but Claude is the one we actually use and
-> support. Block rendering, multi-turn sessions, and prompt tuning all target
-> Claude. Treat the others as experimental until further notice.
+> Both run as multi-turn sessions with structured-block rendering (the same
+> phone UI for diffs, buttons, confirm dialogs, etc.). The CLI also ships
+> profiles for aider, goose, bash, and python — they may work as one-shots
+> but don't get the same block-rendering or session treatment. Treat those
+> as experimental.
 
 ## Install
 
@@ -29,11 +30,16 @@ on `PATH`. Confirm with:
 hisohiso --version
 ```
 
-You also need the Claude CLI installed and authenticated on the same machine:
+You also need the agent CLI you want to wrap installed and authenticated on
+the same machine. hisohiso assumes the wrapped agent is fully set up — it
+does not install agents, configure API keys, or run login flows.
 
 ```sh
-# https://docs.anthropic.com/en/docs/claude-code
+# Claude — https://docs.anthropic.com/en/docs/claude-code
 claude --version
+
+# Codex — https://developers.openai.com/codex/cli
+codex --version
 ```
 
 ## Quick start — wrap mode
@@ -91,9 +97,10 @@ hisohiso daemon unregister myagent
 ```
 
 The registered command receives the phone's message as its final argument.
-This works for any agent CLI that takes a single prompt arg — but again, only
-Claude is officially supported; quality of life for other agents (block
-rendering, multi-turn, error handling) may vary.
+This works for any agent CLI that takes a single prompt arg — but registered
+agents don't get the structured-block UI or multi-turn session handling that
+the built-in `claude` / `codex` profiles do; they're a thin shim for ad-hoc
+tools.
 
 ## Configuration
 
@@ -114,13 +121,14 @@ The server URL is stored in `~/.config/hisohiso/config.json`. Daemon state
 | -------------- | ------- | -------------------------------------------------- |
 | `claude`       | session | Claude Code, multi-turn (`--resume` between msgs)  |
 | `claude-once`  | oneshot | Claude Code, single question each time             |
+| `codex`        | session | Codex CLI (OpenAI), multi-turn (`exec resume`)     |
+| `codex-once`   | oneshot | Codex CLI (OpenAI), single question each time      |
 | `aider`        | oneshot | Aider (AI pair programming) — experimental         |
-| `codex`        | oneshot | Codex CLI (OpenAI) — experimental                  |
 | `goose`        | oneshot | Goose (Block) — experimental                       |
 | `bash`         | oneshot | Run shell commands via `bash -c <msg>`             |
 | `python`       | oneshot | Run Python via `python3 -c <msg>`                  |
 
-Again: `claude` is the supported one. The others ship for tinkering.
+`claude` and `codex` are first-class. The rest ship for tinkering.
 
 ## Releases
 

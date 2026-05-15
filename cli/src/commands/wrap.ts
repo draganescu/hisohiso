@@ -5,7 +5,7 @@ import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
 import { sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
-import { runCommand, parseJsonOutput, parseBlockOutput } from '../lib/agent-process.js';
+import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import qrTerminal from 'qrcode-terminal';
 
 export const wrap = async (agentName: string, customCommand?: string[]): Promise<void> => {
@@ -108,15 +108,29 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       running = true;
 
-      // Build args — session mode adds --resume for subsequent messages
-      const args = [...profile.args];
+      // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
+      // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume strategy
+      // (claude) pushes `--resume <id>` onto the base args.
+      const isResume = profile.mode === 'session' && sessionId !== null;
+      const args = isResume && profile.buildResumeArgs
+        ? profile.buildResumeArgs(sessionId!)
+        : [...profile.args];
+
+      let messageToSend = text;
       if (profile.appendSystemPrompt) {
-        args.push('--append-system-prompt', profile.appendSystemPrompt);
+        if (profile.systemPromptMode === 'prepend-message-once') {
+          // For agents without a system-prompt flag (codex). Prepend on first turn only;
+          // session continuity carries it forward.
+          if (!isResume) messageToSend = `${profile.appendSystemPrompt}\n\n${text}`;
+        } else {
+          args.push('--append-system-prompt', profile.appendSystemPrompt);
+        }
       }
-      if (profile.mode === 'session' && sessionId) {
-        args.push('--resume', sessionId);
+
+      if (isResume && !profile.buildResumeArgs) {
+        args.push('--resume', sessionId!);
       }
-      args.push(text);
+      args.push(messageToSend);
 
       const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
       console.log(`  $ ${profile.command} ${displayArgs.join(' ')}`);
@@ -125,7 +139,9 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       let output: string;
       if (profile.mode === 'session') {
-        const parsed = parseJsonOutput(result.stdout);
+        const parsed = profile.outputFormat === 'codex-ndjson'
+          ? parseCodexNdjson(result.stdout)
+          : parseJsonOutput(result.stdout);
         if (parsed.sessionId) {
           sessionId = parsed.sessionId;
           console.log(`  [session: ${sessionId}]`);

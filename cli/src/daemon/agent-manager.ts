@@ -1,6 +1,6 @@
 import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
 import { deriveMessageKey, sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
-import { runCommand, parseJsonOutput, parseBlockOutput } from '../lib/agent-process.js';
+import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import { getAgent, type AgentProfile } from '../lib/agents.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
@@ -150,15 +150,27 @@ export class AgentManager {
         session.running = true;
 
         try {
-          // Build args — session mode adds --resume
-          const args = [...session.profile.args];
+          // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
+          // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume
+          // strategy (claude) pushes `--resume <id>` onto the base args.
+          const isResume = session.profile.mode === 'session' && session.sessionId !== null;
+          const args = isResume && session.profile.buildResumeArgs
+            ? session.profile.buildResumeArgs(session.sessionId!)
+            : [...session.profile.args];
+
+          let messageToSend = text;
           if (session.profile.appendSystemPrompt) {
-            args.push('--append-system-prompt', session.profile.appendSystemPrompt);
+            if (session.profile.systemPromptMode === 'prepend-message-once') {
+              if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${text}`;
+            } else {
+              args.push('--append-system-prompt', session.profile.appendSystemPrompt);
+            }
           }
-          if (session.profile.mode === 'session' && session.sessionId) {
-            args.push('--resume', session.sessionId);
+
+          if (isResume && !session.profile.buildResumeArgs) {
+            args.push('--resume', session.sessionId!);
           }
-          args.push(text);
+          args.push(messageToSend);
 
           const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
           console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
@@ -167,7 +179,9 @@ export class AgentManager {
 
           let output: string;
           if (session.profile.mode === 'session') {
-            const parsed = parseJsonOutput(result.stdout);
+            const parsed = session.profile.outputFormat === 'codex-ndjson'
+              ? parseCodexNdjson(result.stdout)
+              : parseJsonOutput(result.stdout);
             if (parsed.sessionId) {
               session.sessionId = parsed.sessionId;
             }
