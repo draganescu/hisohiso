@@ -1,4 +1,4 @@
-import { getServer, loadActiveRooms, saveDaemonState, type DaemonState } from '../lib/config.js';
+import { getServer, loadActiveRooms, loadDaemonState, saveDaemonState, type DaemonState } from '../lib/config.js';
 import {
   generateRoomSecret,
   deriveRoomHash,
@@ -39,20 +39,36 @@ export const runDaemon = async (): Promise<void> => {
   // Start presence on control room
   const presence = startPresence(server, controlRoomHash, participantToken);
 
-  // Check for previously active rooms (daemon restart recovery)
+  // Check for previously active rooms — re-attach SSE/presence and restore in-memory
+  // sessions so daemon restarts are invisible to the phone. Conversation continuity is
+  // carried by the LLM provider's session files plus the persisted sessionId.
   const previousRooms = await loadActiveRooms();
   if (previousRooms.length > 0) {
-    console.log(`Found ${previousRooms.length} previously active room(s). Sessions lost after restart.`);
-    await encryptAndSend(
-      server, controlRoomHash, participantToken, messageKey,
-      `Daemon restarted. ${previousRooms.length} previous session(s) were lost.`,
-      { handle: 'hisohiso-daemon' }
-    );
+    console.log(`Restoring ${previousRooms.length} previously active room(s)...`);
+    const result = await manager.restore(previousRooms);
+    console.log(`Restore: ${result.restored} restored, ${result.dropped} dropped.`);
+    if (result.details.length > 0) {
+      for (const d of result.details) console.log(`  - ${d}`);
+    }
+    if (result.restored > 0) {
+      await encryptAndSend(
+        server, controlRoomHash, participantToken, messageKey,
+        `Daemon back. ${result.restored} room(s) restored — keep going.`,
+        { handle: 'hisohiso-daemon' }
+      );
+    }
+    if (result.dropped > 0) {
+      await encryptAndSend(
+        server, controlRoomHash, participantToken, messageKey,
+        `${result.dropped} previous room(s) could not be restored:\n${result.details.join('\n')}`,
+        { handle: 'hisohiso-daemon' }
+      );
+    }
   }
 
   // Send daemon online status with help
   await encryptAndSend(server, controlRoomHash, participantToken, messageKey,
-    'Daemon online. Type an agent name to start a session (e.g. "claude", "bash"). Type "list" to see running agents or "help" for all commands.',
+    'Daemon online. Type an agent name to start a session (e.g. "claude", "codex", "bash"). Type "list" to see running agents or "help" for all commands.',
     { handle: 'hisohiso-daemon' }
   );
 
@@ -179,6 +195,20 @@ const handleCommand = async (
 };
 
 const setupControlRoom = async (server: string): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
+  // Try to reuse a previously-paired control room. If daemon-state.json exists and
+  // the room is still alive server-side, the phone is already paired — no QR rescan
+  // needed across daemon restarts. Falls through to creating a fresh control room if
+  // there's no saved state or the saved room is gone.
+  try {
+    const saved = await loadDaemonState();
+    await api.checkRoom(server, saved.controlRoomHash);
+    console.log('Reusing previously paired control room (no QR scan needed).');
+    const messageKey = await deriveMessageKey(saved.controlRoomSecret, saved.controlRoomPassword);
+    return { state: saved, messageKey };
+  } catch {
+    // No saved state, or saved room has been disbanded server-side. Fall through.
+  }
+
   const password = '';
   const controlRoomSecret = generateRoomSecret();
   const controlRoomHash = await deriveRoomHash(controlRoomSecret);

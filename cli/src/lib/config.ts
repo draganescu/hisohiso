@@ -35,6 +35,13 @@ export type ActiveRoom = {
   name: string;
   roomHash: string;
   roomSecret: string;
+  // Server-side identity for this device in the room — needed to re-attach SSE,
+  // resume presence, and approve future knocks after a daemon restart.
+  participantToken: string;
+  // LLM-provider session handle (Claude session_id / Codex thread_id). Persisted so
+  // a restarted daemon can continue the conversation via --resume / exec resume.
+  // null until the first turn completes for session-mode agents; always null for oneshot.
+  sessionId: string | null;
   pid: number;
 };
 
