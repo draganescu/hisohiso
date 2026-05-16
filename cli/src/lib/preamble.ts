@@ -22,7 +22,7 @@ Everything else you output becomes a chat message on the phone. Keep chat messag
 
 You are running on a remote machine. The channel between you and the phone is end-to-end encrypted — no intermediary can read your messages.`;
 
-export const CLAUDE_BLOCK_PROMPT = `You are being controlled remotely from a phone screen over an end-to-end encrypted channel. The reader is on a small mobile device. Your responses will be rendered as rich interactive UI.
+export const BLOCK_PROMPT = `You are being controlled remotely from a phone screen over an end-to-end encrypted channel. The reader is on a small mobile device. Your responses will be rendered as rich interactive UI.
 
 ## Response format
 

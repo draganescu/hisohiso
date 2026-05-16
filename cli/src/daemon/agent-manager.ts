@@ -1,6 +1,6 @@
 import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
 import { deriveMessageKey, sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
-import { runCommand, parseJsonOutput, parseBlockOutput } from '../lib/agent-process.js';
+import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import { getAgent, type AgentProfile } from '../lib/agents.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
@@ -150,30 +150,55 @@ export class AgentManager {
         session.running = true;
 
         try {
-          // Build args — session mode adds --resume
-          const args = [...session.profile.args];
+          // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
+          // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume
+          // strategy (claude) pushes `--resume <id>` onto the base args.
+          const isResume = session.profile.mode === 'session' && session.sessionId !== null;
+          const args = isResume && session.profile.buildResumeArgs
+            ? session.profile.buildResumeArgs(session.sessionId!)
+            : [...session.profile.args];
+
+          let messageToSend = text;
           if (session.profile.appendSystemPrompt) {
-            args.push('--append-system-prompt', session.profile.appendSystemPrompt);
+            if (session.profile.systemPromptMode === 'prepend-message-once') {
+              if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${text}`;
+            } else {
+              args.push('--append-system-prompt', session.profile.appendSystemPrompt);
+            }
           }
-          if (session.profile.mode === 'session' && session.sessionId) {
-            args.push('--resume', session.sessionId);
+
+          if (isResume && !session.profile.buildResumeArgs) {
+            args.push('--resume', session.sessionId!);
           }
-          args.push(text);
+          args.push(messageToSend);
 
           const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
           console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
 
           const result = await runCommand(session.profile.command, args);
 
-          let output: string;
-          if (session.profile.mode === 'session') {
+          // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
+          // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
+          // capture is gated on session mode since oneshot turns don't persist one.
+          let parsedText: string;
+          let parsedSessionId: string | null = null;
+
+          if (session.profile.outputFormat === 'codex-ndjson') {
+            const parsed = parseCodexNdjson(result.stdout);
+            parsedText = parsed.text;
+            parsedSessionId = parsed.sessionId;
+          } else if (session.profile.mode === 'session') {
             const parsed = parseJsonOutput(result.stdout);
-            if (parsed.sessionId) {
-              session.sessionId = parsed.sessionId;
-            }
-            output = (parsed.text || result.stderr || '(no output)').trim();
+            parsedText = parsed.text;
+            parsedSessionId = parsed.sessionId;
           } else {
-            output = (result.stdout || result.stderr || '(no output)').trim();
+            parsedText = result.stdout;
+          }
+
+          const output = (parsedText || result.stderr || '(no output)').trim();
+
+          if (session.profile.mode === 'session' && parsedSessionId) {
+            session.sessionId = parsedSessionId;
           }
 
           // Try to parse block-structured output
