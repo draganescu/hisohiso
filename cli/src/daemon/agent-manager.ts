@@ -21,6 +21,23 @@ type AgentSession = {
   presence: PresenceHandle;
 };
 
+type AttachArgs = {
+  agentId: string;
+  name: string;
+  profile: AgentProfile;
+  roomHash: string;
+  roomSecret: string;
+  participantToken: string;
+  messageKey: CryptoKey;
+  sessionId: string | null;
+};
+
+export type RestoreResult = {
+  restored: number;
+  dropped: number;
+  details: string[];
+};
+
 export class AgentManager {
   private sessions = new Map<string, AgentSession>();
   private server: string;
@@ -78,13 +95,7 @@ export class AgentManager {
     const room = await createRoomAndJoin(this.server, '', { catchUp: true });
     const agentId = room.roomHash.slice(0, 12);
 
-    // Start presence
-    const presence = startPresence(this.server, room.roomHash, room.participantToken);
-
-    // Set up per-message handler for this agent room
-    const ownTokenHash = await sha256Hex(room.participantToken);
-
-    const session: AgentSession = {
+    await this.attachToRoom({
       agentId,
       name: agentName,
       profile,
@@ -93,6 +104,103 @@ export class AgentManager {
       participantToken: room.participantToken,
       messageKey: room.messageKey,
       sessionId: null,
+    });
+
+    await this.persistRooms();
+    return { agentId, roomSecret: room.roomSecret };
+  }
+
+  /**
+   * Restore previously-active rooms after a daemon restart. For each persisted room:
+   *  - Verify it still exists server-side (via checkRoom). If not, drop it.
+   *  - Resolve its profile from the built-in agents map. If unknown, drop it.
+   *  - Derive the message key from the room secret, re-attach SSE + presence, and
+   *    register the session in memory with its persisted sessionId so the next
+   *    phone message can continue via --resume / exec resume.
+   *
+   * The agent process itself is NOT respawned — there is no long-running agent process
+   * between turns. Conversation continuity is provided by the LLM provider's session
+   * files (~/.claude/projects/..., ~/.codex/sessions/...) which already survive restart.
+   */
+  async restore(rooms: ActiveRoom[]): Promise<RestoreResult> {
+    const restored: string[] = [];
+    const dropped: string[] = [];
+    const details: string[] = [];
+
+    for (const r of rooms) {
+      try {
+        let serverOk = false;
+        try {
+          await api.checkRoom(this.server, r.roomHash);
+          serverOk = true;
+        } catch {
+          serverOk = false;
+        }
+
+        if (!serverOk) {
+          dropped.push(r.agentId);
+          details.push(`${r.name} (${r.agentId}): room no longer exists server-side`);
+          continue;
+        }
+
+        const profile = getAgent(r.name);
+        if (!profile) {
+          dropped.push(r.agentId);
+          details.push(`${r.name} (${r.agentId}): unknown agent profile`);
+          continue;
+        }
+
+        const messageKey = await deriveMessageKey(r.roomSecret, '');
+
+        await this.attachToRoom({
+          agentId: r.agentId,
+          name: r.name,
+          profile,
+          roomHash: r.roomHash,
+          roomSecret: r.roomSecret,
+          participantToken: r.participantToken,
+          messageKey,
+          sessionId: r.sessionId,
+        });
+
+        restored.push(r.agentId);
+        console.log(`[${r.name}:${r.agentId}] Restored from previous daemon run.`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        dropped.push(r.agentId);
+        details.push(`${r.name} (${r.agentId}): ${msg}`);
+      }
+    }
+
+    // Rewrite the rooms file so the dropped entries are removed and any
+    // restored ones reflect their current in-memory state.
+    await this.persistRooms();
+
+    return { restored: restored.length, dropped: dropped.length, details };
+  }
+
+  /**
+   * Wire up an agent session against an already-known room — used by both spawn()
+   * (after createRoomAndJoin) and restore() (after loading from disk). Subscribes to
+   * SSE, starts presence, installs the chat handler, and registers the session in
+   * the in-memory map. Resolves once SSE is connected so the caller can safely
+   * announce that the room is live.
+   */
+  private async attachToRoom(args: AttachArgs): Promise<void> {
+    const { agentId, name: agentName, profile, roomHash, roomSecret, participantToken, messageKey, sessionId } = args;
+
+    const presence = startPresence(this.server, roomHash, participantToken);
+    const ownTokenHash = await sha256Hex(participantToken);
+
+    const session: AgentSession = {
+      agentId,
+      name: agentName,
+      profile,
+      roomHash,
+      roomSecret,
+      participantToken,
+      messageKey,
+      sessionId,
       running: false,
       sse: null!,
       presence,
@@ -101,11 +209,11 @@ export class AgentManager {
     let resolveSseReady: () => void;
     const sseReady = new Promise<void>((resolve) => { resolveSseReady = resolve; });
 
-    const sse = subscribeToRoom(this.server, room.roomHash, {
+    const sse = subscribeToRoom(this.server, roomHash, {
       onKnock: async () => {
         // Auto-approve phone joining agent room
         try {
-          await api.approveKnock(this.server, room.roomHash, room.participantToken);
+          await api.approveKnock(this.server, roomHash, participantToken);
           console.log(`[${agentName}:${agentId}] Phone joined agent room.`);
         } catch (err) {
           console.error(`[${agentName}:${agentId}] Failed to approve knock:`, err);
@@ -129,7 +237,7 @@ export class AgentManager {
             ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
             : event.body.encrypted_payload as EncryptedPayload;
           const msgId = (event.body.msg_id as string) || '';
-          const decrypted = await decryptText(room.messageKey, room.roomHash, 'chat', msgId, encPayload);
+          const decrypted = await decryptText(messageKey, roomHash, 'chat', msgId, encPayload);
           const parsed = JSON.parse(decrypted) as { text: string };
           text = parsed.text;
         } catch (err) {
@@ -141,7 +249,7 @@ export class AgentManager {
 
         if (session.running) {
           await encryptAndSend(
-            this.server, room.roomHash, room.participantToken, room.messageKey,
+            this.server, roomHash, participantToken, messageKey,
             'Still running previous command. Please wait.'
           );
           return;
@@ -154,7 +262,7 @@ export class AgentManager {
           // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume
           // strategy (claude) pushes `--resume <id>` onto the base args.
           const isResume = session.profile.mode === 'session' && session.sessionId !== null;
-          const args = isResume && session.profile.buildResumeArgs
+          const argv = isResume && session.profile.buildResumeArgs
             ? session.profile.buildResumeArgs(session.sessionId!)
             : [...session.profile.args];
 
@@ -163,19 +271,19 @@ export class AgentManager {
             if (session.profile.systemPromptMode === 'prepend-message-once') {
               if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${text}`;
             } else {
-              args.push('--append-system-prompt', session.profile.appendSystemPrompt);
+              argv.push('--append-system-prompt', session.profile.appendSystemPrompt);
             }
           }
 
           if (isResume && !session.profile.buildResumeArgs) {
-            args.push('--resume', session.sessionId!);
+            argv.push('--resume', session.sessionId!);
           }
-          args.push(messageToSend);
+          argv.push(messageToSend);
 
-          const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+          const displayArgs = argv.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
           console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
 
-          const result = await runCommand(session.profile.command, args);
+          const result = await runCommand(session.profile.command, argv);
 
           // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
           // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
@@ -197,8 +305,12 @@ export class AgentManager {
 
           const output = (parsedText || result.stderr || '(no output)').trim();
 
-          if (session.profile.mode === 'session' && parsedSessionId) {
+          if (session.profile.mode === 'session' && parsedSessionId && parsedSessionId !== session.sessionId) {
             session.sessionId = parsedSessionId;
+            // Persist immediately so a daemon restart can pick up exactly where we are.
+            // Cheap (small JSON write); session-mode agents rotate sessionId per turn so this
+            // keeps the on-disk handle current.
+            void this.persistRooms();
           }
 
           // Try to parse block-structured output
@@ -211,17 +323,17 @@ export class AgentManager {
           // Send output back — split if too long
           const MAX_MSG = 4000;
           if (sendText.length <= MAX_MSG) {
-            await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, sendText, { blocks: sendBlocks });
+            await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
           } else {
             for (let i = 0; i < sendText.length; i += MAX_MSG) {
               const chunk = sendText.slice(i, i + MAX_MSG);
-              await encryptAndSend(this.server, room.roomHash, room.participantToken, room.messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
+              await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
             }
           }
 
           if (result.code !== 0 && result.stderr) {
             await encryptAndSend(
-              this.server, room.roomHash, room.participantToken, room.messageKey,
+              this.server, roomHash, participantToken, messageKey,
               `(exit code ${result.code})`
             );
           }
@@ -229,7 +341,7 @@ export class AgentManager {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[${agentName}:${agentId}] Error:`, msg);
           await encryptAndSend(
-            this.server, room.roomHash, room.participantToken, room.messageKey,
+            this.server, roomHash, participantToken, messageKey,
             `Error: ${msg}`
           ).catch(() => {});
         }
@@ -248,12 +360,9 @@ export class AgentManager {
     session.sse = sse;
     this.sessions.set(agentId, session);
 
-    // Wait for SSE to connect before returning — ensures knock listener
-    // is active before the join button is sent to the phone
+    // Wait for SSE to connect before returning — ensures the room is fully wired
+    // before the caller (spawn() join-button send / restore() success report) proceeds.
     await sseReady;
-    await this.persistRooms();
-
-    return { agentId, roomSecret: room.roomSecret };
   }
 
   async kill(agentId: string): Promise<void> {
@@ -289,6 +398,8 @@ export class AgentManager {
       name: s.name,
       roomHash: s.roomHash,
       roomSecret: s.roomSecret,
+      participantToken: s.participantToken,
+      sessionId: s.sessionId,
       pid: 0,
     }));
     await saveActiveRooms(rooms);
