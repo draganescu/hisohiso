@@ -65,12 +65,16 @@ export const parseJsonOutput = (stdout: string): { text: string; sessionId: stri
  *   {"type":"turn.completed"} | {"type":"turn.failed"} | {"type":"error",...}
  *
  * We extract the thread_id (codex's session handle) and the concatenated text of every
- * agent_message item.completed event in order. Non-JSON lines are skipped silently — codex
- * has been known to print occasional warnings on stdout alongside the JSONL stream.
+ * agent_message item.completed event in order. turn.failed / error events are collected as
+ * failure messages so the phone surfaces a human-readable string instead of raw event JSON
+ * when codex bails out before emitting any agent_message. Non-JSON lines are skipped
+ * silently — codex has been known to print occasional warnings on stdout alongside the
+ * JSONL stream.
  */
 export const parseCodexNdjson = (stdout: string): { text: string; sessionId: string | null } => {
   let sessionId: string | null = null;
   const agentMessages: string[] = [];
+  const failures: string[] = [];
 
   for (const rawLine of stdout.split('\n')) {
     const line = rawLine.trim();
@@ -92,10 +96,24 @@ export const parseCodexNdjson = (stdout: string): { text: string; sessionId: str
       if (item && item.type === 'agent_message' && typeof item.text === 'string') {
         agentMessages.push(item.text);
       }
+    } else if (type === 'turn.failed' || type === 'error') {
+      // Field name varies between event types and codex versions; try the common ones.
+      const msg = (event.message ?? event.reason ?? event.error) as unknown;
+      failures.push(typeof msg === 'string' && msg.length > 0 ? msg : `(codex ${type})`);
     }
   }
 
-  const text = agentMessages.join('\n\n').trim() || stdout.trim() || '(no output)';
+  // Prefer agent text. Fall back to failure messages so the phone shows a useful string
+  // instead of raw JSONL when codex errored out before producing any agent_message.
+  let text: string;
+  if (agentMessages.length > 0) {
+    text = agentMessages.join('\n\n').trim();
+  } else if (failures.length > 0) {
+    text = failures.join('\n').trim();
+  } else {
+    text = stdout.trim() || '(no output)';
+  }
+
   return { text, sessionId };
 };
 

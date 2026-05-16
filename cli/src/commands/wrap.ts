@@ -137,18 +137,30 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       const result = await runCommand(profile.command, args);
 
-      let output: string;
-      if (profile.mode === 'session') {
-        const parsed = profile.outputFormat === 'codex-ndjson'
-          ? parseCodexNdjson(result.stdout)
-          : parseJsonOutput(result.stdout);
-        if (parsed.sessionId) {
-          sessionId = parsed.sessionId;
-          console.log(`  [session: ${sessionId}]`);
-        }
-        output = (parsed.text || result.stderr || '(no output)').trim();
+      // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
+      // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
+      // capture is gated on session mode since oneshot turns don't persist one.
+      let parsedText: string;
+      let parsedSessionId: string | null = null;
+
+      if (profile.outputFormat === 'codex-ndjson') {
+        const parsed = parseCodexNdjson(result.stdout);
+        parsedText = parsed.text;
+        parsedSessionId = parsed.sessionId;
+      } else if (profile.mode === 'session') {
+        // Default for session mode: Claude's single-JSON {result, session_id} shape.
+        const parsed = parseJsonOutput(result.stdout);
+        parsedText = parsed.text;
+        parsedSessionId = parsed.sessionId;
       } else {
-        output = (result.stdout || result.stderr || '(no output)').trim();
+        parsedText = result.stdout;
+      }
+
+      const output = (parsedText || result.stderr || '(no output)').trim();
+
+      if (profile.mode === 'session' && parsedSessionId) {
+        sessionId = parsedSessionId;
+        console.log(`  [session: ${sessionId}]`);
       }
 
       // Try to parse block-structured output from Claude
