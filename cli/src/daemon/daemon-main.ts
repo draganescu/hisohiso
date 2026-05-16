@@ -1,4 +1,4 @@
-import { getServer, loadActiveRooms, saveDaemonState, type DaemonState } from '../lib/config.js';
+import { getServer, loadActiveRooms, loadDaemonState, saveDaemonState, type DaemonState } from '../lib/config.js';
 import {
   generateRoomSecret,
   deriveRoomHash,
@@ -195,6 +195,20 @@ const handleCommand = async (
 };
 
 const setupControlRoom = async (server: string): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
+  // Try to reuse a previously-paired control room. If daemon-state.json exists and
+  // the room is still alive server-side, the phone is already paired — no QR rescan
+  // needed across daemon restarts. Falls through to creating a fresh control room if
+  // there's no saved state or the saved room is gone.
+  try {
+    const saved = await loadDaemonState();
+    await api.checkRoom(server, saved.controlRoomHash);
+    console.log('Reusing previously paired control room (no QR scan needed).');
+    const messageKey = await deriveMessageKey(saved.controlRoomSecret, saved.controlRoomPassword);
+    return { state: saved, messageKey };
+  } catch {
+    // No saved state, or saved room has been disbanded server-side. Fall through.
+  }
+
   const password = '';
   const controlRoomSecret = generateRoomSecret();
   const controlRoomHash = await deriveRoomHash(controlRoomSecret);
