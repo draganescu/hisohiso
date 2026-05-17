@@ -383,13 +383,15 @@ export class AgentManager {
     }));
   }
 
-  async killAll(): Promise<void> {
+  // Close in-process resources without touching the persisted rooms file. Used on
+  // daemon shutdown so the next start can restore via loadActiveRooms(). The on-disk
+  // record is already current — every successful turn persists the rotated sessionId.
+  detachAll(): void {
     for (const [, session] of this.sessions) {
       session.sse.close();
       session.presence.stop();
     }
     this.sessions.clear();
-    await this.persistRooms();
   }
 
   private async persistRooms(): Promise<void> {

@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -103,4 +103,14 @@ export const loadActiveRooms = async (): Promise<ActiveRoom[]> => {
 export const saveActiveRooms = async (rooms: ActiveRoom[]): Promise<void> => {
   await ensureConfigDir();
   await writeFile(ROOMS_FILE, JSON.stringify(rooms, null, 2) + '\n', 'utf-8');
+};
+
+// Best-effort delete of the persisted daemon state + rooms files. Used by
+// `daemon start --fresh` to force a new control room (and therefore a new QR).
+export const clearDaemonState = async (): Promise<void> => {
+  await unlink(DAEMON_STATE_FILE).catch(() => {});
+};
+
+export const clearActiveRooms = async (): Promise<void> => {
+  await unlink(ROOMS_FILE).catch(() => {});
 };

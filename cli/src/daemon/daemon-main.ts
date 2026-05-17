@@ -109,7 +109,7 @@ export const runDaemon = async (): Promise<void> => {
     console.log('Shutting down daemon...');
     sse.close();
     presence.stop();
-    await manager.killAll();
+    manager.detachAll();
     await removePid();
     await encryptAndSend(
       server, controlRoomHash, participantToken, messageKey,

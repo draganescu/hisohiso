@@ -57,7 +57,8 @@ const daemon = program
 daemon
   .command('start')
   .description('Start the daemon')
-  .action(daemonStart);
+  .option('--fresh', 'Disband saved control + agent rooms and start with a new QR')
+  .action((opts: { fresh?: boolean }) => daemonStart({ fresh: opts.fresh === true }));
 
 daemon
   .command('stop')
