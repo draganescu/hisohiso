@@ -1,4 +1,11 @@
-import { getServer, loadActiveRooms, loadDaemonState, saveDaemonState, type DaemonState } from '../lib/config.js';
+import {
+  getServer,
+  loadActiveRooms,
+  loadDaemonState,
+  saveDaemonState,
+  clearDaemonState,
+  type DaemonState,
+} from '../lib/config.js';
 import {
   generateRoomSecret,
   deriveRoomHash,
@@ -8,10 +15,10 @@ import {
   type EncryptedPayload,
 } from '../lib/crypto.js';
 import * as api from '../lib/api-client.js';
-import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
-import { startPresence } from '../lib/presence.js';
+import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
+import { startPresence, type PresenceHandle } from '../lib/presence.js';
 import { encryptAndSend } from '../lib/room-bridge.js';
-import { AgentManager } from './agent-manager.js';
+import { AgentManager, type RestoreResult } from './agent-manager.js';
 import { writePid, removePid } from './pid.js';
 import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
@@ -20,99 +27,46 @@ import qrTerminal from 'qrcode-terminal';
 export const runDaemon = async (): Promise<void> => {
   const server = await getServer();
 
-  // Create control room, show QR, wait for phone to join
-  const { state, messageKey } = await setupControlRoom(server);
-  const { controlRoomHash, controlRoomSecret, participantToken, controlRoomPassword } = state;
+  // Initial control room — reuses saved pairing if alive server-side, else shows QR.
+  let { state, messageKey } = await setupControlRoom(server);
 
   await writePid(process.pid);
 
-  const ownTokenHash = await sha256Hex(participantToken);
-
   const manager = new AgentManager(
     server,
-    controlRoomHash,
-    participantToken,
-    controlRoomSecret,
-    controlRoomPassword
+    state.controlRoomHash,
+    state.participantToken,
+    state.controlRoomSecret,
+    state.controlRoomPassword
   );
 
-  // Start presence on control room
-  const presence = startPresence(server, controlRoomHash, participantToken);
-
-  // Check for previously active rooms — re-attach SSE/presence and restore in-memory
-  // sessions so daemon restarts are invisible to the phone. Conversation continuity is
-  // carried by the LLM provider's session files plus the persisted sessionId.
+  // One-time restore of previously active agent rooms. The control room may have
+  // already been reused above (no QR); the agent-room handles are independent.
   const previousRooms = await loadActiveRooms();
+  let restoreResult: RestoreResult | null = null;
   if (previousRooms.length > 0) {
     console.log(`Restoring ${previousRooms.length} previously active room(s)...`);
-    const result = await manager.restore(previousRooms);
-    console.log(`Restore: ${result.restored} restored, ${result.dropped} dropped.`);
-    if (result.details.length > 0) {
-      for (const d of result.details) console.log(`  - ${d}`);
-    }
-    if (result.restored > 0) {
-      await encryptAndSend(
-        server, controlRoomHash, participantToken, messageKey,
-        `Daemon back. ${result.restored} room(s) restored — keep going.`,
-        { handle: 'hisohiso-daemon' }
-      );
-    }
-    if (result.dropped > 0) {
-      await encryptAndSend(
-        server, controlRoomHash, participantToken, messageKey,
-        `${result.dropped} previous room(s) could not be restored:\n${result.details.join('\n')}`,
-        { handle: 'hisohiso-daemon' }
-      );
-    }
+    restoreResult = await manager.restore(previousRooms);
+    console.log(`Restore: ${restoreResult.restored} restored, ${restoreResult.dropped} dropped.`);
+    for (const d of restoreResult.details) console.log(`  - ${d}`);
   }
 
-  // Send daemon online status with help
-  await encryptAndSend(server, controlRoomHash, participantToken, messageKey,
-    'Daemon online. Type an agent name to start a session (e.g. "claude", "codex", "bash"). Type "list" to see running agents or "help" for all commands.',
-    { handle: 'hisohiso-daemon' }
-  );
+  // Mutable refs so the single shutdown handler always sees the current iteration's
+  // control-room SSE + presence (they swap when the phone disbands the control room).
+  let currentSse: SSESubscription | null = null;
+  let currentPresence: PresenceHandle | null = null;
+  let shuttingDown = false;
 
-  console.log('Daemon running. Listening on control room...');
-
-  // Listen for commands on control room
-  const sse = subscribeToRoom(server, controlRoomHash, {
-    onChat: async (event: RoomEvent) => {
-      if (event.from === ownTokenHash) return;
-
-      try {
-        const encPayload = typeof event.body.encrypted_payload === 'string'
-          ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
-          : event.body.encrypted_payload as EncryptedPayload;
-        const msgId = (event.body.msg_id as string) || '';
-        const decrypted = await decryptText(messageKey, controlRoomHash, 'chat', msgId, encPayload);
-        const parsed = JSON.parse(decrypted) as { text: string };
-        const text = parsed.text.trim();
-        const lower = text.toLowerCase();
-
-        console.log(`Control: ${text}`);
-
-        await handleCommand(lower, text, manager, server, controlRoomHash, participantToken, messageKey);
-      } catch (err) {
-        console.error('Failed to process message:', err);
-      }
-    },
-    onError: (err) => {
-      console.error('Control room SSE error:', typeof err === 'string' ? err : 'reconnecting...');
-    },
-    onOpen: () => {
-      console.log('Control room SSE connected.');
-    },
-  });
-
-  // Graceful shutdown
-  const shutdown = async () => {
+  const shutdown = async (): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log('Shutting down daemon...');
-    sse.close();
-    presence.stop();
+    currentSse?.close();
+    currentPresence?.stop();
     manager.detachAll();
     await removePid();
     await encryptAndSend(
-      server, controlRoomHash, participantToken, messageKey,
+      server, state.controlRoomHash, state.participantToken, messageKey,
       'Daemon stopped.',
       { handle: 'hisohiso-daemon' }
     ).catch(() => {});
@@ -121,6 +75,106 @@ export const runDaemon = async (): Promise<void> => {
 
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+
+  // Re-pair loop: each iteration owns one control-room lifecycle. The phone disbanding
+  // the control room resolves the iteration's promise and we re-pair (fresh QR), keeping
+  // agent rooms running across the swap.
+  let firstIteration = true;
+  while (true) {
+    if (!firstIteration) {
+      await clearDaemonState().catch(() => {});
+      console.log('Control room was disbanded by phone — re-pairing.');
+      ({ state, messageKey } = await setupControlRoom(server));
+      manager.updateControlRoom(
+        state.controlRoomHash,
+        state.participantToken,
+        state.controlRoomSecret,
+        state.controlRoomPassword
+      );
+    }
+
+    const ownTokenHash = await sha256Hex(state.participantToken);
+    currentPresence = startPresence(server, state.controlRoomHash, state.participantToken);
+
+    if (firstIteration) {
+      if (restoreResult && restoreResult.restored > 0) {
+        await encryptAndSend(
+          server, state.controlRoomHash, state.participantToken, messageKey,
+          `Daemon back. ${restoreResult.restored} room(s) restored — keep going.`,
+          { handle: 'hisohiso-daemon' }
+        );
+      }
+      if (restoreResult && restoreResult.dropped > 0) {
+        await encryptAndSend(
+          server, state.controlRoomHash, state.participantToken, messageKey,
+          `${restoreResult.dropped} previous room(s) could not be restored:\n${restoreResult.details.join('\n')}`,
+          { handle: 'hisohiso-daemon' }
+        );
+      }
+    } else {
+      const active = manager.listRunning().length;
+      await encryptAndSend(
+        server, state.controlRoomHash, state.participantToken, messageKey,
+        active > 0
+          ? `Control room re-paired. ${active} agent room(s) still active.`
+          : 'Control room re-paired.',
+        { handle: 'hisohiso-daemon' }
+      );
+    }
+
+    await encryptAndSend(server, state.controlRoomHash, state.participantToken, messageKey,
+      'Daemon online. Type an agent name to start a session (e.g. "claude", "codex", "bash"). Type "list" to see running agents or "help" for all commands.',
+      { handle: 'hisohiso-daemon' }
+    );
+
+    console.log('Daemon running. Listening on control room...');
+
+    // Freeze the values the SSE handlers close over so a later re-pair (which reassigns
+    // `state` / `messageKey`) can't redirect in-flight chat decryption to the wrong room.
+    const iterState = state;
+    const iterKey = messageKey;
+
+    await new Promise<void>((resolve) => {
+      const sse = subscribeToRoom(server, iterState.controlRoomHash, {
+        onChat: async (event: RoomEvent) => {
+          if (event.from === ownTokenHash) return;
+
+          try {
+            const encPayload = typeof event.body.encrypted_payload === 'string'
+              ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
+              : event.body.encrypted_payload as EncryptedPayload;
+            const msgId = (event.body.msg_id as string) || '';
+            const decrypted = await decryptText(iterKey, iterState.controlRoomHash, 'chat', msgId, encPayload);
+            const parsed = JSON.parse(decrypted) as { text: string };
+            const text = parsed.text.trim();
+            const lower = text.toLowerCase();
+
+            console.log(`Control: ${text}`);
+
+            await handleCommand(lower, text, manager, server, iterState.controlRoomHash, iterState.participantToken, iterKey);
+          } catch (err) {
+            console.error('Failed to process message:', err);
+          }
+        },
+        onDestroy: () => {
+          sse.close();
+          currentPresence?.stop();
+          currentSse = null;
+          currentPresence = null;
+          resolve();
+        },
+        onError: (err) => {
+          console.error('Control room SSE error:', typeof err === 'string' ? err : 'reconnecting...');
+        },
+        onOpen: () => {
+          console.log('Control room SSE connected.');
+        },
+      });
+      currentSse = sse;
+    });
+
+    firstIteration = false;
+  }
 };
 
 const handleCommand = async (
@@ -234,36 +288,40 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
   console.log(`\nOr open: ${joinUrl}\n`);
   console.log('Waiting for phone to join...');
 
-  // Wait for knock and auto-approve
-  await new Promise<void>((resolve, reject) => {
-    const sse = subscribeToRoom(server, controlRoomHash, {
-      onKnock: async () => {
-        console.log('Phone is joining... approving.');
-        try {
-          await api.approveKnock(server, controlRoomHash, participantToken);
-          console.log('Phone connected to control room.');
-          sse.close();
-          resolve();
-        } catch (err) {
-          sse.close();
-          reject(err);
-        }
-      },
-      onError: (err) => {
-        console.error('SSE error:', typeof err === 'string' ? err : 'reconnecting...');
-      },
-    });
+  // Pairing-only cancel handler. Critical that it's removed once pairing settles —
+  // an earlier version left this attached for the daemon's whole lifetime, so the next
+  // Ctrl+C disbanded the live control room (and forced a QR rescan on every restart).
+  const cancelPairing = async (): Promise<void> => {
+    console.log('\nCancelled. Cleaning up...');
+    try { await api.disbandRoom(server, controlRoomHash, participantToken); } catch { /* */ }
+    process.exit(0);
+  };
+  process.on('SIGINT', cancelPairing);
 
-    process.on('SIGINT', async () => {
-      console.log('\nCancelled. Cleaning up...');
-      sse.close();
-      tempPresence.stop();
-      try { await api.disbandRoom(server, controlRoomHash, participantToken); } catch { /* */ }
-      process.exit(0);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const sse = subscribeToRoom(server, controlRoomHash, {
+        onKnock: async () => {
+          console.log('Phone is joining... approving.');
+          try {
+            await api.approveKnock(server, controlRoomHash, participantToken);
+            console.log('Phone connected to control room.');
+            sse.close();
+            resolve();
+          } catch (err) {
+            sse.close();
+            reject(err);
+          }
+        },
+        onError: (err) => {
+          console.error('SSE error:', typeof err === 'string' ? err : 'reconnecting...');
+        },
+      });
     });
-  });
-
-  tempPresence.stop();
+  } finally {
+    process.off('SIGINT', cancelPairing);
+    tempPresence.stop();
+  }
 
   const state: DaemonState = {
     controlRoomSecret,

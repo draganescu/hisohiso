@@ -365,6 +365,17 @@ export class AgentManager {
     await sseReady;
   }
 
+  // Point the manager at a freshly-paired control room. Used by the re-pair loop in
+  // runDaemon when the phone disbands the control room mid-run. Agent sessions are
+  // untouched — only the channel we send control-room status messages on changes.
+  updateControlRoom(hash: string, token: string, secret: string, password: string): void {
+    this.controlRoomHash = hash;
+    this.controlToken = token;
+    this.controlRoomSecret = secret;
+    this.controlPassword = password;
+    this.controlKey = null;
+  }
+
   async kill(agentId: string): Promise<void> {
     const session = this.sessions.get(agentId);
     if (!session) {
