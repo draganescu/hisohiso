@@ -184,7 +184,7 @@ if ($path === '/api/rooms' && $method === 'POST') {
         ]);
         $token = create_participant($room_hash);
         touch_presence($room_hash, $token);
-        $sub_jwt = jwt_encode_subscriber(['room:' . $room_hash], PARTICIPANT_JWT_TTL);
+        $sub_jwt = jwt_encode_subscriber([room_topic($room_hash)], PARTICIPANT_JWT_TTL);
         json_response([
             'status' => 'created',
             'has_participants' => true,
@@ -227,15 +227,20 @@ if (preg_match('#^/api/rooms/([^/]+)/knock$#', $path, $matches) && $method === '
     if (!is_string($body['knock_pubkey']) || $body['knock_pubkey'] === '') {
         json_response(['error' => 'invalid_knock_pubkey'], 400);
     }
+    // Knock event goes to the MEMBERS topic only — the existing participants
+    // need to see it to approve. Lobby subscribers (other knockers) don't.
     publish_event($room_hash, 'knock', [
         'msg_id' => $body['msg_id'],
         'encrypted_payload' => $body['encrypted_payload'],
         'knock_pubkey' => $body['knock_pubkey'],
     ]);
     touch_room($room_hash);
-    // Lobby JWT lets the unauthenticated knocker subscribe to the room topic
-    // just long enough to receive the wrapped-token event from an approver.
-    $lobby_jwt = jwt_encode_subscriber(['room:' . $room_hash], LOBBY_JWT_TTL);
+    // Lobby JWT is scoped to the :lobby sub-topic ONLY. It lets the knocker
+    // receive the wrapped-token delivery and reject tombstones — but NOT
+    // chat/settings traffic that flows on the members topic. This closes the
+    // 10-minute read window where a knocker could siphon ciphertext after a
+    // single unauthenticated /knock.
+    $lobby_jwt = jwt_encode_subscriber([lobby_topic($room_hash)], LOBBY_JWT_TTL);
     json_response(['status' => 'ok', 'lobby_jwt' => $lobby_jwt]);
 }
 
@@ -262,7 +267,7 @@ if (preg_match('#^/api/rooms/([^/]+)/approve$#', $path, $matches) && $method ===
     // a tombstone for UI/state.
     publish_event($room_hash, 'approve', [], sha256_hex($approver));
     touch_room($room_hash);
-    $sub_jwt = jwt_encode_subscriber(['room:' . $room_hash], PARTICIPANT_JWT_TTL);
+    $sub_jwt = jwt_encode_subscriber([room_topic($room_hash)], PARTICIPANT_JWT_TTL);
     json_response([
         'new_participant_token' => $new_token,
         'subscriber_jwt' => $sub_jwt,
@@ -279,7 +284,7 @@ if (preg_match('#^/api/rooms/([^/]+)/sub-token$#', $path, $matches) && $method =
     }
     $participant = require_participant_token($room_hash);
     touch_presence($room_hash, $participant);
-    $sub_jwt = jwt_encode_subscriber(['room:' . $room_hash], PARTICIPANT_JWT_TTL);
+    $sub_jwt = jwt_encode_subscriber([room_topic($room_hash)], PARTICIPANT_JWT_TTL);
     json_response(['subscriber_jwt' => $sub_jwt]);
 }
 
@@ -295,7 +300,9 @@ if (preg_match('#^/api/rooms/([^/]+)/token$#', $path, $matches) && $method === '
             json_response(['error' => 'missing_' . $field], 400);
         }
     }
-    publish_event($room_hash, 'token', [
+    // Token-wrap delivery only matters to the knocker, who subscribes via the
+    // lobby JWT. Members don't need to see other people's wrap blobs.
+    publish_lobby_event($room_hash, 'token', [
         'knock_msg_id' => $body['knock_msg_id'],
         'approver_pubkey' => $body['approver_pubkey'],
         'nonce' => $body['nonce'],
@@ -321,9 +328,12 @@ if (preg_match('#^/api/rooms/([^/]+)/message$#', $path, $matches) && $method ===
         'encrypted_payload' => $body['encrypted_payload'],
         'msg_id' => $body['msg_id'] ?? null,
     ], $sender_hash);
+    // catch_up is re-checked INSIDE outbox_append under a BEGIN IMMEDIATE
+    // transaction that serializes against outbox_wipe — this is the close-
+    // over of the publish→append TOCTOU window where a concurrent /settings
+    // (off) used to strand one orphan message past the operator's disable.
     if (isset($body['msg_id']) && is_string($body['msg_id']) && $body['msg_id'] !== ''
-        && is_string($body['encrypted_payload'])
-        && room_catch_up_enabled($room_hash)) {
+        && is_string($body['encrypted_payload'])) {
         outbox_append($room_hash, $body['msg_id'], $body['encrypted_payload'], $sender_hash);
     }
     touch_presence($room_hash, $sender);
@@ -379,10 +389,13 @@ if (preg_match('#^/api/rooms/([^/]+)/reject$#', $path, $matches) && $method === 
         json_response(['error' => 'room_not_found'], 404);
     }
     $sender = require_participant_token($room_hash);
-    $body = read_json_body();
-    publish_event($room_hash, 'reject', [
-        'message' => $body['message'] ?? null,
-    ], sha256_hex($sender));
+    // Reject is content-free: the previous design forwarded body.message
+    // verbatim, which (a) wasn't encrypted with k_msg/k_knock, and (b) used
+    // to land on the members topic — both of which let any lobby subscriber
+    // read the reason. The knocker now learns "you were rejected" and
+    // nothing more. Goes to the lobby topic so the knocker (subscribed via
+    // lobby JWT) sees it; members don't need a reject notification.
+    publish_lobby_event($room_hash, 'reject', [], sha256_hex($sender));
     touch_presence($room_hash, $sender);
     touch_room($room_hash);
     json_response(['status' => 'ok']);
@@ -436,7 +449,9 @@ if (preg_match('#^/api/rooms/([^/]+)/disband$#', $path, $matches) && $method ===
     $stmt->execute([':room_hash' => $room_hash]);
     // Wipe per-room outbox before clients hear the destroy event.
     outbox_wipe($room_hash);
-    publish_event($room_hash, 'destroy', [], sha256_hex($sender));
+    // Destroy fans out to BOTH topics so any in-flight knocker (subscribed
+    // only to the lobby topic) also tears down their lobby waiting UI.
+    publish_room_and_lobby($room_hash, 'destroy', [], sha256_hex($sender));
     json_response(['status' => 'ok']);
 }
 

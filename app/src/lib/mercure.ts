@@ -4,8 +4,24 @@
 // `Authorization: Bearer <subscriber_jwt>`.
 import { EventSource as PolyfillEventSource } from 'eventsource';
 
-export const createRoomEventSource = (roomHash: string, jwt: string): EventSource => {
-  const topic = encodeURIComponent(`room:${roomHash}`);
+// Topic scope mirrors server/mercure.php:
+//   'members' → room:<hash>       (chats, settings, knocks, approve, destroy)
+//   'lobby'   → room:<hash>:lobby (token wraps, rejects, destroy)
+// The JWT's subscribe claim MUST list the topic being requested or Mercure
+// refuses delivery. Knockers hold a lobby JWT; participants hold a members
+// JWT — each call site picks the matching topic.
+export type RoomTopicScope = 'members' | 'lobby';
+
+const buildTopic = (roomHash: string, scope: RoomTopicScope): string => {
+  return scope === 'lobby' ? `room:${roomHash}:lobby` : `room:${roomHash}`;
+};
+
+export const createRoomEventSource = (
+  roomHash: string,
+  jwt: string,
+  scope: RoomTopicScope = 'members'
+): EventSource => {
+  const topic = encodeURIComponent(buildTopic(roomHash, scope));
   const url = `/.well-known/mercure?topic=${topic}`;
   return new PolyfillEventSource(url, {
     fetch: (input, init) =>

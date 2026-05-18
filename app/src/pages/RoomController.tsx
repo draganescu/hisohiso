@@ -552,16 +552,19 @@ const RoomController = () => {
     }
     // Mercure rejects anonymous subscribers. Pick whichever JWT applies to the
     // current state: short-lived lobby JWT while waiting for token unwrap,
-    // long-lived subscriber JWT once we're a participant. Without one, we
-    // can't subscribe at all — bail and let the effect re-run when the JWT
-    // becomes available.
-    const activeJwt = roomState === 'PARTICIPANT' ? subJwt : lobbyJwt;
+    // long-lived subscriber JWT once we're a participant. The topic scope
+    // must match the JWT — lobby JWTs ONLY authorize room:<hash>:lobby, where
+    // token-wrap and reject events are published; member JWTs authorize the
+    // chat-traffic topic room:<hash>. Without a JWT we can't subscribe at
+    // all — bail and let the effect re-run when one becomes available.
+    const isParticipant = roomState === 'PARTICIPANT';
+    const activeJwt = isParticipant ? subJwt : lobbyJwt;
     if (!activeJwt) {
       setConnection('idle');
       return;
     }
 
-    const source = createRoomEventSource(roomHash, activeJwt);
+    const source = createRoomEventSource(roomHash, activeJwt, isParticipant ? 'members' : 'lobby');
     setConnection('idle');
 
     const handleEvent = async (event: MessageEvent) => {
