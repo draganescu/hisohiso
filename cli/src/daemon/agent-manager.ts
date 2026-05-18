@@ -14,6 +14,7 @@ type AgentSession = {
   roomHash: string;
   roomSecret: string;
   participantToken: string;
+  subscriberJwt: string;
   messageKey: CryptoKey;
   sessionId: string | null;
   running: boolean;
@@ -28,6 +29,7 @@ type AttachArgs = {
   roomHash: string;
   roomSecret: string;
   participantToken: string;
+  subscriberJwt: string;
   messageKey: CryptoKey;
   sessionId: string | null;
 };
@@ -102,6 +104,7 @@ export class AgentManager {
       roomHash: room.roomHash,
       roomSecret: room.roomSecret,
       participantToken: room.participantToken,
+      subscriberJwt: room.subscriberJwt,
       messageKey: room.messageKey,
       sessionId: null,
     });
@@ -150,6 +153,15 @@ export class AgentManager {
           continue;
         }
 
+        if (!r.subscriberJwt) {
+          // Daemon was upgraded across the Mercure-auth boundary; the old room
+          // entry has no subscriber JWT and we can't get one back without
+          // re-pairing. Drop rather than serve a half-broken session.
+          dropped.push(r.agentId);
+          details.push(`${r.name} (${r.agentId}): missing subscriber JWT (pre-v0.4.2 room); re-spawn after upgrade`);
+          continue;
+        }
+
         const messageKey = await deriveMessageKey(r.roomSecret, '');
 
         await this.attachToRoom({
@@ -159,6 +171,7 @@ export class AgentManager {
           roomHash: r.roomHash,
           roomSecret: r.roomSecret,
           participantToken: r.participantToken,
+          subscriberJwt: r.subscriberJwt,
           messageKey,
           sessionId: r.sessionId,
         });
@@ -187,7 +200,7 @@ export class AgentManager {
    * announce that the room is live.
    */
   private async attachToRoom(args: AttachArgs): Promise<void> {
-    const { agentId, name: agentName, profile, roomHash, roomSecret, participantToken, messageKey, sessionId } = args;
+    const { agentId, name: agentName, profile, roomHash, roomSecret, participantToken, subscriberJwt, messageKey, sessionId } = args;
 
     const presence = startPresence(this.server, roomHash, participantToken);
     const ownTokenHash = await sha256Hex(participantToken);
@@ -199,6 +212,7 @@ export class AgentManager {
       roomHash,
       roomSecret,
       participantToken,
+      subscriberJwt,
       messageKey,
       sessionId,
       running: false,
@@ -209,7 +223,7 @@ export class AgentManager {
     let resolveSseReady: () => void;
     const sseReady = new Promise<void>((resolve) => { resolveSseReady = resolve; });
 
-    const sse = subscribeToRoom(this.server, roomHash, {
+    const sse = subscribeToRoom(this.server, roomHash, subscriberJwt, {
       onKnock: async (knockEvent: RoomEvent) => {
         // Auto-approve phone joining agent room. Wrap the new participant
         // token to the knocker's ephemeral pubkey and post it via /token so
@@ -222,7 +236,11 @@ export class AgentManager {
         }
         try {
           const approveRes = await api.approveKnock(this.server, roomHash, participantToken);
-          const wrapped = await wrapToken(knockPubkey, approveRes.new_participant_token);
+          const bundle = JSON.stringify({
+            token: approveRes.new_participant_token,
+            subscriber_jwt: approveRes.subscriber_jwt,
+          });
+          const wrapped = await wrapToken(knockPubkey, bundle);
           await api.sendWrappedToken(this.server, roomHash, participantToken, knockMsgId, wrapped);
           console.log(`[${agentName}:${agentId}] Phone joined agent room.`);
         } catch (err) {
@@ -422,6 +440,7 @@ export class AgentManager {
       roomHash: s.roomHash,
       roomSecret: s.roomSecret,
       participantToken: s.participantToken,
+      subscriberJwt: s.subscriberJwt,
       sessionId: s.sessionId,
       pid: 0,
     }));

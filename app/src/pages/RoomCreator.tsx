@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { deriveRoomHash, generateRoomSecret } from '../lib/crypto';
-import { setToken } from '../lib/storage';
+import { setToken, setSubscriberJwt } from '../lib/storage';
 
 const RoomCreator = () => {
   const [status, setStatus] = useState<'form' | 'creating' | 'error'>('form');
@@ -25,10 +25,14 @@ const RoomCreator = () => {
 
       const data = (await response.json()) as {
         participant_token?: string;
+        subscriber_jwt?: string;
       };
 
       if (data.participant_token) {
         setToken(hash, data.participant_token);
+      }
+      if (data.subscriber_jwt) {
+        setSubscriberJwt(hash, data.subscriber_jwt);
       }
 
       window.location.href = `/room#${secret}`;

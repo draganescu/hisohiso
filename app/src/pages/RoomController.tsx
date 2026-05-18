@@ -17,15 +17,18 @@ import {
 import {
   clearHandle,
   clearRoomPassword,
+  clearSubscriberJwt,
   clearToken,
   getHandle,
   getRoomPassword,
   getRoomColor,
   getRoomNickname,
+  getSubscriberJwt,
   getToken,
   listRooms,
   setHandle,
   setRoomPassword,
+  setSubscriberJwt,
   setToken,
   upsertRoom,
   removeRoom,
@@ -150,6 +153,12 @@ const RoomController = () => {
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
   const [tokenHash, setTokenHash] = useState<string | null>(null);
+  // Subscriber JWT for Mercure subscription. Long-lived (7 days per server
+  // policy) once we're a PARTICIPANT; short-lived (10 minutes) when we're a
+  // knocker waiting for our wrapped token. Whichever is active is what the
+  // SSE effect uses for Authorization.
+  const [subJwt, setSubJwt] = useState<string | null>(null);
+  const [lobbyJwt, setLobbyJwt] = useState<string | null>(null);
   const [handle, setHandleState] = useState<string>('');
   const [connection, setConnection] = useState<'idle' | 'connected' | 'error'>('idle');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -189,12 +198,15 @@ const RoomController = () => {
 
   const wipeLocalRoom = useCallback(async (hash: string) => {
     clearToken(hash);
+    clearSubscriberJwt(hash);
     clearHandle(hash);
     clearRoomPassword(hash);
     removeRoom(hash);
     await clearRoomMessages(hash);
     setTokenState(null);
     setTokenHash(null);
+    setSubJwt(null);
+    setLobbyJwt(null);
     setKnocks([]);
     setMessages([]);
     setMessage('');
@@ -403,14 +415,38 @@ const RoomController = () => {
             upsertRoom(hash, roomSecret, savedHandle ?? null);
             setTokenState(existingToken);
             setTokenHash(await sha256Hex(existingToken));
+            // Refresh the subscriber JWT every load so an expired or missing
+            // local copy never blocks Mercure subscription. Cheap; the server
+            // mints a fresh one without minting a new participant.
+            try {
+              const subRes = await fetch(`/api/rooms/${hash}/sub-token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Chat-Token': existingToken },
+              });
+              if (subRes.ok) {
+                const subData = (await subRes.json()) as { subscriber_jwt?: string };
+                if (subData.subscriber_jwt) {
+                  setSubscriberJwt(hash, subData.subscriber_jwt);
+                  setSubJwt(subData.subscriber_jwt);
+                }
+              } else {
+                const cached = getSubscriberJwt(hash);
+                if (cached) setSubJwt(cached);
+              }
+            } catch {
+              const cached = getSubscriberJwt(hash);
+              if (cached) setSubJwt(cached);
+            }
             setRoomState('PARTICIPANT');
             return;
           }
 
           if (presenceResponse.status === 401 || presenceResponse.status === 403) {
             clearToken(hash);
+            clearSubscriberJwt(hash);
             setTokenState(null);
             setTokenHash(null);
+            setSubJwt(null);
           } else {
             throw new Error(`Server responded ${presenceResponse.status}`);
           }
@@ -498,8 +534,18 @@ const RoomController = () => {
     if (!roomHash || roomState === 'DESTROYED') {
       return;
     }
+    // Mercure rejects anonymous subscribers. Pick whichever JWT applies to the
+    // current state: short-lived lobby JWT while waiting for token unwrap,
+    // long-lived subscriber JWT once we're a participant. Without one, we
+    // can't subscribe at all — bail and let the effect re-run when the JWT
+    // becomes available.
+    const activeJwt = roomState === 'PARTICIPANT' ? subJwt : lobbyJwt;
+    if (!activeJwt) {
+      setConnection('idle');
+      return;
+    }
 
-    const source = createRoomEventSource(roomHash);
+    const source = createRoomEventSource(roomHash, activeJwt);
     setConnection('idle');
 
     const handleEvent = async (event: MessageEvent) => {
@@ -551,11 +597,16 @@ const RoomController = () => {
             return;
           }
           try {
-            const newToken = await unwrapToken(pending.privateKey, approverPubkey, nonce, ct);
+            const blob = await unwrapToken(pending.privateKey, approverPubkey, nonce, ct);
+            const bundle = JSON.parse(blob) as { token?: string; subscriber_jwt?: string };
+            if (!bundle.token || !bundle.subscriber_jwt) return;
             knockEphemeralRef.current = null;
-            setToken(roomHash, newToken);
-            setTokenState(newToken);
-            setTokenHash(await sha256Hex(newToken));
+            setToken(roomHash, bundle.token);
+            setTokenState(bundle.token);
+            setTokenHash(await sha256Hex(bundle.token));
+            setSubscriberJwt(roomHash, bundle.subscriber_jwt);
+            setSubJwt(bundle.subscriber_jwt);
+            setLobbyJwt(null);
             setRoomState('PARTICIPANT');
           } catch {
             // Wrong recipient or stale event — leave pending in place.
@@ -629,7 +680,7 @@ const RoomController = () => {
       eventTypes.forEach((type) => source.removeEventListener(type, handleEvent));
       source.close();
     };
-  }, [roomHash, roomState, cryptoKey, token, tokenHash, wipeLocalRoom, ingestEncryptedChat]);
+  }, [roomHash, roomState, cryptoKey, token, tokenHash, subJwt, lobbyJwt, wipeLocalRoom, ingestEncryptedChat]);
 
   useEffect(() => {
     if (roomState !== 'PARTICIPANT' || !token || !roomHash) {
@@ -696,6 +747,12 @@ const RoomController = () => {
       });
 
       if (response.ok) {
+        // Capture the lobby JWT so the SSE effect can subscribe to the room
+        // topic just long enough to receive the wrapped-token event.
+        const knockData = (await response.json()) as { lobby_jwt?: string };
+        if (knockData.lobby_jwt) {
+          setLobbyJwt(knockData.lobby_jwt);
+        }
         setKnockSent(true);
         setKnockNotice('Waiting for approval…');
       } else {
@@ -728,10 +785,18 @@ const RoomController = () => {
           }
         });
         if (!approveRes.ok) return;
-        const approveBody = (await approveRes.json()) as { new_participant_token?: string };
+        const approveBody = (await approveRes.json()) as {
+          new_participant_token?: string;
+          subscriber_jwt?: string;
+        };
         const newToken = approveBody.new_participant_token;
-        if (!newToken) return;
-        const wrapped = await wrapToken(knock.pubkey, newToken);
+        const newSubJwt = approveBody.subscriber_jwt;
+        if (!newToken || !newSubJwt) return;
+        // Wrap BOTH the participant token AND the new subscriber JWT into a
+        // single JSON blob — the knocker needs the JWT to subscribe to
+        // Mercure once they upgrade out of the lobby.
+        const bundle = JSON.stringify({ token: newToken, subscriber_jwt: newSubJwt });
+        const wrapped = await wrapToken(knock.pubkey, bundle);
         await fetch(`/api/rooms/${roomHash}/token`, {
           method: 'POST',
           headers: {

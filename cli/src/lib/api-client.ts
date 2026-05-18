@@ -2,6 +2,7 @@ export type CreateRoomResponse = {
   status: 'created' | 'exists';
   has_participants: boolean;
   participant_token?: string;
+  subscriber_jwt?: string;
 };
 
 export type MessageResponse = {
@@ -15,6 +16,12 @@ export type PresenceResponse = {
 
 export type ApproveResponse = {
   new_participant_token: string;
+  subscriber_jwt: string;
+};
+
+export type KnockResponse = {
+  status: string;
+  lobby_jwt: string;
 };
 
 const jsonPost = async (url: string, body: Record<string, unknown>, token?: string): Promise<Response> => {
@@ -53,14 +60,14 @@ export const sendKnock = async (
   msgId: string,
   encryptedPayload: string,
   knockPubkey: string
-): Promise<MessageResponse> => {
+): Promise<KnockResponse> => {
   const res = await jsonPost(`${server}/api/rooms/${roomHash}/knock`, {
     msg_id: msgId,
     encrypted_payload: encryptedPayload,
     knock_pubkey: knockPubkey,
   });
   if (!res.ok) throw new Error(`sendKnock failed: ${res.status}`);
-  return res.json() as Promise<MessageResponse>;
+  return res.json() as Promise<KnockResponse>;
 };
 
 export const approveKnock = async (server: string, roomHash: string, token: string): Promise<ApproveResponse> => {

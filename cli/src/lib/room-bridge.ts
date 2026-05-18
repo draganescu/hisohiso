@@ -23,15 +23,21 @@ export const createRoomAndJoin = async (
   server: string,
   password = '',
   opts?: { catchUp?: boolean }
-): Promise<{ roomSecret: string; roomHash: string; participantToken: string; messageKey: CryptoKey }> => {
+): Promise<{ roomSecret: string; roomHash: string; participantToken: string; subscriberJwt: string; messageKey: CryptoKey }> => {
   const roomSecret = generateRoomSecret();
   const roomHash = await deriveRoomHash(roomSecret);
   const result = await api.createRoom(server, roomHash, opts);
-  if (!result.participant_token) {
-    throw new Error('Failed to create room: no token returned');
+  if (!result.participant_token || !result.subscriber_jwt) {
+    throw new Error('Failed to create room: no token or subscriber_jwt returned');
   }
   const messageKey = await deriveMessageKey(roomSecret, password);
-  return { roomSecret, roomHash, participantToken: result.participant_token, messageKey };
+  return {
+    roomSecret,
+    roomHash,
+    participantToken: result.participant_token,
+    subscriberJwt: result.subscriber_jwt,
+    messageKey,
+  };
 };
 
 export type SendOptions = {
@@ -66,6 +72,7 @@ export const bridgeAgentToRoom = async (
   server: string,
   roomHash: string,
   token: string,
+  subscriberJwt: string,
   messageKey: CryptoKey,
   options?: {
     onParsedLine?: (parsed: ParsedLine) => void;
@@ -134,7 +141,7 @@ export const bridgeAgentToRoom = async (
   });
 
   // Room messages -> agent stdin
-  const sse = subscribeToRoom(server, roomHash, {
+  const sse = subscribeToRoom(server, roomHash, subscriberJwt, {
     onChat: async (event: RoomEvent) => {
       // Filter own messages
       if (event.from === ownTokenHash) return;

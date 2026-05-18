@@ -13,6 +13,14 @@ if (!is_string($path) || strpos($path, '/api/') !== 0) {
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+// Long enough that an active session doesn't need to refresh mid-use; short
+// enough that a leaked JWT has a bounded lifetime even if revocation fails.
+const PARTICIPANT_JWT_TTL = 7 * 24 * 3600;
+// Lobby JWT only needs to live long enough for the approver to wrap and post
+// the participant token. 10 minutes is generous; abandoned knocks expire
+// silently and are harmless (no events ever publish for them).
+const LOBBY_JWT_TTL = 10 * 60;
+
 function touch_room(string $room_hash): void
 {
     $pdo = db();
@@ -117,7 +125,7 @@ if ($path === '/api/stats' && $method === 'GET') {
 if ($path === '/api/rooms' && $method === 'POST') {
     $body = read_json_body();
     $room_hash = $body['room_hash'] ?? null;
-    if (!is_string($room_hash) || $room_hash === '') {
+    if (!valid_room_hash($room_hash)) {
         json_response(['error' => 'invalid_room_hash'], 400);
     }
     $catch_up = !empty($body['catch_up']) ? 1 : 0;
@@ -136,10 +144,12 @@ if ($path === '/api/rooms' && $method === 'POST') {
         ]);
         $token = create_participant($room_hash);
         touch_presence($room_hash, $token);
+        $sub_jwt = jwt_encode_subscriber(['room:' . $room_hash], PARTICIPANT_JWT_TTL);
         json_response([
             'status' => 'created',
             'has_participants' => true,
             'participant_token' => $token,
+            'subscriber_jwt' => $sub_jwt,
             'catch_up_enabled' => (bool) $catch_up,
         ], 201);
     }
@@ -183,7 +193,10 @@ if (preg_match('#^/api/rooms/([^/]+)/knock$#', $path, $matches) && $method === '
         'knock_pubkey' => $body['knock_pubkey'],
     ]);
     touch_room($room_hash);
-    json_response(['status' => 'ok']);
+    // Lobby JWT lets the unauthenticated knocker subscribe to the room topic
+    // just long enough to receive the wrapped-token event from an approver.
+    $lobby_jwt = jwt_encode_subscriber(['room:' . $room_hash], LOBBY_JWT_TTL);
+    json_response(['status' => 'ok', 'lobby_jwt' => $lobby_jwt]);
 }
 
 if (preg_match('#^/api/rooms/([^/]+)/approve$#', $path, $matches) && $method === 'POST') {
@@ -195,11 +208,30 @@ if (preg_match('#^/api/rooms/([^/]+)/approve$#', $path, $matches) && $method ===
     touch_presence($room_hash, $approver);
     $new_token = create_participant($room_hash);
     // Token is NOT included in the published event body — the approver is
-    // expected to wrap it to the knocker's ephemeral pubkey and post it via
-    // /token. The approve event is kept as a tombstone for UI/state.
+    // expected to wrap it (together with the subscriber_jwt) to the knocker's
+    // ephemeral pubkey and post it via /token. The approve event is kept as
+    // a tombstone for UI/state.
     publish_event($room_hash, 'approve', [], sha256_hex($approver));
     touch_room($room_hash);
-    json_response(['new_participant_token' => $new_token]);
+    $sub_jwt = jwt_encode_subscriber(['room:' . $room_hash], PARTICIPANT_JWT_TTL);
+    json_response([
+        'new_participant_token' => $new_token,
+        'subscriber_jwt' => $sub_jwt,
+    ]);
+}
+
+if (preg_match('#^/api/rooms/([^/]+)/sub-token$#', $path, $matches) && $method === 'POST') {
+    // Refresh a subscriber JWT for a participant whose previous one has
+    // expired (or whose local copy was lost). Gated by the participant token;
+    // does not mint a new participant, just a fresh JWT for the existing one.
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    $participant = require_participant_token($room_hash);
+    touch_presence($room_hash, $participant);
+    $sub_jwt = jwt_encode_subscriber(['room:' . $room_hash], PARTICIPANT_JWT_TTL);
+    json_response(['subscriber_jwt' => $sub_jwt]);
 }
 
 if (preg_match('#^/api/rooms/([^/]+)/token$#', $path, $matches) && $method === 'POST') {

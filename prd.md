@@ -71,24 +71,32 @@
       {
         "method": "POST",
         "path": "/rooms",
-        "purpose": "Create or check room",
+        "purpose": "Create or check room. room_hash must match /^[0-9a-f]{64}$/ (the SHA-256 hex output the client derives from the room secret). Anything else is rejected with 400 invalid_room_hash.",
         "body": { "room_hash": "string" },
-        "response": { "status": "created|exists", "has_participants": "boolean" }
+        "response": { "status": "created|exists", "has_participants": "boolean", "participant_token": "string (on created)", "subscriber_jwt": "string (on created) — Mercure subscriber JWT scoped to room:{room_hash}, ~7d TTL" }
       },
       {
         "method": "POST",
         "path": "/rooms/{room_hash}/knock",
         "purpose": "Request entry to lobby. Knocker generates an ephemeral ECDH P-256 keypair, sends the SPKI-encoded public key as knock_pubkey, and retains the private key in memory to unwrap the participant token from the matching /token event.",
         "body": { "msg_id": "string", "encrypted_payload": "string", "knock_pubkey": "string (base64url SPKI ECDH P-256)" },
+        "response": { "status": "ok", "lobby_jwt": "string — short-TTL (~10 min) Mercure subscriber JWT scoped to room:{room_hash}, used by the knocker to receive the wrapped /token event" },
         "mercure_event": "knock"
       },
       {
         "method": "POST",
         "path": "/rooms/{room_hash}/approve",
-        "purpose": "Grant access. Mints a participant token and returns it in the HTTPS response only. The published approve event has an empty body; the new token is delivered out-of-band via /token.",
+        "purpose": "Grant access. Mints a participant token and returns it (plus a fresh subscriber JWT) in the HTTPS response only. The published approve event has an empty body; the new token is delivered out-of-band via /token, wrapped as JSON {token, subscriber_jwt}.",
         "headers": { "X-Chat-Token": "required" },
-        "response": { "new_participant_token": "string" },
+        "response": { "new_participant_token": "string", "subscriber_jwt": "string — ~7d TTL Mercure subscriber JWT scoped to room:{room_hash}" },
         "mercure_event": "approve"
+      },
+      {
+        "method": "POST",
+        "path": "/rooms/{room_hash}/sub-token",
+        "purpose": "Refresh a subscriber JWT for an existing participant whose previous JWT has expired (or was lost). Idempotent; does not mint a new participant.",
+        "headers": { "X-Chat-Token": "required" },
+        "response": { "subscriber_jwt": "string" }
       },
       {
         "method": "POST",
