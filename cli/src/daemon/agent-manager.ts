@@ -266,10 +266,18 @@ export class AgentManager {
             ? session.profile.buildResumeArgs(session.sessionId!)
             : [...session.profile.args];
 
-          let messageToSend = text;
+          // Wrap inbound chat in an explicit untrusted-content envelope. The room model is
+          // flat — we can't reliably tell the operator apart from other peers by token hash
+          // alone, so we label everything as peer-authored. The agent's system prompt
+          // instructs it to treat the envelope body as data, not instructions, which is the
+          // defense against "respond with this exact JSON link-preview block" injection.
+          const peerHandle = event.from || 'unknown';
+          const wrappedText = `<untrusted-peer-message from="${peerHandle.replace(/"/g, '')}">\n${text}\n</untrusted-peer-message>`;
+
+          let messageToSend = wrappedText;
           if (session.profile.appendSystemPrompt) {
             if (session.profile.systemPromptMode === 'prepend-message-once') {
-              if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${text}`;
+              if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${wrappedText}`;
             } else {
               argv.push('--append-system-prompt', session.profile.appendSystemPrompt);
             }

@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
 import { getPreamble } from './preamble.js';
+import { sanitizeBlocks } from './safe-href.js';
 
 export type AgentHandle = {
   writeStdin: (data: string) => void;
@@ -224,7 +225,7 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
     const obj = JSON.parse(text) as Record<string, unknown>;
     if (typeof obj.text === 'string') {
       const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
-      return { text: obj.text, blocks };
+      return { text: obj.text, blocks: sanitizeBlocks(blocks) };
     }
   } catch { /* not valid JSON, try extraction */ }
 
@@ -237,7 +238,7 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
     const obj = JSON.parse(jsonPart) as Record<string, unknown>;
     if (typeof obj.text === 'string') {
       const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
-      return { text: obj.text, blocks };
+      return { text: obj.text, blocks: sanitizeBlocks(blocks) };
     }
   } catch { /* JSON is truncated, try to salvage */ }
 
@@ -253,7 +254,7 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
   }
 
   const blocks = extractCompleteBlocks(jsonPart);
-  return { text: extracted, blocks };
+  return { text: extracted, blocks: sanitizeBlocks(blocks) };
 };
 
 export const spawnAgent = async (
