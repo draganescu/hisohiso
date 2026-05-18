@@ -27,6 +27,21 @@ function mercure_hub_url(): string
     return $scheme . '://' . $host . '/.well-known/mercure';
 }
 
+// Mint a subscriber JWT scoped to specific topics. TTL bounded so a leaked
+// JWT only buys access until expiry. Disband-time revocation works through
+// the absence of further events on the topic (room rows go away) rather
+// than per-JWT invalidation, which Mercure does not natively support.
+function jwt_encode_subscriber(array $topics, int $ttl_seconds): string
+{
+    $key = getenv('MERCURE_SUBSCRIBER_JWT_KEY') ?: '!ChangeMe!';
+    $now = time();
+    return jwt_encode([
+        'mercure' => ['subscribe' => $topics],
+        'iat' => $now,
+        'exp' => $now + $ttl_seconds,
+    ], $key);
+}
+
 function publish_event(string $room_hash, string $type, array $body = [], ?string $from = null): void
 {
     $topic = 'room:' . $room_hash;
@@ -43,10 +58,14 @@ function publish_event(string $room_hash, string $type, array $body = [], ?strin
     $jwtKey = getenv('MERCURE_PUBLISHER_JWT_KEY') ?: '!ChangeMe!';
     $jwt = jwt_encode(['mercure' => ['publish' => [$topic]]], $jwtKey);
 
+    // private=on gates this update to subscribers whose JWT lists $topic in
+    // its subscribe claim. Combined with `anonymous` being OFF in the hub,
+    // this means an unauthenticated client cannot read it.
     $postFields = http_build_query([
         'topic' => $topic,
         'data' => json_encode($payload, JSON_UNESCAPED_SLASHES),
         'type' => $type,
+        'private' => 'on',
     ]);
 
     $ch = curl_init(mercure_hub_url());

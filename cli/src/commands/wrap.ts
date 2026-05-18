@@ -50,7 +50,7 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
   // Wait for phone to knock and auto-approve
   await new Promise<void>((resolve, reject) => {
-    const sse = subscribeToRoom(server, room.roomHash, {
+    const sse = subscribeToRoom(server, room.roomHash, room.subscriberJwt, {
       onKnock: async (knockEvent: RoomEvent) => {
         const knockPubkey = knockEvent.body?.knock_pubkey;
         const knockMsgId = knockEvent.body?.msg_id;
@@ -60,7 +60,14 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
         }
         try {
           const approveRes = await api.approveKnock(server, room.roomHash, room.participantToken);
-          const wrapped = await wrapToken(knockPubkey, approveRes.new_participant_token);
+          // Wrap BOTH the participant token AND the new subscriber JWT — the
+          // phone needs the JWT to subscribe to Mercure now that the hub
+          // rejects anonymous clients.
+          const bundle = JSON.stringify({
+            token: approveRes.new_participant_token,
+            subscriber_jwt: approveRes.subscriber_jwt,
+          });
+          const wrapped = await wrapToken(knockPubkey, bundle);
           await api.sendWrappedToken(server, room.roomHash, room.participantToken, knockMsgId, wrapped);
           console.log('Phone connected.\n');
           sse.close();
@@ -88,7 +95,7 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
   console.log(`Listening${modeLabel}. Messages from phone → ${profile.command} ${profile.args.join(' ')} <message>\n`);
 
   // Message loop: phone message → run agent → send output
-  const sse = subscribeToRoom(server, room.roomHash, {
+  const sse = subscribeToRoom(server, room.roomHash, room.subscriberJwt, {
     onChat: async (event: RoomEvent) => {
       if (event.from === ownTokenHash) return;
 

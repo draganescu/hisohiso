@@ -24,10 +24,15 @@ export type SSESubscription = {
   close: () => void;
 };
 
-export const subscribeToRoom = (server: string, roomHash: string, handlers: SSEHandlers): SSESubscription => {
+export const subscribeToRoom = (server: string, roomHash: string, jwt: string, handlers: SSEHandlers): SSESubscription => {
   const topic = encodeURIComponent(`room:${roomHash}`);
   const url = `${server}/.well-known/mercure?topic=${topic}`;
-  const es = new EventSource(url);
+  const es = new EventSource(url, {
+    fetch: (input, init) => fetch(input, {
+      ...init,
+      headers: { ...(init?.headers || {}), Authorization: `Bearer ${jwt}` },
+    }),
+  });
 
   const dispatch = (event: MessageEvent) => {
     try {

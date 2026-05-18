@@ -21,6 +21,10 @@ export type DaemonState = {
   controlRoomSecret: string;
   controlRoomHash: string;
   participantToken: string;
+  // Subscriber JWT used to re-attach SSE to the control room after a daemon
+  // restart. Expires per server policy (PARTICIPANT_JWT_TTL); on expiry the
+  // daemon needs to re-pair.
+  subscriberJwt: string;
   controlRoomPassword: string;
 };
 
@@ -38,6 +42,10 @@ export type ActiveRoom = {
   // Server-side identity for this device in the room — needed to re-attach SSE,
   // resume presence, and approve future knocks after a daemon restart.
   participantToken: string;
+  // Mercure subscriber JWT scoped to room:{roomHash}. Required to re-subscribe
+  // after restart; if it has expired (or absent on a daemon upgraded across
+  // protocol versions) the room is dropped during restore().
+  subscriberJwt: string;
   // LLM-provider session handle (Claude session_id / Codex thread_id). Persisted so
   // a restarted daemon can continue the conversation via --resume / exec resume.
   // null until the first turn completes for session-mode agents; always null for oneshot.

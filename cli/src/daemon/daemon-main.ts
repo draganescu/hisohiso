@@ -136,7 +136,7 @@ export const runDaemon = async (): Promise<void> => {
     const iterKey = messageKey;
 
     await new Promise<void>((resolve) => {
-      const sse = subscribeToRoom(server, iterState.controlRoomHash, {
+      const sse = subscribeToRoom(server, iterState.controlRoomHash, iterState.subscriberJwt, {
         onChat: async (event: RoomEvent) => {
           if (event.from === ownTokenHash) return;
 
@@ -270,11 +270,12 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
 
   console.log('Creating control room...');
   const result = await api.createRoom(server, controlRoomHash, { catchUp: true });
-  if (!result.participant_token) {
-    console.error('Failed to create control room.');
+  if (!result.participant_token || !result.subscriber_jwt) {
+    console.error('Failed to create control room (no token or subscriber_jwt).');
     process.exit(1);
   }
   const participantToken = result.participant_token;
+  const subscriberJwt = result.subscriber_jwt;
   const messageKey = await deriveMessageKey(controlRoomSecret, password);
 
   // Start presence so room shows as active
@@ -301,7 +302,7 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const sse = subscribeToRoom(server, controlRoomHash, {
+      const sse = subscribeToRoom(server, controlRoomHash, subscriberJwt, {
         onKnock: async (knockEvent: RoomEvent) => {
           console.log('Phone is joining... approving.');
           const knockPubkey = knockEvent.body?.knock_pubkey;
@@ -312,7 +313,11 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
           }
           try {
             const approveRes = await api.approveKnock(server, controlRoomHash, participantToken);
-            const wrapped = await wrapToken(knockPubkey, approveRes.new_participant_token);
+            const bundle = JSON.stringify({
+              token: approveRes.new_participant_token,
+              subscriber_jwt: approveRes.subscriber_jwt,
+            });
+            const wrapped = await wrapToken(knockPubkey, bundle);
             await api.sendWrappedToken(server, controlRoomHash, participantToken, knockMsgId, wrapped);
             console.log('Phone connected to control room.');
             sse.close();
@@ -336,6 +341,7 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
     controlRoomSecret,
     controlRoomHash,
     participantToken,
+    subscriberJwt,
     controlRoomPassword: password,
   };
   await saveDaemonState(state);

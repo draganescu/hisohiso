@@ -57,3 +57,11 @@ function get_header_value(string $name): ?string
     $value = $_SERVER[$key] ?? null;
     return is_string($value) && $value !== '' ? $value : null;
 }
+
+// room_hash is SHA-256 hex of "hisohiso.room_hash" || room_secret on the client.
+// Anything else is either a client bug, a typo, or someone squatting custom names —
+// reject before the rooms table accepts it as a primary key.
+function valid_room_hash(mixed $value): bool
+{
+    return is_string($value) && preg_match('/^[0-9a-f]{64}$/', $value) === 1;
+}

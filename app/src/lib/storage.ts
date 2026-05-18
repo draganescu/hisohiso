@@ -12,6 +12,20 @@ export const clearToken = (roomHash: string): void => {
   localStorage.removeItem(tokenKey(roomHash));
 };
 
+const subJwtKey = (roomHash: string): string => `hisohiso.subjwt.${roomHash}`;
+
+export const getSubscriberJwt = (roomHash: string): string | null => {
+  return localStorage.getItem(subJwtKey(roomHash));
+};
+
+export const setSubscriberJwt = (roomHash: string, jwt: string): void => {
+  localStorage.setItem(subJwtKey(roomHash), jwt);
+};
+
+export const clearSubscriberJwt = (roomHash: string): void => {
+  localStorage.removeItem(subJwtKey(roomHash));
+};
+
 const handleKey = (roomHash: string): string => `hisohiso.handle.${roomHash}`;
 
 export const getHandle = (roomHash: string): string | null => {

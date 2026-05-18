@@ -5,11 +5,14 @@
 }
 
 {$SERVER_NAME} {
-	# Mercure Hub
+	# Mercure Hub — anonymous subscribers are NOT allowed. Every subscriber
+	# must present a JWT (Authorization: Bearer or mercureAuthorization
+	# cookie) whose mercure.subscribe claim lists the topics they want.
+	# Events are published with private=on, so the hub gates delivery per
+	# topic against each subscriber's claim.
 	mercure {
 		publisher_jwt {$MERCURE_PUBLISHER_JWT_KEY}
 		subscriber_jwt {$MERCURE_SUBSCRIBER_JWT_KEY}
-		anonymous
 	}
 
 	# PHP Backend API

@@ -82,6 +82,13 @@ docker compose -f compose.yaml -f compose.prod.yaml up -d --build
   pubkey (HKDF-SHA256 → AES-256-GCM) and publishes the wrapped blob on a
   dedicated `token` event. Only the knocker can derive the shared secret and
   unwrap. A passive subscriber to the room topic learns nothing usable.
+- The Mercure hub rejects anonymous subscribers. Every SSE connection presents
+  a per-room subscriber JWT (`Authorization: Bearer …`) whose `mercure.subscribe`
+  claim covers exactly one room. Events are published with `private=on`, so the
+  hub gates each delivery against the subscriber's claim. A token leaked from
+  one room cannot read another. Knockers receive a short-lived lobby JWT scoped
+  to the room they knocked on, valid only long enough to receive their wrapped
+  participant token.
 - If a room is compromised, disband and create a new one.
 - Clearing browser storage removes local message history.
 
