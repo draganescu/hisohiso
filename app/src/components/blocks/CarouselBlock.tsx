@@ -29,7 +29,7 @@ export const CarouselBlockView = ({ block }: Props) => {
         {block.cards.map((card, i) => (
           <div
             key={i}
-            className="w-[75vw] max-w-[280px] shrink-0 snap-start rounded-2xl border border-[#d5c8b2] bg-[#fdf9f2] p-4"
+            className="w-[75vw] max-w-[280px] shrink-0 snap-start last:snap-end rounded-2xl border border-[#d5c8b2] bg-[#fdf9f2] p-4"
           >
             <p className="text-sm font-semibold text-[#171613]">{card.title}</p>
             {card.subtitle && <p className="mt-1 font-mono text-xs text-[#8d816c]">{card.subtitle}</p>}
