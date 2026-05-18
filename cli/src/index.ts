@@ -12,7 +12,7 @@ const program = new Command();
 program
   .name('hisohiso')
   .description('Control terminal agents from your phone over E2E encrypted channels')
-  .version('0.4.0');
+  .version('0.4.1');
 
 program
   .command('wrap')
