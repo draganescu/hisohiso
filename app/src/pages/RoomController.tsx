@@ -10,8 +10,8 @@ import {
   base64UrlEncode,
   sha256Hex,
   generateEphemeralKeyPair,
-  wrapToken,
-  unwrapToken,
+  beginApprove,
+  unwrapAndDeriveClaim,
   type EncryptedPayload
 } from '../lib/crypto';
 import {
@@ -178,6 +178,12 @@ const RoomController = () => {
   // knock. Set right before /knock fires; consulted when the matching `token`
   // event arrives. Cleared once we upgrade to PARTICIPANT.
   const knockEphemeralRef = useRef<{ privateKey: CryptoKey; msgId: string } | null>(null);
+  // Claim tag derived alongside the unwrap. Sent as X-Chat-Claim-Tag on the
+  // first /presence to prove this client is the same one that knocked — a
+  // sniffer who somehow got the plaintext token cannot forge the tag without
+  // the ephemeral private key. Cleared on first successful /presence; never
+  // persisted (one-shot, in-memory only).
+  const claimTagRef = useRef<string | null>(null);
 
   const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
   const showEmptyState = messages.length === 0 && !hasCompanion && roomState === 'PARTICIPANT';
@@ -607,10 +613,20 @@ const RoomController = () => {
             return;
           }
           try {
-            const blob = await unwrapToken(pending.privateKey, approverPubkey, nonce, ct);
-            const bundle = JSON.parse(blob) as { token?: string; subscriber_jwt?: string };
+            const { plaintext, claimTag } = await unwrapAndDeriveClaim(
+              pending.privateKey,
+              approverPubkey,
+              nonce,
+              ct,
+              pending.msgId
+            );
+            const bundle = JSON.parse(plaintext) as { token?: string; subscriber_jwt?: string };
             if (!bundle.token || !bundle.subscriber_jwt) return;
             knockEphemeralRef.current = null;
+            // Stash the claim tag so the next /presence can prove this is the
+            // session that decrypted the wrap. Cleared inside the presence ping
+            // once the server confirms 200.
+            claimTagRef.current = claimTag;
             setToken(roomHash, bundle.token);
             setTokenState(bundle.token);
             setTokenHash(await sha256Hex(bundle.token));
@@ -703,12 +719,20 @@ const RoomController = () => {
       if (!active) {
         return;
       }
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Chat-Token': token
+      };
+      // First /presence for a knocker-minted token carries the claim tag. Room
+      // creators' tokens aren't pending so this is harmless either way; the
+      // ref is only set in the unwrap path.
+      const claimTag = claimTagRef.current;
+      if (claimTag) {
+        headers['X-Chat-Claim-Tag'] = claimTag;
+      }
       const response = await fetch(`/api/rooms/${roomHash}/presence`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Chat-Token': token
-        }
+        headers
       });
 
       if (!active) {
@@ -719,6 +743,23 @@ const RoomController = () => {
         active = false;
         await wipeLocalRoom(roomHash);
         setRoomState('DESTROYED');
+        return;
+      }
+
+      if (claimTag) {
+        if (response.ok) {
+          // Claim succeeded — token is now active, the tag is single-use.
+          claimTagRef.current = null;
+        } else if (response.status === 403) {
+          // Either invalid_claim (tag mismatch, server burned the row) or
+          // token_unclaimed (shouldn't happen here — we sent the tag). Either
+          // way the session is unrecoverable; drop back to LOBBY so the user
+          // can re-knock.
+          active = false;
+          claimTagRef.current = null;
+          await wipeLocalRoom(roomHash);
+          setRoomState('DESTROYED');
+        }
       }
     };
 
@@ -787,12 +828,17 @@ const RoomController = () => {
         return;
       }
       try {
+        // beginApprove pre-derives the wrap material AND the claim tag from one
+        // ephemeral keypair. We commit sha256(tag) on /approve so the knocker's
+        // first /presence can prove it's the same client that decrypted the wrap.
+        const binding = await beginApprove(knock.pubkey, knock.msgId);
         const approveRes = await fetch(`/api/rooms/${roomHash}/approve`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-Chat-Token': token
-          }
+          },
+          body: JSON.stringify({ claim_tag_hash: binding.claimTagHash })
         });
         if (!approveRes.ok) return;
         const approveBody = (await approveRes.json()) as {
@@ -806,7 +852,7 @@ const RoomController = () => {
         // single JSON blob — the knocker needs the JWT to subscribe to
         // Mercure once they upgrade out of the lobby.
         const bundle = JSON.stringify({ token: newToken, subscriber_jwt: newSubJwt });
-        const wrapped = await wrapToken(knock.pubkey, bundle);
+        const wrapped = await binding.wrap(bundle);
         await fetch(`/api/rooms/${roomHash}/token`, {
           method: 'POST',
           headers: {

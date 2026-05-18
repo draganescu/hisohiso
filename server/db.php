@@ -45,10 +45,26 @@ function db(): PDO
         token_hash TEXT PRIMARY KEY,
         room_hash TEXT NOT NULL,
         joined_at INTEGER NOT NULL,
+        pending INTEGER NOT NULL DEFAULT 0,
+        claim_tag_hash TEXT,
         FOREIGN KEY(room_hash) REFERENCES rooms(room_hash) ON DELETE CASCADE
     );');
 
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_participants_room ON participants(room_hash);');
+
+    // Migrate existing participants tables that pre-date the claim binding columns.
+    // Existing rows default to pending=0 (already active), which is correct —
+    // they were minted before this protection existed.
+    $existing_cols = [];
+    foreach ($pdo->query('PRAGMA table_info(participants)') as $col) {
+        $existing_cols[(string) ($col['name'] ?? '')] = true;
+    }
+    if (!isset($existing_cols['pending'])) {
+        $pdo->exec('ALTER TABLE participants ADD COLUMN pending INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!isset($existing_cols['claim_tag_hash'])) {
+        $pdo->exec('ALTER TABLE participants ADD COLUMN claim_tag_hash TEXT');
+    }
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS presence (
         token_hash TEXT PRIMARY KEY,

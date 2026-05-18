@@ -3,7 +3,7 @@ import { createRoomAndJoin, encryptAndSend } from '../lib/room-bridge.js';
 import { startPresence } from '../lib/presence.js';
 import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
-import { sha256Hex, decryptText, wrapToken, type EncryptedPayload } from '../lib/crypto.js';
+import { sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import qrTerminal from 'qrcode-terminal';
@@ -59,7 +59,11 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
           return;
         }
         try {
-          const approveRes = await api.approveKnock(server, room.roomHash, room.participantToken);
+          // beginApprove derives the wrap material + claim tag from one ephemeral
+          // keypair. claimTagHash is committed via /approve; the phone reveals the
+          // matching tag on its first /presence to claim the token.
+          const binding = await beginApprove(knockPubkey, knockMsgId);
+          const approveRes = await api.approveKnock(server, room.roomHash, room.participantToken, binding.claimTagHash);
           // Wrap BOTH the participant token AND the new subscriber JWT — the
           // phone needs the JWT to subscribe to Mercure now that the hub
           // rejects anonymous clients.
@@ -67,7 +71,7 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
             token: approveRes.new_participant_token,
             subscriber_jwt: approveRes.subscriber_jwt,
           });
-          const wrapped = await wrapToken(knockPubkey, bundle);
+          const wrapped = await binding.wrap(bundle);
           await api.sendWrappedToken(server, room.roomHash, room.participantToken, knockMsgId, wrapped);
           console.log('Phone connected.\n');
           sse.close();

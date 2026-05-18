@@ -70,8 +70,13 @@ export const sendKnock = async (
   return res.json() as Promise<KnockResponse>;
 };
 
-export const approveKnock = async (server: string, roomHash: string, token: string): Promise<ApproveResponse> => {
-  const res = await jsonPost(`${server}/api/rooms/${roomHash}/approve`, {}, token);
+export const approveKnock = async (
+  server: string,
+  roomHash: string,
+  token: string,
+  claimTagHash: string
+): Promise<ApproveResponse> => {
+  const res = await jsonPost(`${server}/api/rooms/${roomHash}/approve`, { claim_tag_hash: claimTagHash }, token);
   if (!res.ok) throw new Error(`approveKnock failed: ${res.status}`);
   return res.json() as Promise<ApproveResponse>;
 };
@@ -108,8 +113,27 @@ export const sendMessage = async (
   return res.json() as Promise<MessageResponse>;
 };
 
-export const sendPresence = async (server: string, roomHash: string, token: string): Promise<PresenceResponse> => {
-  const res = await jsonPost(`${server}/api/rooms/${roomHash}/presence`, {}, token);
+export const sendPresence = async (
+  server: string,
+  roomHash: string,
+  token: string,
+  claimTag?: string
+): Promise<PresenceResponse> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Chat-Token': token,
+  };
+  // First /presence for a knocker-minted token must carry the claim tag the
+  // approver committed to via /approve. Room creators (token from /api/rooms)
+  // never need this; their participants row is active from the start.
+  if (claimTag) {
+    headers['X-Chat-Claim-Tag'] = claimTag;
+  }
+  const res = await fetch(`${server}/api/rooms/${roomHash}/presence`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
   if (!res.ok) throw new Error(`sendPresence failed: ${res.status}`);
   return res.json() as Promise<PresenceResponse>;
 };
