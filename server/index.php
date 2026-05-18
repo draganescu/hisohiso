@@ -46,7 +46,17 @@ function participant_count(string $room_hash): int
     return (int)$stmt->fetchColumn();
 }
 
+// Active = the token has been claimed via /presence (or was minted by /api/rooms,
+// which has no knocker to bind to). Pending tokens — issued by /approve but not
+// yet claimed — are accepted ONLY by the claim path in /presence. Every other
+// endpoint must reject them; otherwise a sniffer who racing the legit joiner
+// could /message before the joiner ever sees their token.
 function require_participant_token(string $room_hash): string
+{
+    return require_participant_token_internal($room_hash, false);
+}
+
+function require_participant_token_internal(string $room_hash, bool $allow_pending): string
 {
     $token = get_header_value('X-Chat-Token');
     if ($token === null) {
@@ -54,11 +64,14 @@ function require_participant_token(string $room_hash): string
     }
     $token_hash = sha256_hex($token);
     $pdo = db();
-    $stmt = $pdo->prepare('SELECT token_hash FROM participants WHERE token_hash = :token_hash AND room_hash = :room_hash');
+    $stmt = $pdo->prepare('SELECT pending FROM participants WHERE token_hash = :token_hash AND room_hash = :room_hash');
     $stmt->execute([':token_hash' => $token_hash, ':room_hash' => $room_hash]);
-    $found = $stmt->fetchColumn();
-    if (!$found) {
+    $row = $stmt->fetch();
+    if (!$row) {
         json_response(['error' => 'invalid_token'], 403);
+    }
+    if ((int) $row['pending'] === 1 && !$allow_pending) {
+        json_response(['error' => 'token_unclaimed'], 403);
     }
     return $token;
 }
@@ -68,13 +81,40 @@ function create_participant(string $room_hash): string
     $token = random_token(32);
     $token_hash = sha256_hex($token);
     $pdo = db();
-    $stmt = $pdo->prepare('INSERT INTO participants (token_hash, room_hash, joined_at) VALUES (:token_hash, :room_hash, :joined_at)');
+    $stmt = $pdo->prepare('INSERT INTO participants (token_hash, room_hash, joined_at, pending, claim_tag_hash)
+        VALUES (:token_hash, :room_hash, :joined_at, 0, NULL)');
     $stmt->execute([
         ':token_hash' => $token_hash,
         ':room_hash' => $room_hash,
         ':joined_at' => time(),
     ]);
     return $token;
+}
+
+// Tokens minted via /approve start pending=1 and carry the SHA-256 of the
+// claim_tag the approver derived from the ECDH shared secret with the knocker.
+// First /presence must reveal the matching claim_tag or the row is deleted.
+function create_pending_participant(string $room_hash, string $claim_tag_hash): string
+{
+    $token = random_token(32);
+    $token_hash = sha256_hex($token);
+    $pdo = db();
+    $stmt = $pdo->prepare('INSERT INTO participants (token_hash, room_hash, joined_at, pending, claim_tag_hash)
+        VALUES (:token_hash, :room_hash, :joined_at, 1, :claim_tag_hash)');
+    $stmt->execute([
+        ':token_hash' => $token_hash,
+        ':room_hash' => $room_hash,
+        ':joined_at' => time(),
+        ':claim_tag_hash' => $claim_tag_hash,
+    ]);
+    return $token;
+}
+
+function delete_participant(string $room_hash, string $token_hash): void
+{
+    $pdo = db();
+    $stmt = $pdo->prepare('DELETE FROM participants WHERE token_hash = :token_hash AND room_hash = :room_hash');
+    $stmt->execute([':token_hash' => $token_hash, ':room_hash' => $room_hash]);
 }
 
 function room_catch_up_enabled(string $room_hash): bool
@@ -205,8 +245,17 @@ if (preg_match('#^/api/rooms/([^/]+)/approve$#', $path, $matches) && $method ===
         json_response(['error' => 'room_not_found'], 404);
     }
     $approver = require_participant_token($room_hash);
+    $body = read_json_body();
+    // claim_tag_hash binds the new token to the knocker's ephemeral keypair: the
+    // approver commits to a hash now, the knocker reveals the matching tag on
+    // first /presence (it can only derive the tag from the ECDH shared secret).
+    // Without this, a sniffer of the plaintext token could race the legit joiner.
+    $claim_tag_hash = $body['claim_tag_hash'] ?? null;
+    if (!is_string($claim_tag_hash) || preg_match('/^[0-9a-f]{64}$/', $claim_tag_hash) !== 1) {
+        json_response(['error' => 'invalid_claim_tag_hash'], 400);
+    }
     touch_presence($room_hash, $approver);
-    $new_token = create_participant($room_hash);
+    $new_token = create_pending_participant($room_hash, $claim_tag_hash);
     // Token is NOT included in the published event body — the approver is
     // expected to wrap it (together with the subscriber_jwt) to the knocker's
     // ephemeral pubkey and post it via /token. The approve event is kept as
@@ -344,7 +393,33 @@ if (preg_match('#^/api/rooms/([^/]+)/presence$#', $path, $matches) && $method ==
     if (!room_exists($room_hash)) {
         json_response(['error' => 'room_not_found'], 404);
     }
-    $token = require_participant_token($room_hash);
+    // /presence is the claim path: pending tokens are accepted here ONLY long
+    // enough to verify the X-Chat-Claim-Tag header. Any wrong or missing tag
+    // deletes the participant — the legitimate joiner can re-knock, but the
+    // token a sniffer raced with is burned. Active tokens skip the claim check.
+    $token = require_participant_token_internal($room_hash, true);
+    $token_hash = sha256_hex($token);
+    $pdo = db();
+    $stmt = $pdo->prepare('SELECT pending, claim_tag_hash FROM participants WHERE token_hash = :token_hash AND room_hash = :room_hash');
+    $stmt->execute([':token_hash' => $token_hash, ':room_hash' => $room_hash]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        json_response(['error' => 'invalid_token'], 403);
+    }
+    if ((int) $row['pending'] === 1) {
+        $claim_tag = get_header_value('X-Chat-Claim-Tag');
+        $expected_hash = is_string($row['claim_tag_hash']) ? $row['claim_tag_hash'] : '';
+        if ($claim_tag === null || $expected_hash === '' || !hash_equals($expected_hash, sha256_hex($claim_tag))) {
+            // Burn the token on any failed claim — protects against race-and-invalidate.
+            delete_participant($room_hash, $token_hash);
+            json_response(['error' => 'invalid_claim'], 403);
+        }
+        // Atomic activation: clear pending only if it's still 1 (defensive against
+        // a parallel /presence racing the same legitimate joiner across tabs).
+        $upd = $pdo->prepare('UPDATE participants SET pending = 0, claim_tag_hash = NULL
+            WHERE token_hash = :token_hash AND room_hash = :room_hash AND pending = 1');
+        $upd->execute([':token_hash' => $token_hash, ':room_hash' => $room_hash]);
+    }
     touch_presence($room_hash, $token);
     $count = participant_count($room_hash);
     json_response(['status' => 'ok', 'active_participants' => $count]);

@@ -12,7 +12,7 @@ import {
   deriveMessageKey,
   sha256Hex,
   decryptText,
-  wrapToken,
+  beginApprove,
   type EncryptedPayload,
 } from '../lib/crypto.js';
 import * as api from '../lib/api-client.js';
@@ -312,12 +312,13 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
             return;
           }
           try {
-            const approveRes = await api.approveKnock(server, controlRoomHash, participantToken);
+            const binding = await beginApprove(knockPubkey, knockMsgId);
+            const approveRes = await api.approveKnock(server, controlRoomHash, participantToken, binding.claimTagHash);
             const bundle = JSON.stringify({
               token: approveRes.new_participant_token,
               subscriber_jwt: approveRes.subscriber_jwt,
             });
-            const wrapped = await wrapToken(knockPubkey, bundle);
+            const wrapped = await binding.wrap(bundle);
             await api.sendWrappedToken(server, controlRoomHash, participantToken, knockMsgId, wrapped);
             console.log('Phone connected to control room.');
             sse.close();

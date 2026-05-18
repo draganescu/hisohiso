@@ -1,5 +1,5 @@
 import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
-import { deriveMessageKey, sha256Hex, decryptText, wrapToken, type EncryptedPayload } from '../lib/crypto.js';
+import { deriveMessageKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import { getAgent, type AgentProfile } from '../lib/agents.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
@@ -235,12 +235,13 @@ export class AgentManager {
           return;
         }
         try {
-          const approveRes = await api.approveKnock(this.server, roomHash, participantToken);
+          const binding = await beginApprove(knockPubkey, knockMsgId);
+          const approveRes = await api.approveKnock(this.server, roomHash, participantToken, binding.claimTagHash);
           const bundle = JSON.stringify({
             token: approveRes.new_participant_token,
             subscriber_jwt: approveRes.subscriber_jwt,
           });
-          const wrapped = await wrapToken(knockPubkey, bundle);
+          const wrapped = await binding.wrap(bundle);
           await api.sendWrappedToken(this.server, roomHash, participantToken, knockMsgId, wrapped);
           console.log(`[${agentName}:${agentId}] Phone joined agent room.`);
         } catch (err) {
