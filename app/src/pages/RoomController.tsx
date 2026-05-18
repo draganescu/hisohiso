@@ -40,6 +40,7 @@ import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import type { Block, BlockResponse } from '../lib/blocks';
 import { BlockRenderer } from '../components/blocks/BlockRenderer';
+import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
 
 type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED';
@@ -195,6 +196,15 @@ const RoomController = () => {
   const visibleMessages = useMemo(() => [...messages].sort((a, b) => b.timestamp - a.timestamp), [messages]);
   const activeMessage = useMemo(() => messages.find((entry) => entry.id === selectedId) ?? null, [messages, selectedId]);
   const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
+
+  const {
+    renderedItems: renderedMessages,
+    hasOlder,
+    hasNewer,
+    topSentinelRef,
+    bottomSentinelRef,
+    jumpToLatest: jumpWindowToLatest,
+  } = useMessageWindow(visibleMessages, listRef);
 
   const wipeLocalRoom = useCallback(async (hash: string) => {
     clearToken(hash);
@@ -1065,12 +1075,14 @@ const RoomController = () => {
   }, [roomState, showComposer, showMenu, showHelp, showQueue, showDisband, showQr, selectedId, openComposer]);
 
   const scrollToLatest = useCallback(() => {
-    const el = listRef.current;
-    if (!el) {
-      return;
-    }
-    el.scrollTop = 0;
-  }, []);
+    // Reset render window to newest BEFORE scrolling so scrollTop=0 lands on the
+    // newest message rather than the visual top of whatever slice was rendered.
+    jumpWindowToLatest();
+    requestAnimationFrame(() => {
+      const el = listRef.current;
+      if (el) el.scrollTop = 0;
+    });
+  }, [jumpWindowToLatest]);
 
   const handleScroll = useCallback(() => {
     const el = listRef.current;
@@ -1279,7 +1291,14 @@ const RoomController = () => {
               )}
 
               <div className="flex flex-col gap-3 lg:gap-4">
-                {visibleMessages.map((msg) => {
+                {hasNewer && (
+                  <div
+                    ref={topSentinelRef}
+                    aria-hidden="true"
+                    className="h-px w-full shrink-0"
+                  />
+                )}
+                {renderedMessages.map((msg) => {
                   const isSystem = msg.type === 'system';
                   const isMine = msg.direction === 'out' && !isSystem;
 
@@ -1363,6 +1382,13 @@ const RoomController = () => {
                     </div>
                   );
                 })}
+                {hasOlder && (
+                  <div
+                    ref={bottomSentinelRef}
+                    aria-hidden="true"
+                    className="h-px w-full shrink-0"
+                  />
+                )}
               </div>
             </section>
           </div>
