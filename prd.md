@@ -78,17 +78,25 @@
       {
         "method": "POST",
         "path": "/rooms/{room_hash}/knock",
-        "purpose": "Request entry to lobby",
-        "body": { "public_key_temp": "string (for negotiation if needed later)" },
-        "merucure_event": "knock"
+        "purpose": "Request entry to lobby. Knocker generates an ephemeral ECDH P-256 keypair, sends the SPKI-encoded public key as knock_pubkey, and retains the private key in memory to unwrap the participant token from the matching /token event.",
+        "body": { "msg_id": "string", "encrypted_payload": "string", "knock_pubkey": "string (base64url SPKI ECDH P-256)" },
+        "mercure_event": "knock"
       },
       {
         "method": "POST",
         "path": "/rooms/{room_hash}/approve",
-        "purpose": "Grant access",
+        "purpose": "Grant access. Mints a participant token and returns it in the HTTPS response only. The published approve event has an empty body; the new token is delivered out-of-band via /token.",
         "headers": { "X-Chat-Token": "required" },
         "response": { "new_participant_token": "string" },
         "mercure_event": "approve"
+      },
+      {
+        "method": "POST",
+        "path": "/rooms/{room_hash}/token",
+        "purpose": "Deliver a freshly-minted participant token to a specific knocker. Approver mints its own ephemeral ECDH P-256 keypair, derives a shared secret with the knocker's knock_pubkey (HKDF-SHA256, info='hisohiso.token_wrap'), AES-256-GCM encrypts the token, and posts the wrapped payload. Server publishes a `token` event carrying knock_msg_id + approver_pubkey + nonce + ct. Only the knocker (holding the matching private key) can derive the shared secret and decrypt.",
+        "headers": { "X-Chat-Token": "required" },
+        "body": { "knock_msg_id": "string", "approver_pubkey": "string", "nonce": "string", "ct": "string" },
+        "mercure_event": "token"
       },
       {
         "method": "POST",

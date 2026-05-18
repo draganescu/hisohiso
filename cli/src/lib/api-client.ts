@@ -51,11 +51,13 @@ export const sendKnock = async (
   server: string,
   roomHash: string,
   msgId: string,
-  encryptedPayload: string
+  encryptedPayload: string,
+  knockPubkey: string
 ): Promise<MessageResponse> => {
   const res = await jsonPost(`${server}/api/rooms/${roomHash}/knock`, {
     msg_id: msgId,
     encrypted_payload: encryptedPayload,
+    knock_pubkey: knockPubkey,
   });
   if (!res.ok) throw new Error(`sendKnock failed: ${res.status}`);
   return res.json() as Promise<MessageResponse>;
@@ -65,6 +67,23 @@ export const approveKnock = async (server: string, roomHash: string, token: stri
   const res = await jsonPost(`${server}/api/rooms/${roomHash}/approve`, {}, token);
   if (!res.ok) throw new Error(`approveKnock failed: ${res.status}`);
   return res.json() as Promise<ApproveResponse>;
+};
+
+export const sendWrappedToken = async (
+  server: string,
+  roomHash: string,
+  approverToken: string,
+  knockMsgId: string,
+  wrapped: { approver_pubkey: string; nonce: string; ct: string }
+): Promise<MessageResponse> => {
+  const res = await jsonPost(`${server}/api/rooms/${roomHash}/token`, {
+    knock_msg_id: knockMsgId,
+    approver_pubkey: wrapped.approver_pubkey,
+    nonce: wrapped.nonce,
+    ct: wrapped.ct,
+  }, approverToken);
+  if (!res.ok) throw new Error(`sendWrappedToken failed: ${res.status}`);
+  return res.json() as Promise<MessageResponse>;
 };
 
 export const sendMessage = async (

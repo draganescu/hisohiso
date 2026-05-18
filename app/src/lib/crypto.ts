@@ -121,3 +121,99 @@ export const decryptText = async (
   );
   return new TextDecoder().decode(plaintext);
 };
+
+// --- Token wrap: ephemeral ECDH P-256 → HKDF-SHA256 → AES-256-GCM ---
+// See cli/src/lib/crypto.ts for the matching helpers; both sides must agree
+// byte-for-byte on curve, KDF info, and AES mode.
+
+const HKDF_INFO_TOKEN_WRAP = encoder.encode('hisohiso.token_wrap');
+
+export type EphemeralKeyPair = {
+  publicKey: string;
+  privateKey: CryptoKey;
+};
+
+export type WrappedToken = {
+  approver_pubkey: string;
+  nonce: string;
+  ct: string;
+};
+
+export const generateEphemeralKeyPair = async (): Promise<EphemeralKeyPair> => {
+  const pair = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits']
+  );
+  const spki = await crypto.subtle.exportKey('spki', pair.publicKey);
+  return {
+    publicKey: base64UrlEncode(new Uint8Array(spki)),
+    privateKey: pair.privateKey,
+  };
+};
+
+const importPubKey = async (b64: string): Promise<CryptoKey> => {
+  const bytes = base64UrlDecode(b64);
+  return crypto.subtle.importKey(
+    'spki',
+    bytes as BufferSource,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    []
+  );
+};
+
+const deriveWrapKey = async (privateKey: CryptoKey, peerPubB64: string): Promise<CryptoKey> => {
+  const peer = await importPubKey(peerPubB64);
+  const sharedBits = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: peer },
+    privateKey,
+    256
+  );
+  const ikm = await crypto.subtle.importKey('raw', sharedBits, { name: 'HKDF' }, false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: new Uint8Array(0) as BufferSource,
+      info: HKDF_INFO_TOKEN_WRAP as BufferSource,
+    },
+    ikm,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+};
+
+export const wrapToken = async (knockerPubB64: string, token: string): Promise<WrappedToken> => {
+  const ephemeral = await generateEphemeralKeyPair();
+  const wrapKey = await deriveWrapKey(ephemeral.privateKey, knockerPubB64);
+  const nonce = randomBytes(12);
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce as BufferSource },
+    wrapKey,
+    encoder.encode(token)
+  );
+  return {
+    approver_pubkey: ephemeral.publicKey,
+    nonce: base64UrlEncode(nonce),
+    ct: base64UrlEncode(new Uint8Array(ct)),
+  };
+};
+
+export const unwrapToken = async (
+  knockerPriv: CryptoKey,
+  approverPubB64: string,
+  nonceB64: string,
+  ctB64: string
+): Promise<string> => {
+  const wrapKey = await deriveWrapKey(knockerPriv, approverPubB64);
+  const nonce = base64UrlDecode(nonceB64);
+  const ct = base64UrlDecode(ctB64);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: nonce as BufferSource },
+    wrapKey,
+    ct as BufferSource
+  );
+  return new TextDecoder().decode(plaintext);
+};

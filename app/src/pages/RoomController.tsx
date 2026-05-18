@@ -9,6 +9,9 @@ import {
   randomBytes,
   base64UrlEncode,
   sha256Hex,
+  generateEphemeralKeyPair,
+  wrapToken,
+  unwrapToken,
   type EncryptedPayload
 } from '../lib/crypto';
 import {
@@ -46,7 +49,7 @@ type RoomLookupResponse = {
 
 type RoomEvent = {
   v: number;
-  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy' | 'settings';
+  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy' | 'settings' | 'token';
   room_hash: string;
   from?: string | null;
   ts: number;
@@ -62,6 +65,8 @@ type OutboxMessage = {
 
 type KnockRequest = {
   id: string;
+  msgId: string;
+  pubkey: string;
   ts: number;
   message?: string | null;
 };
@@ -159,6 +164,10 @@ const RoomController = () => {
   const focusProxyRef = useRef<HTMLTextAreaElement | null>(null);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
+  // Ephemeral keypair used to receive the wrapped participant token after a
+  // knock. Set right before /knock fires; consulted when the matching `token`
+  // event arrives. Cleared once we upgrade to PARTICIPANT.
+  const knockEphemeralRef = useRef<{ privateKey: CryptoKey; msgId: string } | null>(null);
 
   const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
   const showEmptyState = messages.length === 0 && !hasCompanion && roomState === 'PARTICIPANT';
@@ -507,7 +516,8 @@ const RoomController = () => {
           }
           const rawPayload = payload.body?.encrypted_payload;
           const msgId = (payload.body?.msg_id as string | null) ?? '';
-          if (!rawPayload || !msgId) {
+          const knockPubkey = (payload.body?.knock_pubkey as string | null) ?? '';
+          if (!rawPayload || !msgId || !knockPubkey) {
             return;
           }
           const parsed: EncryptedPayload =
@@ -522,17 +532,33 @@ const RoomController = () => {
             if (prev.find((item) => item.id === knockId)) {
               return prev;
             }
-            return [{ id: knockId, ts: payload.ts, message: knockMessage }, ...prev];
+            return [{ id: knockId, msgId, pubkey: knockPubkey, ts: payload.ts, message: knockMessage }, ...prev];
           });
         }
 
-        if (payload.type === 'approve' && payload.body?.new_participant_token) {
-          if (!token) {
-            const newToken = String(payload.body.new_participant_token);
+        if (payload.type === 'token') {
+          // Knocker side: match the wrapped delivery to our outstanding knock,
+          // unwrap with our ephemeral private key, become participant. Other
+          // subscribers see the same event but cannot derive the shared secret.
+          const pending = knockEphemeralRef.current;
+          if (!pending || token) return;
+          const knockMsgId = payload.body?.knock_msg_id;
+          if (knockMsgId !== pending.msgId) return;
+          const approverPubkey = payload.body?.approver_pubkey;
+          const nonce = payload.body?.nonce;
+          const ct = payload.body?.ct;
+          if (typeof approverPubkey !== 'string' || typeof nonce !== 'string' || typeof ct !== 'string') {
+            return;
+          }
+          try {
+            const newToken = await unwrapToken(pending.privateKey, approverPubkey, nonce, ct);
+            knockEphemeralRef.current = null;
             setToken(roomHash, newToken);
             setTokenState(newToken);
             setTokenHash(await sha256Hex(newToken));
             setRoomState('PARTICIPANT');
+          } catch {
+            // Wrong recipient or stale event — leave pending in place.
           }
         }
 
@@ -565,7 +591,7 @@ const RoomController = () => {
       }
     };
 
-    const eventTypes: RoomEvent['type'][] = ['chat', 'knock', 'approve', 'reject', 'destroy', 'settings'];
+    const eventTypes: RoomEvent['type'][] = ['chat', 'knock', 'approve', 'reject', 'destroy', 'settings', 'token'];
     eventTypes.forEach((type) => source.addEventListener(type, handleEvent));
 
     source.onopen = () => {
@@ -656,13 +682,16 @@ const RoomController = () => {
     const msgId = base64UrlEncode(randomBytes(12));
     const knockMessage = message.trim() || 'Knock';
     try {
+      const ephemeral = await generateEphemeralKeyPair();
+      knockEphemeralRef.current = { privateKey: ephemeral.privateKey, msgId };
       const encrypted = await encryptText(knockKey, roomHash, 'knock', msgId, knockMessage);
       const response = await fetch(`/api/rooms/${roomHash}/knock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           msg_id: msgId,
-          encrypted_payload: JSON.stringify(encrypted)
+          encrypted_payload: JSON.stringify(encrypted),
+          knock_pubkey: ephemeral.publicKey
         })
       });
 
@@ -670,10 +699,12 @@ const RoomController = () => {
         setKnockSent(true);
         setKnockNotice('Waiting for approval…');
       } else {
+        knockEphemeralRef.current = null;
         setKnockSent(false);
         setKnockNotice('Unable to send join request.');
       }
     } catch {
+      knockEphemeralRef.current = null;
       setKnockSent(false);
       setKnockNotice('Unable to send join request.');
     }
@@ -684,17 +715,43 @@ const RoomController = () => {
       if (!roomHash || !token) {
         return;
       }
-      await fetch(`/api/rooms/${roomHash}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Chat-Token': token
-        }
-      });
-      setHasCompanion(true);
-      setKnocks((prev) => prev.filter((item) => item.id !== knockId));
+      const knock = knocks.find((item) => item.id === knockId);
+      if (!knock) {
+        return;
+      }
+      try {
+        const approveRes = await fetch(`/api/rooms/${roomHash}/approve`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Chat-Token': token
+          }
+        });
+        if (!approveRes.ok) return;
+        const approveBody = (await approveRes.json()) as { new_participant_token?: string };
+        const newToken = approveBody.new_participant_token;
+        if (!newToken) return;
+        const wrapped = await wrapToken(knock.pubkey, newToken);
+        await fetch(`/api/rooms/${roomHash}/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Chat-Token': token
+          },
+          body: JSON.stringify({
+            knock_msg_id: knock.msgId,
+            approver_pubkey: wrapped.approver_pubkey,
+            nonce: wrapped.nonce,
+            ct: wrapped.ct
+          })
+        });
+        setHasCompanion(true);
+        setKnocks((prev) => prev.filter((item) => item.id !== knockId));
+      } catch {
+        // Leave the knock visible so the approver can retry.
+      }
     },
-    [roomHash, token]
+    [roomHash, token, knocks]
   );
 
   const rejectKnock = useCallback(

@@ -2,7 +2,7 @@ import { EventSource } from 'eventsource';
 
 export type RoomEvent = {
   v: number;
-  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy';
+  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy' | 'token';
   room_hash: string;
   from: string | null;
   ts: number;
@@ -15,6 +15,7 @@ export type SSEHandlers = {
   onApprove?: (event: RoomEvent) => void;
   onReject?: (event: RoomEvent) => void;
   onDestroy?: (event: RoomEvent) => void;
+  onToken?: (event: RoomEvent) => void;
   onOpen?: () => void;
   onError?: (error: unknown) => void;
 };
@@ -37,6 +38,7 @@ export const subscribeToRoom = (server: string, roomHash: string, handlers: SSEH
         case 'approve': handlers.onApprove?.(data); break;
         case 'reject': handlers.onReject?.(data); break;
         case 'destroy': handlers.onDestroy?.(data); break;
+        case 'token': handlers.onToken?.(data); break;
         default: console.error('[sse] unknown event type:', data.type);
       }
     } catch (err) {
@@ -50,6 +52,7 @@ export const subscribeToRoom = (server: string, roomHash: string, handlers: SSEH
   es.addEventListener('approve', dispatch);
   es.addEventListener('reject', dispatch);
   es.addEventListener('destroy', dispatch);
+  es.addEventListener('token', dispatch);
 
   // Some Mercure configs also send unnamed events
   es.onmessage = dispatch;

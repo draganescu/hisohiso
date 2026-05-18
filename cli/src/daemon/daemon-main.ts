@@ -12,6 +12,7 @@ import {
   deriveMessageKey,
   sha256Hex,
   decryptText,
+  wrapToken,
   type EncryptedPayload,
 } from '../lib/crypto.js';
 import * as api from '../lib/api-client.js';
@@ -301,10 +302,18 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
   try {
     await new Promise<void>((resolve, reject) => {
       const sse = subscribeToRoom(server, controlRoomHash, {
-        onKnock: async () => {
+        onKnock: async (knockEvent: RoomEvent) => {
           console.log('Phone is joining... approving.');
+          const knockPubkey = knockEvent.body?.knock_pubkey;
+          const knockMsgId = knockEvent.body?.msg_id;
+          if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string') {
+            console.error('Knock missing knock_pubkey or msg_id — ignoring.');
+            return;
+          }
           try {
-            await api.approveKnock(server, controlRoomHash, participantToken);
+            const approveRes = await api.approveKnock(server, controlRoomHash, participantToken);
+            const wrapped = await wrapToken(knockPubkey, approveRes.new_participant_token);
+            await api.sendWrappedToken(server, controlRoomHash, participantToken, knockMsgId, wrapped);
             console.log('Phone connected to control room.');
             sse.close();
             resolve();
