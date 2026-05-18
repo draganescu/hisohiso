@@ -171,12 +171,16 @@ if (preg_match('#^/api/rooms/([^/]+)/knock$#', $path, $matches) && $method === '
         json_response(['error' => 'room_not_found'], 404);
     }
     $body = read_json_body();
-    if (!isset($body['msg_id']) || !isset($body['encrypted_payload'])) {
+    if (!isset($body['msg_id']) || !isset($body['encrypted_payload']) || !isset($body['knock_pubkey'])) {
         json_response(['error' => 'missing_knock_payload'], 400);
+    }
+    if (!is_string($body['knock_pubkey']) || $body['knock_pubkey'] === '') {
+        json_response(['error' => 'invalid_knock_pubkey'], 400);
     }
     publish_event($room_hash, 'knock', [
         'msg_id' => $body['msg_id'],
         'encrypted_payload' => $body['encrypted_payload'],
+        'knock_pubkey' => $body['knock_pubkey'],
     ]);
     touch_room($room_hash);
     json_response(['status' => 'ok']);
@@ -190,11 +194,35 @@ if (preg_match('#^/api/rooms/([^/]+)/approve$#', $path, $matches) && $method ===
     $approver = require_participant_token($room_hash);
     touch_presence($room_hash, $approver);
     $new_token = create_participant($room_hash);
-    publish_event($room_hash, 'approve', [
-        'new_participant_token' => $new_token,
-    ], sha256_hex($approver));
+    // Token is NOT included in the published event body — the approver is
+    // expected to wrap it to the knocker's ephemeral pubkey and post it via
+    // /token. The approve event is kept as a tombstone for UI/state.
+    publish_event($room_hash, 'approve', [], sha256_hex($approver));
     touch_room($room_hash);
     json_response(['new_participant_token' => $new_token]);
+}
+
+if (preg_match('#^/api/rooms/([^/]+)/token$#', $path, $matches) && $method === 'POST') {
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    $approver = require_participant_token($room_hash);
+    $body = read_json_body();
+    foreach (['knock_msg_id', 'approver_pubkey', 'nonce', 'ct'] as $field) {
+        if (!isset($body[$field]) || !is_string($body[$field]) || $body[$field] === '') {
+            json_response(['error' => 'missing_' . $field], 400);
+        }
+    }
+    publish_event($room_hash, 'token', [
+        'knock_msg_id' => $body['knock_msg_id'],
+        'approver_pubkey' => $body['approver_pubkey'],
+        'nonce' => $body['nonce'],
+        'ct' => $body['ct'],
+    ], sha256_hex($approver));
+    touch_presence($room_hash, $approver);
+    touch_room($room_hash);
+    json_response(['status' => 'ok']);
 }
 
 if (preg_match('#^/api/rooms/([^/]+)/message$#', $path, $matches) && $method === 'POST') {

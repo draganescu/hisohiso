@@ -77,6 +77,11 @@ docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 
 - The room secret is in the hash fragment — it never appears in HTTP requests, server logs, or Referer headers.
 - Use a shared passphrase for stronger knock encryption.
+- Participant tokens are never broadcast on the room topic. Each knock carries
+  an ephemeral ECDH P-256 public key; the approver wraps the new token to that
+  pubkey (HKDF-SHA256 → AES-256-GCM) and publishes the wrapped blob on a
+  dedicated `token` event. Only the knocker can derive the shared secret and
+  unwrap. A passive subscriber to the room topic learns nothing usable.
 - If a room is compromised, disband and create a new one.
 - Clearing browser storage removes local message history.
 

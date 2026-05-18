@@ -1,5 +1,5 @@
 import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
-import { deriveMessageKey, sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
+import { deriveMessageKey, sha256Hex, decryptText, wrapToken, type EncryptedPayload } from '../lib/crypto.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import { getAgent, type AgentProfile } from '../lib/agents.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
@@ -210,10 +210,20 @@ export class AgentManager {
     const sseReady = new Promise<void>((resolve) => { resolveSseReady = resolve; });
 
     const sse = subscribeToRoom(this.server, roomHash, {
-      onKnock: async () => {
-        // Auto-approve phone joining agent room
+      onKnock: async (knockEvent: RoomEvent) => {
+        // Auto-approve phone joining agent room. Wrap the new participant
+        // token to the knocker's ephemeral pubkey and post it via /token so
+        // it isn't broadcast on the room topic.
+        const knockPubkey = knockEvent.body?.knock_pubkey;
+        const knockMsgId = knockEvent.body?.msg_id;
+        if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string') {
+          console.error(`[${agentName}:${agentId}] knock missing knock_pubkey or msg_id — ignoring`);
+          return;
+        }
         try {
-          await api.approveKnock(this.server, roomHash, participantToken);
+          const approveRes = await api.approveKnock(this.server, roomHash, participantToken);
+          const wrapped = await wrapToken(knockPubkey, approveRes.new_participant_token);
+          await api.sendWrappedToken(this.server, roomHash, participantToken, knockMsgId, wrapped);
           console.log(`[${agentName}:${agentId}] Phone joined agent room.`);
         } catch (err) {
           console.error(`[${agentName}:${agentId}] Failed to approve knock:`, err);

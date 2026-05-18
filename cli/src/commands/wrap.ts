@@ -3,7 +3,7 @@ import { createRoomAndJoin, encryptAndSend } from '../lib/room-bridge.js';
 import { startPresence } from '../lib/presence.js';
 import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
-import { sha256Hex, decryptText, type EncryptedPayload } from '../lib/crypto.js';
+import { sha256Hex, decryptText, wrapToken, type EncryptedPayload } from '../lib/crypto.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import qrTerminal from 'qrcode-terminal';
@@ -51,9 +51,17 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
   // Wait for phone to knock and auto-approve
   await new Promise<void>((resolve, reject) => {
     const sse = subscribeToRoom(server, room.roomHash, {
-      onKnock: async () => {
+      onKnock: async (knockEvent: RoomEvent) => {
+        const knockPubkey = knockEvent.body?.knock_pubkey;
+        const knockMsgId = knockEvent.body?.msg_id;
+        if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string') {
+          console.error('[wrap] knock missing knock_pubkey or msg_id — ignoring');
+          return;
+        }
         try {
-          await api.approveKnock(server, room.roomHash, room.participantToken);
+          const approveRes = await api.approveKnock(server, room.roomHash, room.participantToken);
+          const wrapped = await wrapToken(knockPubkey, approveRes.new_participant_token);
+          await api.sendWrappedToken(server, room.roomHash, room.participantToken, knockMsgId, wrapped);
           console.log('Phone connected.\n');
           sse.close();
           resolve();
