@@ -6,13 +6,16 @@ import { daemonStart, daemonStop, daemonStatus } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
 import { saveConfig, ensureConfigDir } from './lib/config.js';
 import { listAgents } from './lib/agents.js';
+// Single source of truth for the CLI version. release.sh bumps
+// cli/package.json and the bundled binary picks it up at build time.
+import pkg from '../package.json' with { type: 'json' };
 
 const program = new Command();
 
 program
   .name('hisohiso')
   .description('Control terminal agents from your phone over E2E encrypted channels')
-  .version('0.4.3');
+  .version(pkg.version);
 
 program
   .command('wrap')

@@ -21,6 +21,7 @@ import { startPresence, type PresenceHandle } from '../lib/presence.js';
 import { encryptAndSend } from '../lib/room-bridge.js';
 import { AgentManager, type RestoreResult } from './agent-manager.js';
 import { writePid, removePid } from './pid.js';
+import { startUpdateLoop } from '../lib/updater.js';
 import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
@@ -129,6 +130,16 @@ export const runDaemon = async (): Promise<void> => {
     );
 
     console.log('Daemon running. Listening on control room...');
+
+    // Sparkle-style auto-updater. Ticks every 6h (first tick delayed 30 min
+    // by the helper). Only swaps the binary when no agent session is mid-
+    // turn. Opt out with HISOHISO_AUTO_UPDATE=off. Daemon state is already
+    // persisted via saveDaemonState() at setup, so the re-exec'd daemon
+    // re-attaches to every active room on next boot.
+    startUpdateLoop({
+      isIdle: () => manager.isIdle(),
+      log: (m) => console.log(`[updater] ${m}`),
+    });
 
     // Freeze the values the SSE handlers close over so a later re-pair (which reassigns
     // `state` / `messageKey`) can't redirect in-flight chat decryption to the wrong room.

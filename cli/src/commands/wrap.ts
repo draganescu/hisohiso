@@ -98,6 +98,12 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
   const modeLabel = profile.mode === 'session' ? ' (session)' : '';
   console.log(`Listening${modeLabel}. Messages from phone → ${profile.command} ${profile.args.join(' ')} <message>\n`);
 
+  // Note: no auto-updater in wrap. Each `hisohiso wrap` invocation mints a
+  // fresh room with a fresh QR, so re-execing mid-session would orphan the
+  // phone (the new wrap would create yet another room). Users with long-
+  // running wrap sessions pick up updates by Ctrl-C-ing and rescanning, or
+  // by switching to the daemon which IS auto-updated.
+
   // Message loop: phone message → run agent → send output
   const sse = subscribeToRoom(server, room.roomHash, room.subscriberJwt, {
     onChat: async (event: RoomEvent) => {
