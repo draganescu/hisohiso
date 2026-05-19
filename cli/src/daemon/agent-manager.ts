@@ -1,5 +1,6 @@
 import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
-import { deriveMessageKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
+import { deriveMessageKey, deriveKnockKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
+import { generatePairingCode } from '../lib/prompt.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import { getAgent, type AgentProfile } from '../lib/agents.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
@@ -13,13 +14,21 @@ type AgentSession = {
   profile: AgentProfile;
   roomHash: string;
   roomSecret: string;
+  roomPassword: string;
   participantToken: string;
   subscriberJwt: string;
   messageKey: CryptoKey;
+  knockKey: CryptoKey;
   sessionId: string | null;
   running: boolean;
   sse: SSESubscription;
   presence: PresenceHandle;
+  // Per-session msg_id dedup — drops any chat we've already dispatched to the
+  // agent. The server can re-publish identical ciphertexts (it has the
+  // publisher JWT, AAD is deterministic for the same msg_id); without this
+  // the agent would re-execute a captured turn. In-memory only — replay
+  // window is the session lifetime, which is what we care about.
+  seenMsgIds: Set<string>;
 };
 
 type AttachArgs = {
@@ -28,9 +37,13 @@ type AttachArgs = {
   profile: AgentProfile;
   roomHash: string;
   roomSecret: string;
+  // 4-digit pairing code that derived this room's k_msg/k_knock. Persisted on
+  // ActiveRoom so a daemon restart can re-derive identical keys.
+  roomPassword: string;
   participantToken: string;
   subscriberJwt: string;
   messageKey: CryptoKey;
+  knockKey: CryptoKey;
   sessionId: string | null;
 };
 
@@ -59,19 +72,26 @@ export class AgentManager {
   private controlKey: CryptoKey | null = null;
   private controlRoomSecret: string;
   private controlPassword: string;
+  // The operator's session-wide knock message. Compared against the decrypted
+  // cleartext of every incoming /knock; mismatched knocks are dropped without
+  // approving. Held by-value (not via DaemonState ref) so a re-pair that
+  // mutates control room identity doesn't accidentally reset the secret.
+  private sessionKnockMessage: string;
 
   constructor(
     server: string,
     controlRoomHash: string,
     controlToken: string,
     controlRoomSecret: string,
-    controlPassword: string
+    controlPassword: string,
+    sessionKnockMessage: string
   ) {
     this.server = server;
     this.controlRoomHash = controlRoomHash;
     this.controlToken = controlToken;
     this.controlRoomSecret = controlRoomSecret;
     this.controlPassword = controlPassword;
+    this.sessionKnockMessage = sessionKnockMessage;
   }
 
   private async getControlKey(): Promise<CryptoKey> {
@@ -89,7 +109,7 @@ export class AgentManager {
     });
   }
 
-  async spawn(agentName: string): Promise<{ agentId: string; roomSecret: string }> {
+  async spawn(agentName: string): Promise<{ agentId: string; roomSecret: string; roomPassword: string }> {
     // Resolve profile: check built-in agents first, then registry
     let profile = getAgent(agentName);
     if (!profile) {
@@ -103,10 +123,14 @@ export class AgentManager {
       throw new Error(`Unknown agent "${agentName}". Use "list" to see available agents.`);
     }
 
-    // Create room for this agent — catch-up on by default so the phone can
-    // open the room later and see anything the agent emitted while it was closed.
-    const room = await createRoomAndJoin(this.server, '', { catchUp: true });
+    // Mint a fresh 4-digit pairing code for this agent room. It's the password
+    // factor folded into k_msg/k_knock — the phone needs it to even produce a
+    // decryptable knock, and we broadcast it via the control-room chat below
+    // so the operator can read it off the phone they're already holding.
+    const roomPassword = generatePairingCode();
+    const room = await createRoomAndJoin(this.server, roomPassword, { catchUp: true });
     const agentId = room.roomHash.slice(0, 12);
+    const knockKey = await deriveKnockKey(room.roomSecret, roomPassword);
 
     await this.attachToRoom({
       agentId,
@@ -114,14 +138,16 @@ export class AgentManager {
       profile,
       roomHash: room.roomHash,
       roomSecret: room.roomSecret,
+      roomPassword,
       participantToken: room.participantToken,
       subscriberJwt: room.subscriberJwt,
       messageKey: room.messageKey,
+      knockKey,
       sessionId: null,
     });
 
     await this.persistRooms();
-    return { agentId, roomSecret: room.roomSecret };
+    return { agentId, roomSecret: room.roomSecret, roomPassword };
   }
 
   /**
@@ -173,7 +199,15 @@ export class AgentManager {
           continue;
         }
 
-        const messageKey = await deriveMessageKey(r.roomSecret, '');
+        // Pre-v0.4.5 rooms on disk have no roomPassword. Drop rather than try
+        // to derive incompatible keys — the operator can respawn via control.
+        if (typeof r.roomPassword !== 'string' || r.roomPassword === '') {
+          dropped.push(r.agentId);
+          details.push(`${r.name} (${r.agentId}): missing roomPassword (pre-pairing-code room); respawn`);
+          continue;
+        }
+        const messageKey = await deriveMessageKey(r.roomSecret, r.roomPassword);
+        const knockKey = await deriveKnockKey(r.roomSecret, r.roomPassword);
 
         await this.attachToRoom({
           agentId: r.agentId,
@@ -181,9 +215,11 @@ export class AgentManager {
           profile,
           roomHash: r.roomHash,
           roomSecret: r.roomSecret,
+          roomPassword: r.roomPassword,
           participantToken: r.participantToken,
           subscriberJwt: r.subscriberJwt,
           messageKey,
+          knockKey,
           sessionId: r.sessionId,
         });
 
@@ -211,7 +247,7 @@ export class AgentManager {
    * announce that the room is live.
    */
   private async attachToRoom(args: AttachArgs): Promise<void> {
-    const { agentId, name: agentName, profile, roomHash, roomSecret, participantToken, subscriberJwt, messageKey, sessionId } = args;
+    const { agentId, name: agentName, profile, roomHash, roomSecret, roomPassword, participantToken, subscriberJwt, messageKey, knockKey, sessionId } = args;
 
     const presence = startPresence(this.server, roomHash, participantToken);
     const ownTokenHash = await sha256Hex(participantToken);
@@ -222,13 +258,16 @@ export class AgentManager {
       profile,
       roomHash,
       roomSecret,
+      roomPassword,
       participantToken,
       subscriberJwt,
       messageKey,
+      knockKey,
       sessionId,
       running: false,
       sse: null!,
       presence,
+      seenMsgIds: new Set<string>(),
     };
 
     let resolveSseReady: () => void;
@@ -236,13 +275,33 @@ export class AgentManager {
 
     const sse = subscribeToRoom(this.server, roomHash, subscriberJwt, {
       onKnock: async (knockEvent: RoomEvent) => {
-        // Auto-approve phone joining agent room. Wrap the new participant
-        // token to the knocker's ephemeral pubkey and post it via /token so
-        // it isn't broadcast on the room topic.
+        // Gate the auto-approve on TWO checks:
+        //   1. The encrypted_payload must decrypt with k_knock (which means the
+        //      knocker had room_secret + the room's pairing code).
+        //   2. The decrypted cleartext must EQUAL this daemon's sessionKnockMessage
+        //      (the operator's session secret, never on the wire as plaintext).
+        // Either check failing → drop the knock silently. No 'please retry'
+        // back to the room because we can't authenticate the knocker yet,
+        // and any error path that does leak info helps a brute-forcer.
         const knockPubkey = knockEvent.body?.knock_pubkey;
         const knockMsgId = knockEvent.body?.msg_id;
-        if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string') {
-          console.error(`[${agentName}:${agentId}] knock missing knock_pubkey or msg_id — ignoring`);
+        const rawPayload = knockEvent.body?.encrypted_payload;
+        if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string' || !rawPayload) {
+          console.error(`[${agentName}:${agentId}] knock missing fields — ignoring`);
+          return;
+        }
+        let knockText: string;
+        try {
+          const enc: EncryptedPayload = typeof rawPayload === 'string'
+            ? JSON.parse(rawPayload) as EncryptedPayload
+            : rawPayload as EncryptedPayload;
+          knockText = (await decryptText(knockKey, roomHash, 'knock', knockMsgId, enc)).trim();
+        } catch {
+          console.error(`[${agentName}:${agentId}] knock decrypt failed — wrong pairing code, ignoring`);
+          return;
+        }
+        if (knockText !== this.sessionKnockMessage) {
+          console.error(`[${agentName}:${agentId}] knock message mismatch — ignoring`);
           return;
         }
         try {
@@ -270,13 +329,28 @@ export class AgentManager {
       onChat: async (event: RoomEvent) => {
         if (event.from === ownTokenHash) return;
 
+        // Replay protection: drop any chat we've already dispatched to the
+        // agent in this session. AAD includes msg_id but doesn't prevent the
+        // SAME ciphertext arriving twice (server can re-publish; offline-sync
+        // can re-deliver). Without this, the agent re-executes captured turns.
+        const incomingMsgId = (event.body.msg_id as string) || '';
+        if (incomingMsgId === '') {
+          console.error(`[${agentName}:${agentId}] chat without msg_id — dropping`);
+          return;
+        }
+        if (session.seenMsgIds.has(incomingMsgId)) {
+          console.error(`[${agentName}:${agentId}] replay of msg_id ${incomingMsgId} — dropping`);
+          return;
+        }
+        session.seenMsgIds.add(incomingMsgId);
+
         // Decrypt inbound message
         let text: string;
         try {
           const encPayload = typeof event.body.encrypted_payload === 'string'
             ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
             : event.body.encrypted_payload as EncryptedPayload;
-          const msgId = (event.body.msg_id as string) || '';
+          const msgId = incomingMsgId;
           const decrypted = await decryptText(messageKey, roomHash, 'chat', msgId, encPayload);
           const parsed = JSON.parse(decrypted) as { text: string };
           text = parsed.text;
@@ -459,6 +533,7 @@ export class AgentManager {
       name: s.name,
       roomHash: s.roomHash,
       roomSecret: s.roomSecret,
+      roomPassword: s.roomPassword,
       participantToken: s.participantToken,
       subscriberJwt: s.subscriberJwt,
       sessionId: s.sessionId,

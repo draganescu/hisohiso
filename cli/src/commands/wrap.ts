@@ -3,7 +3,8 @@ import { createRoomAndJoin, encryptAndSend } from '../lib/room-bridge.js';
 import { startPresence } from '../lib/presence.js';
 import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
-import { sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
+import { sha256Hex, decryptText, deriveKnockKey, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
+import { promptLine, generatePairingCode } from '../lib/prompt.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import qrTerminal from 'qrcode-terminal';
@@ -34,16 +35,30 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     profile = builtin;
   }
 
-  // Create room — catch-up on so the phone sees agent output even after closing the app.
-  const password = '';
+  // Prompt the operator for a session knock message BEFORE generating the QR.
+  // Hidden input so it stays out of scrollback. This is the secret the phone
+  // must type as the knock body — only knowing it AND the pairing code AND the
+  // room URL together gets a phone past the auto-approve gate below.
+  const sessionKnockMessage = (await promptLine('Knock message (the secret the phone will type as the knock body): ', { hidden: true })).trim();
+  if (sessionKnockMessage === '') {
+    console.error('Knock message cannot be empty. Aborting.');
+    process.exit(1);
+  }
+
+  // Create room with a fresh 4-digit pairing code as the password — k_msg and
+  // k_knock now depend on secret + code, not secret alone.
+  const password = generatePairingCode();
   const room = await createRoomAndJoin(server, password, { catchUp: true });
+  const knockKey = await deriveKnockKey(room.roomSecret, password);
 
   const joinUrl = `${server}/room#${room.roomSecret}`;
   console.log(`\nScan to connect (${agentName}):\n`);
   qrTerminal.generate(joinUrl, { small: true }, (code: string) => {
     console.log(code);
   });
-  console.log(`\nOr open: ${joinUrl}\n`);
+  console.log(`\nOr open: ${joinUrl}`);
+  console.log(`Pairing code: ${password}`);
+  console.log('(Enter the pairing code as the room password; use your knock message as the knock body.)\n');
   console.log('Waiting for phone to join...');
 
   const presence = startPresence(server, room.roomHash, room.participantToken);
@@ -54,8 +69,27 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
       onKnock: async (knockEvent: RoomEvent) => {
         const knockPubkey = knockEvent.body?.knock_pubkey;
         const knockMsgId = knockEvent.body?.msg_id;
-        if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string') {
-          console.error('[wrap] knock missing knock_pubkey or msg_id — ignoring');
+        const rawPayload = knockEvent.body?.encrypted_payload;
+        if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string' || !rawPayload) {
+          console.error('[wrap] knock missing fields — ignoring');
+          return;
+        }
+        // Two-factor knock gate: decrypt with k_knock (proves possession of
+        // the pairing code), then string-equality the cleartext to the
+        // session knock message (proves possession of the operator's secret).
+        // Both checks silent on failure — no info to brute-forcers.
+        let knockText: string;
+        try {
+          const enc = typeof rawPayload === 'string'
+            ? JSON.parse(rawPayload) as EncryptedPayload
+            : rawPayload as EncryptedPayload;
+          knockText = (await decryptText(knockKey, room.roomHash, 'knock', knockMsgId, enc)).trim();
+        } catch {
+          console.error('[wrap] knock decrypt failed — wrong pairing code, ignoring');
+          return;
+        }
+        if (knockText !== sessionKnockMessage) {
+          console.error('[wrap] knock message mismatch — ignoring');
           return;
         }
         try {
@@ -94,6 +128,11 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
   const ownTokenHash = await sha256Hex(room.participantToken);
   let running = false;
   let sessionId: string | null = null;
+  // Per-session msg_id dedup: drops any chat we've already dispatched. AAD
+  // matching is necessary but not sufficient — server can replay captured
+  // ciphertexts with their original msg_id, and offline-sync can re-deliver
+  // historical messages. Without dedup the agent re-executes those.
+  const seenMsgIds = new Set<string>();
 
   const modeLabel = profile.mode === 'session' ? ' (session)' : '';
   console.log(`Listening${modeLabel}. Messages from phone → ${profile.command} ${profile.args.join(' ')} <message>\n`);
@@ -109,13 +148,23 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     onChat: async (event: RoomEvent) => {
       if (event.from === ownTokenHash) return;
 
+      const incomingMsgId = (event.body.msg_id as string) || '';
+      if (incomingMsgId === '') {
+        console.error('[bridge] chat without msg_id — dropping');
+        return;
+      }
+      if (seenMsgIds.has(incomingMsgId)) {
+        console.error(`[bridge] replay of msg_id ${incomingMsgId} — dropping`);
+        return;
+      }
+      seenMsgIds.add(incomingMsgId);
+
       let text: string;
       try {
         const encPayload = typeof event.body.encrypted_payload === 'string'
           ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
           : event.body.encrypted_payload as EncryptedPayload;
-        const msgId = (event.body.msg_id as string) || '';
-        const decrypted = await decryptText(room.messageKey, room.roomHash, 'chat', msgId, encPayload);
+        const decrypted = await decryptText(room.messageKey, room.roomHash, 'chat', incomingMsgId, encPayload);
         const parsed = JSON.parse(decrypted) as { text: string };
         text = parsed.text;
       } catch (err) {

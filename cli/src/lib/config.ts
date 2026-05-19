@@ -26,6 +26,12 @@ export type DaemonState = {
   // daemon needs to re-pair.
   subscriberJwt: string;
   controlRoomPassword: string;
+  // The operator's session knock message — set once at `hisohiso daemon start`,
+  // reused as the expected knock-cleartext for the control room AND for every
+  // agent room minted during this daemon's lifetime. Persisted so auto-update
+  // re-execs don't lose it. Cleared by `daemon start --fresh`. The threat model
+  // assumes this string is unguessable to anyone outside the operator's head.
+  sessionKnockMessage: string;
 };
 
 export type RegisteredAgent = {
@@ -39,6 +45,11 @@ export type ActiveRoom = {
   name: string;
   roomHash: string;
   roomSecret: string;
+  // Per-agent-room 4-digit pairing code used as the room password (folded into
+  // k_msg/k_knock). Broadcast to the operator via the control-room chat and
+  // typed on the phone when joining. Distinct per room; persisted so a daemon
+  // restart preserves the cryptographic identity of in-flight agent rooms.
+  roomPassword: string;
   // Server-side identity for this device in the room — needed to re-attach SSE,
   // resume presence, and approve future knocks after a daemon restart.
   participantToken: string;
