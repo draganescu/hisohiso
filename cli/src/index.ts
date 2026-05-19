@@ -61,7 +61,9 @@ daemon
   .command('start')
   .description('Start the daemon')
   .option('--fresh', 'Disband saved control + agent rooms and start with a new QR')
-  .action((opts: { fresh?: boolean }) => daemonStart({ fresh: opts.fresh === true }));
+  .action(async (opts: { fresh?: boolean }) => {
+    await daemonStart({ fresh: opts.fresh === true });
+  });
 
 daemon
   .command('stop')
