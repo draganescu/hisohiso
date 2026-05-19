@@ -23,8 +23,25 @@
 
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { promises as fs, realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
+
+// Bun-compiled binaries report a virtual /$bunfs/… path for process.execPath.
+// Resolve the real filesystem path from argv[0] instead.
+function resolveExecPath(): string {
+  const argv0 = process.argv[0];
+  if (argv0 && !argv0.startsWith('/$bunfs')) {
+    try {
+      return realpathSync(resolve(argv0));
+    } catch {
+      // fall through
+    }
+  }
+  return process.execPath;
+}
+
+const EXEC_PATH = resolveExecPath();
 
 const REPO = 'draganescu/hisohiso';
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -94,7 +111,7 @@ async function tick(ctx: TickCtx): Promise<void> {
     return;
   }
 
-  const tmpPath = `${process.execPath}.new`;
+  const tmpPath = `${EXEC_PATH}.new`;
   // Best-effort cleanup of a stale tmp from a prior failed tick.
   await fs.rm(tmpPath, { force: true });
 
@@ -123,12 +140,12 @@ async function tick(ctx: TickCtx): Promise<void> {
   }
 
   ctx.log(`swapping binary and re-execing...`);
-  await fs.rename(tmpPath, process.execPath);
+  await fs.rename(tmpPath, EXEC_PATH);
 
   // Re-exec with the original argv. `detached: true` plus `unref` lets the
   // new process outlive us; `stdio: 'inherit'` so logs continue going to
   // wherever they were going (daemon log file, user's terminal for wrap).
-  const child = spawn(process.execPath, process.argv.slice(1), {
+  const child = spawn(EXEC_PATH, process.argv.slice(1), {
     detached: true,
     stdio: 'inherit',
     env: process.env,
