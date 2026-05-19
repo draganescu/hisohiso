@@ -43,6 +43,17 @@ export type RestoreResult = {
 export class AgentManager {
   private sessions = new Map<string, AgentSession>();
   private server: string;
+
+  // Used by the auto-updater to decide when it's safe to swap the binary and
+  // re-exec — every session that's mid-turn has `running = true`, so idle =
+  // every session is between turns (or there are no sessions).
+  isIdle(): boolean {
+    for (const session of this.sessions.values()) {
+      if (session.running) return false;
+    }
+    return true;
+  }
+
   private controlRoomHash: string;
   private controlToken: string;
   private controlKey: CryptoKey | null = null;

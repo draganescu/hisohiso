@@ -61,10 +61,12 @@ done
 
 gh auth status >/dev/null 2>&1 || { echo "gh CLI not authenticated — run: gh auth login" >&2; exit 1; }
 
-# Refuse to start with a dirty tree on the files we're going to edit, so the
-# commit at step 4 contains ONLY the version bump.
-if [[ -n "$(git status --porcelain -- cli/package.json cli/src/index.ts)" ]]; then
-  echo "cli/package.json or cli/src/index.ts has uncommitted changes — commit or stash first" >&2
+# Refuse to start with a dirty tree on the version file we're going to edit,
+# so the commit at step 4 contains ONLY the version bump. cli/src/index.ts
+# reads its version via JSON import from package.json, so we no longer touch
+# index.ts during the bump — just package.json.
+if [[ -n "$(git status --porcelain -- cli/package.json)" ]]; then
+  echo "cli/package.json has uncommitted changes — commit or stash first" >&2
   exit 1
 fi
 
@@ -105,12 +107,11 @@ fi
 echo ">> Bumping cli to $NUMERIC..."
 # package.json: only the TOP-LEVEL "version" key. The perl one-liner stops
 # after the first replacement so we never rewrite a "version" inside a
-# dependency entry by accident.
+# dependency entry by accident. cli/src/index.ts reads pkg.version at build
+# time via JSON import, so it does NOT need a separate edit here.
 perl -i -pe 'BEGIN { $n = 0 } if ($n == 0 && /"version":\s*"[^"]+"/) { s/"version":\s*"[^"]+"/"version": "'"$NUMERIC"'"/; $n = 1 }' cli/package.json
-perl -i -pe "s/\\.version\\('[^']+'\\)/\\.version('$NUMERIC')/" cli/src/index.ts
 
 grep -q "\"version\": \"$NUMERIC\"" cli/package.json || { echo "Failed to update cli/package.json" >&2; exit 1; }
-grep -q "\.version('$NUMERIC')" cli/src/index.ts || { echo "Failed to update cli/src/index.ts" >&2; exit 1; }
 
 # --- 2. Build binaries ---
 echo ">> Building binaries..."
@@ -119,6 +120,19 @@ echo ">> Building binaries..."
 for arch in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
   [[ -f "cli/dist/hisohiso-$arch" ]] || { echo "Missing cli/dist/hisohiso-$arch after build" >&2; exit 1; }
 done
+
+# Emit a checksum manifest so the auto-updater can verify downloads. Order
+# matches the upload list below for human readability — only filename and
+# hex SHA-256 are consumed, so order is functionally irrelevant.
+echo ">> Computing SHA-256 checksums..."
+(
+  cd cli/dist && shasum -a 256 \
+    hisohiso-darwin-arm64 \
+    hisohiso-darwin-x64 \
+    hisohiso-linux-arm64 \
+    hisohiso-linux-x64 > checksums.txt
+)
+[[ -f cli/dist/checksums.txt ]] || { echo "Failed to write checksums.txt" >&2; exit 1; }
 
 # Sanity-check: the local-arch binary should report the new version. Catches
 # a broken bump where one of the two version fields silently regressed.
@@ -140,7 +154,7 @@ fi
 
 # --- 3. Commit (source only) + tag + push ---
 echo ">> Committing source bump (binaries NOT committed)..."
-git add cli/package.json cli/src/index.ts
+git add cli/package.json
 git commit -m "Release CLI $TAG"
 
 git tag "$TAG"
@@ -156,7 +170,8 @@ gh release create "$TAG" \
   "cli/dist/hisohiso-darwin-arm64" \
   "cli/dist/hisohiso-darwin-x64" \
   "cli/dist/hisohiso-linux-arm64" \
-  "cli/dist/hisohiso-linux-x64"
+  "cli/dist/hisohiso-linux-x64" \
+  "cli/dist/checksums.txt"
 
 REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 echo
