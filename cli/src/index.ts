@@ -96,4 +96,4 @@ daemon
   .description('List registered agents')
   .action(list);
 
-program.parse();
+await program.parseAsync();
