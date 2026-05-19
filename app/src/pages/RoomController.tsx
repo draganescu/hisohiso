@@ -75,6 +75,8 @@ type KnockRequest = {
   message?: string | null;
 };
 
+const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
+
 const formatMailStamp = (timestamp: number): string => {
   return new Date(timestamp * 1000).toLocaleString([], {
     month: 'short',
@@ -125,7 +127,7 @@ const getMessageLabel = (message: ChatMessage): string => {
 };
 
 const RoomController = () => {
-  const [roomSecret] = useState(() => window.location.hash.replace(/^#\/?/, ''));
+  const [roomSecret, setRoomSecret] = useState(readRoomSecretFromHash);
   const [roomHash, setRoomHash] = useState<string>('');
   const [roomState, setRoomState] = useState<RoomState>('INIT');
   const [error, setError] = useState<string>('');
@@ -187,6 +189,23 @@ const RoomController = () => {
 
   const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
   const showEmptyState = messages.length === 0 && !hasCompanion && roomState === 'PARTICIPANT';
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setRoomSecret(readRoomSecretFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const navigateToRoom = useCallback((nextRoomSecret: string) => {
+    const nextSecret = nextRoomSecret.replace(/^#\/?/, '');
+    if (!nextSecret) return;
+    if (window.location.hash.replace(/^#\/?/, '') !== nextSecret) {
+      window.location.hash = `#${nextSecret}`;
+    }
+    setRoomSecret(nextSecret);
+  }, []);
 
   useEffect(() => {
     if (!showEmptyState || !shareUrl) {
@@ -399,11 +418,47 @@ const RoomController = () => {
   }, [showComposer]);
 
   useEffect(() => {
+    let active = true;
+
     const init = async () => {
       try {
+        setRoomHash('');
+        setRoomState('INIT');
+        setError('');
+        setKnockSent(false);
+        setKnockNotice('');
+        setKnocks([]);
+        setMessages([]);
+        setSelectedId(null);
+        setShowQr(false);
+        setShowDisband(false);
+        setShowMenu(false);
+        setShowHelp(false);
+        setShowQueue(false);
+        setShowComposer(false);
+        setShowSwitcher(false);
+        setReplyToId(null);
+        setCryptoKey(null);
+        setKnockKey(null);
+        setTokenState(null);
+        setTokenHash(null);
+        setSubJwt(null);
+        setLobbyJwt(null);
+        setConnection('idle');
+        setUnreadCount(0);
+        setHasCompanion(false);
+        setEmptyQrSrc('');
+        setCatchUpEnabled(false);
+        setRoomPasswordState('');
+        knockEphemeralRef.current = null;
+        claimTagRef.current = null;
+
         const hash = await deriveRoomHash(roomSecret);
+        if (!active) return;
         setRoomHash(hash);
-        setMessages(await loadMessages(hash));
+        const localMessages = await loadMessages(hash);
+        if (!active) return;
+        setMessages(localMessages);
         const savedHandle = getHandle(hash);
         const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
@@ -420,9 +475,11 @@ const RoomController = () => {
               'X-Chat-Token': existingToken
             }
           });
+          if (!active) return;
 
           if (presenceResponse.status === 404) {
             await wipeLocalRoom(hash);
+            if (!active) return;
             setRoomState('DESTROYED');
             return;
           }
@@ -439,8 +496,10 @@ const RoomController = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Chat-Token': existingToken },
               });
+              if (!active) return;
               if (subRes.ok) {
                 const subData = (await subRes.json()) as { subscriber_jwt?: string };
+                if (!active) return;
                 if (subData.subscriber_jwt) {
                   setSubscriberJwt(hash, subData.subscriber_jwt);
                   setSubJwt(subData.subscriber_jwt);
@@ -469,9 +528,11 @@ const RoomController = () => {
         }
 
         const response = await fetch(`/api/rooms/${hash}`);
+        if (!active) return;
 
         if (response.status === 404) {
           await wipeLocalRoom(hash);
+          if (!active) return;
           setRoomState('DESTROYED');
           return;
         }
@@ -481,6 +542,7 @@ const RoomController = () => {
         }
 
         const data = (await response.json()) as RoomLookupResponse;
+        if (!active) return;
         upsertRoom(hash, roomSecret, savedHandle ?? null);
 
         if (data.has_participants) {
@@ -489,6 +551,7 @@ const RoomController = () => {
           setRoomState('LOBBY_EMPTY');
         }
       } catch (err) {
+        if (!active) return;
         setError(err instanceof Error ? err.message : 'Unable to load room');
       }
     };
@@ -496,6 +559,10 @@ const RoomController = () => {
     if (roomSecret) {
       void init();
     }
+
+    return () => {
+      active = false;
+    };
   }, [roomSecret, wipeLocalRoom]);
 
   useEffect(() => {
@@ -1420,8 +1487,7 @@ const RoomController = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (msg.action?.type === 'join-room') {
-                                window.location.hash = `#${msg.action.roomSecret}`;
-                                window.location.reload();
+                                navigateToRoom(msg.action.roomSecret);
                               }
                             }}
                           >
@@ -1586,12 +1652,12 @@ const RoomController = () => {
                   <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room key</p>
                     <p className="mt-2 text-sm leading-7 text-[#5d564d]">
-                      Optional password used to encrypt knocks and message cards for this room.
+                      Optional key used to encrypt knocks and message cards for this room.
                     </p>
                     <input
                       className="mt-4 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base shadow-inner"
                       style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
-                      placeholder="Room password (optional)"
+                      placeholder="Room key (optional)"
                       type="text"
                       name="room-key"
                       autoComplete="off"
@@ -1604,7 +1670,7 @@ const RoomController = () => {
                       onChange={(event) => updateRoomPassword(event.target.value)}
                     />
                     <p className="mt-3 text-xs leading-5 text-[#6a6358]">
-                      Saved only on this device. Everyone who should read the room needs the same password.
+                      Saved only on this device. Everyone who should read the room needs the same key.
                     </p>
                   </div>
                 </div>
@@ -1677,8 +1743,7 @@ const RoomController = () => {
                         className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white"
                         onClick={() => {
                           if (activeMessage.action?.type === 'join-room') {
-                            window.location.hash = `#${activeMessage.action.roomSecret}`;
-                            window.location.reload();
+                            navigateToRoom(activeMessage.action.roomSecret);
                           }
                         }}
                       >
@@ -2005,8 +2070,7 @@ const RoomController = () => {
                             setShowSwitcher(false);
                             return;
                           }
-                          window.location.hash = `#${r.roomSecret}`;
-                          window.location.reload();
+                          navigateToRoom(r.roomSecret);
                         }}
                         className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
                           isCurrent
@@ -2077,10 +2141,10 @@ const RoomController = () => {
             <input
               className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-base"
               style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
-              placeholder="Room password (optional)"
+              placeholder="Room key or pairing code"
               type="text"
               name="room-key"
-              autoComplete="off"
+              autoComplete="one-time-code"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
