@@ -1590,8 +1590,16 @@ const RoomController = () => {
                     </p>
                     <input
                       className="mt-4 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base shadow-inner"
+                      style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
                       placeholder="Room password (optional)"
-                      type="password"
+                      type="text"
+                      name="room-key"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-1p-ignore=""
+                      data-lpignore="true"
                       value={roomPassword}
                       onChange={(event) => updateRoomPassword(event.target.value)}
                     />
@@ -2067,9 +2075,17 @@ const RoomController = () => {
             <p className="mt-3 text-[#3a362f]">Ask to be let in. Someone inside has to approve you.</p>
 
             <input
-              className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
+              className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-base"
+              style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
               placeholder="Room password (optional)"
-              type="password"
+              type="text"
+              name="room-key"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-1p-ignore=""
+              data-lpignore="true"
               value={roomPassword}
               onChange={(event) => updateRoomPassword(event.target.value)}
             />
@@ -2078,9 +2094,11 @@ const RoomController = () => {
             </p>
 
             <textarea
-              className="mt-4 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-sm"
+              className="mt-4 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-base"
               placeholder="Optional message"
               rows={3}
+              autoCorrect="off"
+              autoCapitalize="sentences"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
             />
