@@ -5,6 +5,10 @@ export type MessageAction = {
   type: 'join-room';
   roomSecret: string;
   label: string;
+  // 4-digit pairing code minted by the CLI for this agent room. The operator
+  // reads it off the message and types it as the room password on join. Only
+  // present on rooms minted by daemons that ship the pairing-code protection.
+  code?: string;
 };
 
 export type ChatMessage = {
