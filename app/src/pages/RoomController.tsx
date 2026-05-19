@@ -1413,19 +1413,26 @@ const RoomController = () => {
                         </span>
                       )}
                       {msg.action?.type === 'join-room' && (
-                        <button
-                          type="button"
-                          className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-5 py-2.5 text-sm font-semibold text-white"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (msg.action?.type === 'join-room') {
-                              window.location.hash = `#${msg.action.roomSecret}`;
-                              window.location.reload();
-                            }
-                          }}
-                        >
-                          {msg.action.label} &rarr;
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-5 py-2.5 text-sm font-semibold text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (msg.action?.type === 'join-room') {
+                                window.location.hash = `#${msg.action.roomSecret}`;
+                                window.location.reload();
+                              }
+                            }}
+                          >
+                            {msg.action.label} &rarr;
+                          </button>
+                          {msg.action.code && (
+                            <div className={`mt-2 text-xs font-mono tracking-widest ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>
+                              Pairing code: <span className="font-semibold text-base tracking-[0.3em]">{msg.action.code}</span>
+                            </div>
+                          )}
+                        </>
                       )}
                       <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
                     </div>
@@ -1656,18 +1663,25 @@ const RoomController = () => {
                     </div>
                   )}
                   {activeMessage.action?.type === 'join-room' && (
-                    <button
-                      type="button"
-                      className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white"
-                      onClick={() => {
-                        if (activeMessage.action?.type === 'join-room') {
-                          window.location.hash = `#${activeMessage.action.roomSecret}`;
-                          window.location.reload();
-                        }
-                      }}
-                    >
-                      {activeMessage.action.label} &rarr;
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white"
+                        onClick={() => {
+                          if (activeMessage.action?.type === 'join-room') {
+                            window.location.hash = `#${activeMessage.action.roomSecret}`;
+                            window.location.reload();
+                          }
+                        }}
+                      >
+                        {activeMessage.action.label} &rarr;
+                      </button>
+                      {activeMessage.action.code && (
+                        <div className="mt-3 text-xs font-mono tracking-widest text-[#766f63]">
+                          Pairing code: <span className="font-semibold text-base tracking-[0.3em]">{activeMessage.action.code}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </article>
 
