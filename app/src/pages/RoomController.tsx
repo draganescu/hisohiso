@@ -77,6 +77,42 @@ type KnockRequest = {
 
 const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
 
+// Synchronously derive chrome state (hash, nickname, color, token, etc.) for the
+// room in the URL hash, so the first paint after a hard reload already shows the
+// correct PARTICIPANT layout instead of flashing the INIT loading card. Only
+// returns non-null if we have a stored participant token for this room — otherwise
+// the async init flow takes over from the INIT state as before.
+type OptimisticContext = {
+  roomSecret: string;
+  roomHash: string;
+  token: string;
+  handle: string;
+  roomPassword: string;
+  roomNickname: string;
+  roomColor: string;
+  subJwt: string | null;
+};
+
+const loadInitialContext = (): OptimisticContext | null => {
+  const roomSecret = readRoomSecretFromHash();
+  if (!roomSecret) return null;
+  const stored = listRooms().find((r) => r.roomSecret === roomSecret);
+  if (!stored) return null;
+  const hash = stored.roomHash;
+  const token = getToken(hash);
+  if (!token) return null;
+  return {
+    roomSecret,
+    roomHash: hash,
+    token,
+    handle: getHandle(hash) ?? '',
+    roomPassword: getRoomPassword(hash) ?? '',
+    roomNickname: getRoomNickname(hash) ?? '',
+    roomColor: getRoomColor(hash),
+    subJwt: getSubscriberJwt(hash),
+  };
+};
+
 const formatMailStamp = (timestamp: number): string => {
   return new Date(timestamp * 1000).toLocaleString([], {
     month: 'short',
@@ -127,15 +163,16 @@ const getMessageLabel = (message: ChatMessage): string => {
 };
 
 const RoomController = () => {
-  const [roomSecret, setRoomSecret] = useState(readRoomSecretFromHash);
-  const [roomHash, setRoomHash] = useState<string>('');
-  const [roomState, setRoomState] = useState<RoomState>('INIT');
+  const [initialContext] = useState<OptimisticContext | null>(loadInitialContext);
+  const [roomSecret, setRoomSecret] = useState(() => initialContext?.roomSecret ?? readRoomSecretFromHash());
+  const [roomHash, setRoomHash] = useState<string>(() => initialContext?.roomHash ?? '');
+  const [roomState, setRoomState] = useState<RoomState>(() => (initialContext ? 'PARTICIPANT' : 'INIT'));
   const [error, setError] = useState<string>('');
   const [message, setMessage] = useState<string>('');
   const [knockSent, setKnockSent] = useState(false);
   const [knockNotice, setKnockNotice] = useState<string>('');
   const [knocks, setKnocks] = useState<KnockRequest[]>([]);
-  const [roomPassword, setRoomPasswordState] = useState('');
+  const [roomPassword, setRoomPasswordState] = useState(() => initialContext?.roomPassword ?? '');
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -148,21 +185,21 @@ const RoomController = () => {
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [headerCondensed, setHeaderCondensed] = useState(false);
-  const [roomNickname, setRoomNickname] = useState<string>('');
-  const [roomColor, setRoomColor] = useState<string>('#ccc');
+  const [roomNickname, setRoomNickname] = useState<string>(() => initialContext?.roomNickname ?? '');
+  const [roomColor, setRoomColor] = useState<string>(() => initialContext?.roomColor ?? '#ccc');
   const [allRooms, setAllRooms] = useState<StoredRoom[]>([]);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
-  const [token, setTokenState] = useState<string | null>(null);
+  const [token, setTokenState] = useState<string | null>(() => initialContext?.token ?? null);
   const [tokenHash, setTokenHash] = useState<string | null>(null);
   // Subscriber JWT for Mercure subscription. Long-lived (7 days per server
   // policy) once we're a PARTICIPANT; short-lived (10 minutes) when we're a
   // knocker waiting for our wrapped token. Whichever is active is what the
   // SSE effect uses for Authorization.
-  const [subJwt, setSubJwt] = useState<string | null>(null);
+  const [subJwt, setSubJwt] = useState<string | null>(() => initialContext?.subJwt ?? null);
   const [lobbyJwt, setLobbyJwt] = useState<string | null>(null);
-  const [handle, setHandleState] = useState<string>('');
+  const [handle, setHandleState] = useState<string>(() => initialContext?.handle ?? '');
   const [connection, setConnection] = useState<'idle' | 'connected' | 'error'>('idle');
   const [autoScroll, setAutoScroll] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -186,6 +223,13 @@ const RoomController = () => {
   // the ephemeral private key. Cleared on first successful /presence; never
   // persisted (one-shot, in-memory only).
   const claimTagRef = useRef<string | null>(null);
+  // Whether the init effect is running for the first time. We use this to skip
+  // the destructive reset block when an optimistic context was loaded — the
+  // initial useState values already reflect the room we're entering, so wiping
+  // them and re-deriving asynchronously causes a visible PARTICIPANT-→INIT-→
+  // PARTICIPANT flip. On any subsequent run (roomSecret changed in-place via
+  // hashchange) the reset is correct.
+  const isFirstInitRunRef = useRef(true);
 
   const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
   const showEmptyState = messages.length === 0 && !hasCompanion && roomState === 'PARTICIPANT';
@@ -422,38 +466,44 @@ const RoomController = () => {
 
     const init = async () => {
       try {
-        setRoomHash('');
-        setRoomState('INIT');
-        setError('');
-        setKnockSent(false);
-        setKnockNotice('');
-        setKnocks([]);
-        setMessages([]);
-        setSelectedId(null);
-        setShowQr(false);
-        setShowDisband(false);
-        setShowMenu(false);
-        setShowHelp(false);
-        setShowQueue(false);
-        setShowComposer(false);
-        setShowSwitcher(false);
-        setReplyToId(null);
-        setCryptoKey(null);
-        setKnockKey(null);
-        setTokenState(null);
-        setTokenHash(null);
-        setSubJwt(null);
-        setLobbyJwt(null);
-        setConnection('idle');
-        setUnreadCount(0);
-        setHasCompanion(false);
-        setEmptyQrSrc('');
-        setCatchUpEnabled(false);
-        setRoomPasswordState('');
-        knockEphemeralRef.current = null;
-        claimTagRef.current = null;
+        const firstRun = isFirstInitRunRef.current;
+        isFirstInitRunRef.current = false;
+        const skipReset = firstRun && initialContext !== null && initialContext.roomSecret === roomSecret;
 
-        const hash = await deriveRoomHash(roomSecret);
+        if (!skipReset) {
+          setRoomHash('');
+          setRoomState('INIT');
+          setError('');
+          setKnockSent(false);
+          setKnockNotice('');
+          setKnocks([]);
+          setMessages([]);
+          setSelectedId(null);
+          setShowQr(false);
+          setShowDisband(false);
+          setShowMenu(false);
+          setShowHelp(false);
+          setShowQueue(false);
+          setShowComposer(false);
+          setShowSwitcher(false);
+          setReplyToId(null);
+          setCryptoKey(null);
+          setKnockKey(null);
+          setTokenState(null);
+          setTokenHash(null);
+          setSubJwt(null);
+          setLobbyJwt(null);
+          setConnection('idle');
+          setUnreadCount(0);
+          setHasCompanion(false);
+          setEmptyQrSrc('');
+          setCatchUpEnabled(false);
+          setRoomPasswordState('');
+          knockEphemeralRef.current = null;
+          claimTagRef.current = null;
+        }
+
+        const hash = skipReset ? initialContext!.roomHash : await deriveRoomHash(roomSecret);
         if (!active) return;
         setRoomHash(hash);
         const localMessages = await loadMessages(hash);
@@ -563,7 +613,7 @@ const RoomController = () => {
     return () => {
       active = false;
     };
-  }, [roomSecret, wipeLocalRoom]);
+  }, [roomSecret, wipeLocalRoom, initialContext]);
 
   useEffect(() => {
     if (roomState === 'PARTICIPANT') {
