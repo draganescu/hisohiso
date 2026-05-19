@@ -255,25 +255,12 @@ if (preg_match('#^/api/rooms/([^/]+)/approve$#', $path, $matches) && $method ===
     // approver commits to a hash now, the knocker reveals the matching tag on
     // first /presence (it can only derive the tag from the ECDH shared secret).
     // Without this, a sniffer of the plaintext token could race the legit joiner.
-    //
-    // Backward-compat: legacy approvers (CLI ≤ v0.4.2) don't know about
-    // claim_tag_hash and post an empty body. We accept that path and fall
-    // back to pre-PR#25 semantics — pending=0, no claim required on first
-    // /presence. The phone's /presence header (X-Chat-Claim-Tag) is then
-    // ignored by the /presence handler because pending=0. The single-use
-    // binding is lost for THAT participant; security matches pre-PR#25,
-    // which is what the legacy CLI was always expecting anyway. Drop this
-    // shim in a future major once v0.4.2 daemons are out of the wild.
     $claim_tag_hash = $body['claim_tag_hash'] ?? null;
-    touch_presence($room_hash, $approver);
-    if ($claim_tag_hash === null) {
-        $new_token = create_participant($room_hash);
-    } else {
-        if (!is_string($claim_tag_hash) || preg_match('/^[0-9a-f]{64}$/', $claim_tag_hash) !== 1) {
-            json_response(['error' => 'invalid_claim_tag_hash'], 400);
-        }
-        $new_token = create_pending_participant($room_hash, $claim_tag_hash);
+    if (!is_string($claim_tag_hash) || preg_match('/^[0-9a-f]{64}$/', $claim_tag_hash) !== 1) {
+        json_response(['error' => 'invalid_claim_tag_hash'], 400);
     }
+    touch_presence($room_hash, $approver);
+    $new_token = create_pending_participant($room_hash, $claim_tag_hash);
     // Token is NOT included in the published event body — the approver is
     // expected to wrap it (together with the subscriber_jwt) to the knocker's
     // ephemeral pubkey and post it via /token. The approve event is kept as
