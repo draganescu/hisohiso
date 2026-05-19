@@ -42,7 +42,10 @@ export const createRoomAndJoin = async (
 
 export type SendOptions = {
   handle?: string;
-  action?: { type: string; roomSecret: string; label: string };
+  // `code` carries the per-agent-room pairing code so the phone's join button
+  // can display 'Pairing code: 4827' next to it. The phone must type it as the
+  // room password during the join flow — that's what gates k_msg/k_knock.
+  action?: { type: string; roomSecret: string; label: string; code?: string };
   blocks?: unknown[];
 };
 

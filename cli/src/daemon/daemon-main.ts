@@ -22,6 +22,8 @@ import { encryptAndSend } from '../lib/room-bridge.js';
 import { AgentManager, type RestoreResult } from './agent-manager.js';
 import { writePid, removePid } from './pid.js';
 import { startUpdateLoop } from '../lib/updater.js';
+import { promptLine, generatePairingCode } from '../lib/prompt.js';
+import { deriveKnockKey } from '../lib/crypto.js';
 import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
@@ -39,7 +41,8 @@ export const runDaemon = async (): Promise<void> => {
     state.controlRoomHash,
     state.participantToken,
     state.controlRoomSecret,
-    state.controlRoomPassword
+    state.controlRoomPassword,
+    state.sessionKnockMessage
   );
 
   // One-time restore of previously active agent rooms. The control room may have
@@ -84,9 +87,15 @@ export const runDaemon = async (): Promise<void> => {
   let firstIteration = true;
   while (true) {
     if (!firstIteration) {
+      // Re-pair after the phone disbanded the control room. Carry the session
+      // knock message into the new pair — it's the operator's session secret,
+      // not a per-room thing, and re-prompting after every re-pair would be
+      // hostile UX. clearDaemonState wipes the now-dead saved state so the
+      // freshly minted controlRoomPassword / hash get persisted cleanly.
+      const carriedKnockMessage = state.sessionKnockMessage;
       await clearDaemonState().catch(() => {});
       console.log('Control room was disbanded by phone — re-pairing.');
-      ({ state, messageKey } = await setupControlRoom(server));
+      ({ state, messageKey } = await setupControlRoom(server, carriedKnockMessage));
       manager.updateControlRoom(
         state.controlRoomHash,
         state.participantToken,
@@ -198,7 +207,7 @@ const handleCommand = async (
   token: string,
   messageKey: CryptoKey
 ): Promise<void> => {
-  const reply = async (text: string, action?: { type: string; roomSecret: string; label: string }) => {
+  const reply = async (text: string, action?: { type: string; roomSecret: string; label: string; code?: string }) => {
     await encryptAndSend(server, controlRoomHash, token, messageKey, text, {
       handle: 'hisohiso-daemon',
       action,
@@ -245,13 +254,17 @@ const handleCommand = async (
     // Anything else — treat as agent name to spawn
     const agentName = lower.replace(/^spawn\s+/, ''); // allow "spawn claude" or just "claude"
     console.log(`Spawning agent: ${agentName}`);
-    const { agentId, roomSecret } = await manager.spawn(agentName);
+    const { agentId, roomSecret, roomPassword } = await manager.spawn(agentName);
     console.log(`Agent spawned: ${agentName} (${agentId})`);
 
+    // Broadcast the join action with the pairing code attached. The phone's
+    // control room renders 'Join <agent>' with 'code: 4827' beneath it; the
+    // operator reads the code and types it on the join screen as the password.
     await reply(`${original} session ready.`, {
       type: 'join-room',
       roomSecret,
       label: `Join ${original}`,
+      code: roomPassword,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -260,22 +273,46 @@ const handleCommand = async (
   }
 };
 
-const setupControlRoom = async (server: string): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
-  // Try to reuse a previously-paired control room. If daemon-state.json exists and
-  // the room is still alive server-side, the phone is already paired — no QR rescan
-  // needed across daemon restarts. Falls through to creating a fresh control room if
-  // there's no saved state or the saved room is gone.
+const setupControlRoom = async (
+  server: string,
+  carriedKnockMessage?: string
+): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
+  // Reuse a previously-paired control room if alive server-side. This carries
+  // the persisted controlRoomPassword AND sessionKnockMessage forward across
+  // daemon restarts (including auto-update re-execs), so the phone keeps
+  // working with the same code + knock-msg it was paired with originally.
   try {
     const saved = await loadDaemonState();
     await api.checkRoom(server, saved.controlRoomHash);
+    if (typeof saved.sessionKnockMessage !== 'string' || saved.sessionKnockMessage === '') {
+      // Pre-pairing-code state — too risky to reuse silently. Treat as if
+      // there were no saved state, which forces a fresh pair below.
+      throw new Error('saved state predates pairing-code release');
+    }
     console.log('Reusing previously paired control room (no QR scan needed).');
     const messageKey = await deriveMessageKey(saved.controlRoomSecret, saved.controlRoomPassword);
     return { state: saved, messageKey };
   } catch {
-    // No saved state, or saved room has been disbanded server-side. Fall through.
+    // No saved state, the saved room has been disbanded server-side, or the
+    // saved state is from a pre-pairing-code daemon. Fall through to fresh pair.
   }
 
-  const password = '';
+  // Operator-typed session knock message. Hidden input so it doesn't show up
+  // in scrollback / screenshots. Persisted via DaemonState below; the same
+  // string is the expected knock cleartext for every agent room minted later.
+  // A re-pair carries the existing knockMessage forward — no re-prompt.
+  let sessionKnockMessage: string;
+  if (typeof carriedKnockMessage === 'string' && carriedKnockMessage !== '') {
+    sessionKnockMessage = carriedKnockMessage;
+  } else {
+    sessionKnockMessage = (await promptLine('Session knock message (used to authenticate every join in this session): ', { hidden: true })).trim();
+    if (sessionKnockMessage === '') {
+      console.error('Knock message cannot be empty. Aborting.');
+      process.exit(1);
+    }
+  }
+
+  const password = generatePairingCode();
   const controlRoomSecret = generateRoomSecret();
   const controlRoomHash = await deriveRoomHash(controlRoomSecret);
 
@@ -288,17 +325,23 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
   const participantToken = result.participant_token;
   const subscriberJwt = result.subscriber_jwt;
   const messageKey = await deriveMessageKey(controlRoomSecret, password);
+  const knockKey = await deriveKnockKey(controlRoomSecret, password);
 
   // Start presence so room shows as active
   const tempPresence = startPresence(server, controlRoomHash, participantToken);
 
-  // Show QR
+  // Show QR + pairing code together. The phone scans QR for room_secret;
+  // operator reads the pairing code off this terminal and types it as the
+  // password on the phone's join screen. The knock message stays in the
+  // operator's head — never displayed.
   const joinUrl = `${server}/room#${controlRoomSecret}`;
   console.log('\nScan to connect your phone to the daemon:\n');
   qrTerminal.generate(joinUrl, { small: true }, (code: string) => {
     console.log(code);
   });
-  console.log(`\nOr open: ${joinUrl}\n`);
+  console.log(`\nOr open: ${joinUrl}`);
+  console.log(`Pairing code: ${password}`);
+  console.log('(Enter the pairing code as the room password; use your session knock message as the knock body.)\n');
   console.log('Waiting for phone to join...');
 
   // Pairing-only cancel handler. Critical that it's removed once pairing settles —
@@ -315,13 +358,33 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
     await new Promise<void>((resolve, reject) => {
       const sse = subscribeToRoom(server, controlRoomHash, subscriberJwt, {
         onKnock: async (knockEvent: RoomEvent) => {
-          console.log('Phone is joining... approving.');
           const knockPubkey = knockEvent.body?.knock_pubkey;
           const knockMsgId = knockEvent.body?.msg_id;
-          if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string') {
-            console.error('Knock missing knock_pubkey or msg_id — ignoring.');
+          const rawPayload = knockEvent.body?.encrypted_payload;
+          if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string' || !rawPayload) {
+            console.error('Knock missing fields — ignoring.');
             return;
           }
+          // Decrypt the knock body with k_knock; if that fails the phone
+          // didn't use the right pairing code. Then compare the cleartext to
+          // the operator's session knock message; if those differ, drop.
+          // Either path: do NOT approve. The legitimate phone retries with
+          // correct inputs; brute-forcers see nothing actionable.
+          let knockText: string;
+          try {
+            const enc = typeof rawPayload === 'string'
+              ? JSON.parse(rawPayload) as EncryptedPayload
+              : rawPayload as EncryptedPayload;
+            knockText = (await decryptText(knockKey, controlRoomHash, 'knock', knockMsgId, enc)).trim();
+          } catch {
+            console.error('Knock decrypt failed — wrong pairing code, ignoring.');
+            return;
+          }
+          if (knockText !== sessionKnockMessage) {
+            console.error('Knock message mismatch — ignoring.');
+            return;
+          }
+          console.log('Phone is joining... approving.');
           try {
             const binding = await beginApprove(knockPubkey, knockMsgId);
             const approveRes = await api.approveKnock(server, controlRoomHash, participantToken, binding.claimTagHash);
@@ -355,6 +418,7 @@ const setupControlRoom = async (server: string): Promise<{ state: DaemonState; m
     participantToken,
     subscriberJwt,
     controlRoomPassword: password,
+    sessionKnockMessage,
   };
   await saveDaemonState(state);
 
