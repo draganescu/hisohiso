@@ -390,7 +390,12 @@ export class AgentManager {
 
           let messageToSend = wrappedText;
           if (session.profile.appendSystemPrompt) {
-            if (session.profile.systemPromptMode === 'prepend-message-once') {
+            if (session.profile.systemPromptMode === 'codex-config') {
+              // Codex: inject via --config instructions=<value> on every turn (initial + resume).
+              // Unlike 'prepend-message-once', this survives resume turns because it's a CLI flag
+              // processed fresh each invocation, and it doesn't pollute the user message.
+              argv.push('--config', `instructions=${session.profile.appendSystemPrompt}`);
+            } else if (session.profile.systemPromptMode === 'prepend-message-once') {
               if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${wrappedText}`;
             } else {
               argv.push('--append-system-prompt', session.profile.appendSystemPrompt);

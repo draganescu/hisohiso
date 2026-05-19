@@ -192,9 +192,9 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       let messageToSend = text;
       if (profile.appendSystemPrompt) {
-        if (profile.systemPromptMode === 'prepend-message-once') {
-          // For agents without a system-prompt flag (codex). Prepend on first turn only;
-          // session continuity carries it forward.
+        if (profile.systemPromptMode === 'codex-config') {
+          args.push('--config', `instructions=${profile.appendSystemPrompt}`);
+        } else if (profile.systemPromptMode === 'prepend-message-once') {
           if (!isResume) messageToSend = `${profile.appendSystemPrompt}\n\n${text}`;
         } else {
           args.push('--append-system-prompt', profile.appendSystemPrompt);

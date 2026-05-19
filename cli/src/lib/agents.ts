@@ -10,7 +10,7 @@ export type AgentProfile = {
   // How to inject appendSystemPrompt. Default 'append-flag' uses --append-system-prompt <value>
   // (Claude). 'prepend-message-once' prepends the prompt to the user message on the first turn
   // only (for agents like codex that lack a system-prompt flag — session continuity carries it).
-  systemPromptMode?: 'append-flag' | 'prepend-message-once';
+  systemPromptMode?: 'append-flag' | 'prepend-message-once' | 'codex-config';
   // Build args for a resume turn. If undefined, default behavior is `[...args, '--resume', id]`
   // (Claude). Codex needs `exec resume <id> ...` which can't be expressed as a flag append.
   buildResumeArgs?: (sessionId: string) => string[];
@@ -46,7 +46,7 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
     mode: 'session',
     appendSystemPrompt: BLOCK_PROMPT,
     outputFormat: 'codex-ndjson',
-    systemPromptMode: 'prepend-message-once',
+    systemPromptMode: 'codex-config',
     buildResumeArgs: (id) => ['exec', 'resume', id, '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
   },
   'codex-once': {
@@ -56,7 +56,7 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
     mode: 'oneshot',
     appendSystemPrompt: BLOCK_PROMPT,
     outputFormat: 'codex-ndjson',
-    systemPromptMode: 'prepend-message-once',
+    systemPromptMode: 'codex-config',
   },
   'goose': {
     command: 'goose',
