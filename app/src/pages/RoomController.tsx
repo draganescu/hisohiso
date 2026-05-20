@@ -75,6 +75,44 @@ type KnockRequest = {
   message?: string | null;
 };
 
+const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
+
+// Synchronously derive chrome state (hash, nickname, color, token, etc.) for the
+// room in the URL hash, so the first paint after a hard reload already shows the
+// correct PARTICIPANT layout instead of flashing the INIT loading card. Only
+// returns non-null if we have a stored participant token for this room — otherwise
+// the async init flow takes over from the INIT state as before.
+type OptimisticContext = {
+  roomSecret: string;
+  roomHash: string;
+  token: string;
+  handle: string;
+  roomPassword: string;
+  roomNickname: string;
+  roomColor: string;
+  subJwt: string | null;
+};
+
+const loadInitialContext = (): OptimisticContext | null => {
+  const roomSecret = readRoomSecretFromHash();
+  if (!roomSecret) return null;
+  const stored = listRooms().find((r) => r.roomSecret === roomSecret);
+  if (!stored) return null;
+  const hash = stored.roomHash;
+  const token = getToken(hash);
+  if (!token) return null;
+  return {
+    roomSecret,
+    roomHash: hash,
+    token,
+    handle: getHandle(hash) ?? '',
+    roomPassword: getRoomPassword(hash) ?? '',
+    roomNickname: getRoomNickname(hash) ?? '',
+    roomColor: getRoomColor(hash),
+    subJwt: getSubscriberJwt(hash),
+  };
+};
+
 const formatMailStamp = (timestamp: number): string => {
   return new Date(timestamp * 1000).toLocaleString([], {
     month: 'short',
@@ -125,15 +163,16 @@ const getMessageLabel = (message: ChatMessage): string => {
 };
 
 const RoomController = () => {
-  const [roomSecret] = useState(() => window.location.hash.replace(/^#\/?/, ''));
-  const [roomHash, setRoomHash] = useState<string>('');
-  const [roomState, setRoomState] = useState<RoomState>('INIT');
+  const [initialContext] = useState<OptimisticContext | null>(loadInitialContext);
+  const [roomSecret, setRoomSecret] = useState(() => initialContext?.roomSecret ?? readRoomSecretFromHash());
+  const [roomHash, setRoomHash] = useState<string>(() => initialContext?.roomHash ?? '');
+  const [roomState, setRoomState] = useState<RoomState>(() => (initialContext ? 'PARTICIPANT' : 'INIT'));
   const [error, setError] = useState<string>('');
   const [message, setMessage] = useState<string>('');
   const [knockSent, setKnockSent] = useState(false);
   const [knockNotice, setKnockNotice] = useState<string>('');
   const [knocks, setKnocks] = useState<KnockRequest[]>([]);
-  const [roomPassword, setRoomPasswordState] = useState('');
+  const [roomPassword, setRoomPasswordState] = useState(() => initialContext?.roomPassword ?? '');
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -146,21 +185,21 @@ const RoomController = () => {
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [headerCondensed, setHeaderCondensed] = useState(false);
-  const [roomNickname, setRoomNickname] = useState<string>('');
-  const [roomColor, setRoomColor] = useState<string>('#ccc');
+  const [roomNickname, setRoomNickname] = useState<string>(() => initialContext?.roomNickname ?? '');
+  const [roomColor, setRoomColor] = useState<string>(() => initialContext?.roomColor ?? '#ccc');
   const [allRooms, setAllRooms] = useState<StoredRoom[]>([]);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
-  const [token, setTokenState] = useState<string | null>(null);
+  const [token, setTokenState] = useState<string | null>(() => initialContext?.token ?? null);
   const [tokenHash, setTokenHash] = useState<string | null>(null);
   // Subscriber JWT for Mercure subscription. Long-lived (7 days per server
   // policy) once we're a PARTICIPANT; short-lived (10 minutes) when we're a
   // knocker waiting for our wrapped token. Whichever is active is what the
   // SSE effect uses for Authorization.
-  const [subJwt, setSubJwt] = useState<string | null>(null);
+  const [subJwt, setSubJwt] = useState<string | null>(() => initialContext?.subJwt ?? null);
   const [lobbyJwt, setLobbyJwt] = useState<string | null>(null);
-  const [handle, setHandleState] = useState<string>('');
+  const [handle, setHandleState] = useState<string>(() => initialContext?.handle ?? '');
   const [connection, setConnection] = useState<'idle' | 'connected' | 'error'>('idle');
   const [autoScroll, setAutoScroll] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -184,9 +223,33 @@ const RoomController = () => {
   // the ephemeral private key. Cleared on first successful /presence; never
   // persisted (one-shot, in-memory only).
   const claimTagRef = useRef<string | null>(null);
+  // Whether the init effect is running for the first time. We use this to skip
+  // the destructive reset block when an optimistic context was loaded — the
+  // initial useState values already reflect the room we're entering, so wiping
+  // them and re-deriving asynchronously causes a visible PARTICIPANT-→INIT-→
+  // PARTICIPANT flip. On any subsequent run (roomSecret changed in-place via
+  // hashchange) the reset is correct.
+  const isFirstInitRunRef = useRef(true);
 
   const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
   const showEmptyState = messages.length === 0 && !hasCompanion && roomState === 'PARTICIPANT';
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setRoomSecret(readRoomSecretFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const navigateToRoom = useCallback((nextRoomSecret: string) => {
+    const nextSecret = nextRoomSecret.replace(/^#\/?/, '');
+    if (!nextSecret) return;
+    if (window.location.hash.replace(/^#\/?/, '') !== nextSecret) {
+      window.location.hash = `#${nextSecret}`;
+    }
+    setRoomSecret(nextSecret);
+  }, []);
 
   useEffect(() => {
     if (!showEmptyState || !shareUrl) {
@@ -399,11 +462,53 @@ const RoomController = () => {
   }, [showComposer]);
 
   useEffect(() => {
+    let active = true;
+
     const init = async () => {
       try {
-        const hash = await deriveRoomHash(roomSecret);
+        const firstRun = isFirstInitRunRef.current;
+        isFirstInitRunRef.current = false;
+        const skipReset = firstRun && initialContext !== null && initialContext.roomSecret === roomSecret;
+
+        if (!skipReset) {
+          setRoomHash('');
+          setRoomState('INIT');
+          setError('');
+          setKnockSent(false);
+          setKnockNotice('');
+          setKnocks([]);
+          setMessages([]);
+          setSelectedId(null);
+          setShowQr(false);
+          setShowDisband(false);
+          setShowMenu(false);
+          setShowHelp(false);
+          setShowQueue(false);
+          setShowComposer(false);
+          setShowSwitcher(false);
+          setReplyToId(null);
+          setCryptoKey(null);
+          setKnockKey(null);
+          setTokenState(null);
+          setTokenHash(null);
+          setSubJwt(null);
+          setLobbyJwt(null);
+          setConnection('idle');
+          setUnreadCount(0);
+          setHasCompanion(false);
+          setEmptyQrSrc('');
+          setCatchUpEnabled(false);
+          setRoomPasswordState('');
+          knockEphemeralRef.current = null;
+          claimTagRef.current = null;
+        }
+
+        const hash = skipReset ? initialContext!.roomHash : await deriveRoomHash(roomSecret);
+        if (!active) return;
         setRoomHash(hash);
-        setMessages(await loadMessages(hash));
+        const localMessages = await loadMessages(hash);
+        if (!active) return;
+        setMessages(localMessages);
         const savedHandle = getHandle(hash);
         const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
@@ -420,9 +525,11 @@ const RoomController = () => {
               'X-Chat-Token': existingToken
             }
           });
+          if (!active) return;
 
           if (presenceResponse.status === 404) {
             await wipeLocalRoom(hash);
+            if (!active) return;
             setRoomState('DESTROYED');
             return;
           }
@@ -439,8 +546,10 @@ const RoomController = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Chat-Token': existingToken },
               });
+              if (!active) return;
               if (subRes.ok) {
                 const subData = (await subRes.json()) as { subscriber_jwt?: string };
+                if (!active) return;
                 if (subData.subscriber_jwt) {
                   setSubscriberJwt(hash, subData.subscriber_jwt);
                   setSubJwt(subData.subscriber_jwt);
@@ -469,9 +578,11 @@ const RoomController = () => {
         }
 
         const response = await fetch(`/api/rooms/${hash}`);
+        if (!active) return;
 
         if (response.status === 404) {
           await wipeLocalRoom(hash);
+          if (!active) return;
           setRoomState('DESTROYED');
           return;
         }
@@ -481,6 +592,7 @@ const RoomController = () => {
         }
 
         const data = (await response.json()) as RoomLookupResponse;
+        if (!active) return;
         upsertRoom(hash, roomSecret, savedHandle ?? null);
 
         if (data.has_participants) {
@@ -489,6 +601,7 @@ const RoomController = () => {
           setRoomState('LOBBY_EMPTY');
         }
       } catch (err) {
+        if (!active) return;
         setError(err instanceof Error ? err.message : 'Unable to load room');
       }
     };
@@ -496,7 +609,11 @@ const RoomController = () => {
     if (roomSecret) {
       void init();
     }
-  }, [roomSecret, wipeLocalRoom]);
+
+    return () => {
+      active = false;
+    };
+  }, [roomSecret, wipeLocalRoom, initialContext]);
 
   useEffect(() => {
     if (roomState === 'PARTICIPANT') {
@@ -1420,8 +1537,7 @@ const RoomController = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (msg.action?.type === 'join-room') {
-                                window.location.hash = `#${msg.action.roomSecret}`;
-                                window.location.reload();
+                                navigateToRoom(msg.action.roomSecret);
                               }
                             }}
                           >
@@ -1586,12 +1702,12 @@ const RoomController = () => {
                   <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room key</p>
                     <p className="mt-2 text-sm leading-7 text-[#5d564d]">
-                      Optional password used to encrypt knocks and message cards for this room.
+                      Optional key used to encrypt knocks and message cards for this room.
                     </p>
                     <input
                       className="mt-4 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base shadow-inner"
                       style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
-                      placeholder="Room password (optional)"
+                      placeholder="Room key (optional)"
                       type="text"
                       name="room-key"
                       autoComplete="off"
@@ -1604,7 +1720,7 @@ const RoomController = () => {
                       onChange={(event) => updateRoomPassword(event.target.value)}
                     />
                     <p className="mt-3 text-xs leading-5 text-[#6a6358]">
-                      Saved only on this device. Everyone who should read the room needs the same password.
+                      Saved only on this device. Everyone who should read the room needs the same key.
                     </p>
                   </div>
                 </div>
@@ -1677,8 +1793,7 @@ const RoomController = () => {
                         className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white"
                         onClick={() => {
                           if (activeMessage.action?.type === 'join-room') {
-                            window.location.hash = `#${activeMessage.action.roomSecret}`;
-                            window.location.reload();
+                            navigateToRoom(activeMessage.action.roomSecret);
                           }
                         }}
                       >
@@ -2005,8 +2120,7 @@ const RoomController = () => {
                             setShowSwitcher(false);
                             return;
                           }
-                          window.location.hash = `#${r.roomSecret}`;
-                          window.location.reload();
+                          navigateToRoom(r.roomSecret);
                         }}
                         className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
                           isCurrent
@@ -2077,10 +2191,10 @@ const RoomController = () => {
             <input
               className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-base"
               style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
-              placeholder="Room password (optional)"
+              placeholder="Room key or pairing code"
               type="text"
               name="room-key"
-              autoComplete="off"
+              autoComplete="one-time-code"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
