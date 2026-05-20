@@ -410,7 +410,14 @@ export class AgentManager {
           const displayArgs = argv.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
           console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
 
-          const result = await runCommand(session.profile.command, argv);
+          const result = await runCommand(session.profile.command, argv, {
+            env: {
+              HISOHISO_AGENT_ID: session.agentId,
+              HISOHISO_AGENT_NAME: session.name,
+              HISOHISO_ROOM_HASH: session.roomHash,
+              HISOHISO_ROOM_SECRET: session.roomSecret,
+            },
+          });
 
           // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
           // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId

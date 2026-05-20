@@ -209,7 +209,14 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
       const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
       console.log(`  $ ${profile.command} ${displayArgs.join(' ')}`);
 
-      const result = await runCommand(profile.command, args);
+      const result = await runCommand(profile.command, args, {
+        env: {
+          HISOHISO_AGENT_ID: room.roomHash.slice(0, 12),
+          HISOHISO_AGENT_NAME: agentName,
+          HISOHISO_ROOM_HASH: room.roomHash,
+          HISOHISO_ROOM_SECRET: room.roomSecret,
+        },
+      });
 
       // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
       // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId

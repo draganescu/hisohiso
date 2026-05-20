@@ -20,11 +20,11 @@ export type SpawnOptions = {
   shellCommand?: boolean;
 };
 
-export const runCommand = (command: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> => {
+export const runCommand = (command: string, args: string[], options: SpawnOptions = {}): Promise<{ stdout: string; stderr: string; code: number | null }> => {
   return new Promise((resolve) => {
     const child: ChildProcess = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      env: { ...process.env, ...(options.env ?? {}) },
     });
 
     let stdout = '';
