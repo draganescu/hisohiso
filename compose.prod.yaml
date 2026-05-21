@@ -16,15 +16,18 @@ services:
     # The FrankenPHP image's default HEALTHCHECK probes 127.0.0.1:2019 (the
     # Caddy admin API), which we deliberately disable via `admin off` in
     # Caddyfile (defense-in-depth against an in-container RCE reaching it).
-    # Replace it with an HTTPS probe against our actual API: the room-count
-    # endpoint is unauthenticated, cheap, and proves Caddy + PHP + SQLite
-    # are all wired up. -k tolerates the self-signed cert that Caddy serves
-    # for localhost via auto_https.
+    # Replace it with an HTTPS probe against our actual API: /api/stats is
+    # unauthenticated, cheap, and proves Caddy + PHP + SQLite are all wired
+    # up. --resolve forces curl to send SNI=$SERVER_NAME to 127.0.0.1 — a
+    # plain `https://localhost/...` would get a TLS internal_error because
+    # Caddy only has a cert for the public hostname.
     healthcheck:
-      test: ['CMD-SHELL', 'curl -fsSk https://localhost/api/stats || exit 1']
+      test:
+        - 'CMD-SHELL'
+        - 'curl -fsS --resolve "${SERVER_NAME}:443:127.0.0.1" "https://${SERVER_NAME}/api/stats" >/dev/null || exit 1'
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      start_period: 15s
       retries: 3
     # no-new-privileges blocks setuid binaries / kernel privilege escalation
     # from inside the container. The container still runs as root internally
