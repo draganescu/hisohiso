@@ -26,9 +26,16 @@ RUN { \
       echo 'expose_php=Off'; \
     } > /usr/local/etc/php/conf.d/zz-prod.ini
 
-COPY ./server /app/server
 COPY ./public /app/landing
 COPY --from=frontend /build/app/dist /app/public
+# PHP API lives under /app/public/api so FrankenPHP's worker root (/app/public)
+# can resolve it. Per-handle `root *` in Caddy doesn't propagate to FrankenPHP's
+# `php` directive — the worker always uses its global root — so the API must
+# live inside that root rather than at a sibling path like /app/server.
+COPY ./server /app/public/api
+# Remove FrankenPHP's default phpinfo() welcome page so a stray /index.php
+# request (or a misrouted /api/*) can't leak our PHP build info.
+RUN rm -f /app/public/index.php
 COPY Caddyfile /etc/caddy/Caddyfile
 ENV MERCURE_PUBLISHER_JWT_KEY='!ChangeMe!'
 ENV MERCURE_SUBSCRIBER_JWT_KEY='!ChangeMe!'

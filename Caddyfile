@@ -46,16 +46,19 @@
 		heartbeat 30s
 	}
 
-	# PHP Backend API. Explicit `try_files` + `php` instead of the `php_server`
-	# shorthand: the shorthand's default try_files chain (`{path} {path}/index.php
-	# index.php`) changed between Caddy 2.7 → 2.11 in a way that left unmatched
-	# `/api/*` requests being served as phpinfo() from the FrankenPHP image's
-	# default welcome page. The explicit form below routes every `/api/*` to
-	# `/app/server/index.php`, which then dispatches by REQUEST_URI internally.
+	# PHP Backend API.
+	# FrankenPHP 1.12 uses a single global PHP worker root (/app/public from
+	# the base image), so per-handle `root *` doesn't change which file
+	# `php` executes. We worked with that by COPY'ing ./server to
+	# /app/public/api in the Dockerfile, so /app/public/api/index.php is the
+	# entry point under the worker's natural root.
+	#
+	# try_files {path} /api/index.php: for /api/stats, {path} doesn't exist on
+	# disk, so internal SCRIPT_NAME becomes /api/index.php. PHP sees
+	# REQUEST_URI=/api/stats (preserved) and dispatches by parse_url(REQUEST_URI).
 	@api path /api/*
 	handle @api {
-		root * /app/server
-		try_files {path} /index.php
+		try_files {path} /api/index.php
 		php
 	}
 

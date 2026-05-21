@@ -14,5 +14,7 @@ services:
       - CHAT_DB_PATH=/data/chat.sqlite
     volumes:
       - ./data:/data
-      - ./server:/app/server
+      # ./server lives at /app/public/api in the image (FrankenPHP's worker
+      # root is /app/public, so PHP code has to live under it).
+      - ./server:/app/public/api
       - ./public:/app/landing
