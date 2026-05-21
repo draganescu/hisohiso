@@ -6,7 +6,7 @@ require_once __DIR__ . '/db.php';
 
 const OUTBOX_DEFAULT_DIR = '/data/rooms';
 const OUTBOX_MAX_ROWS = 500;
-const OUTBOX_TTL_SECONDS = 86400; // 24h
+const OUTBOX_TTL_MS = 86400 * 1000; // 24h, in ms (matches publish_event_to's ms ts)
 
 function outbox_root(): string
 {
@@ -94,13 +94,13 @@ function outbox_append(string $room_hash, string $msg_id, string $encrypted_payl
             VALUES (:msg_id, :ts, :sender_hash, :encrypted_payload)');
         $stmt->execute([
             ':msg_id' => $msg_id,
-            ':ts' => time(),
+            ':ts' => (int)round(microtime(true) * 1000),
             ':sender_hash' => $sender_hash,
             ':encrypted_payload' => $encrypted_payload,
         ]);
 
         // TTL prune
-        $ttl_cutoff = time() - OUTBOX_TTL_SECONDS;
+        $ttl_cutoff = (int)round(microtime(true) * 1000) - OUTBOX_TTL_MS;
         $pdo->prepare('DELETE FROM messages WHERE ts < :cutoff')->execute([':cutoff' => $ttl_cutoff]);
 
         // Count cap — delete everything past the newest OUTBOX_MAX_ROWS.
@@ -123,7 +123,7 @@ function outbox_fetch(string $room_hash, int $since_ts, int $limit = 500): array
     $pdo = outbox_open($room_hash);
 
     // Lazy TTL prune on read.
-    $ttl_cutoff = time() - OUTBOX_TTL_SECONDS;
+    $ttl_cutoff = (int)round(microtime(true) * 1000) - OUTBOX_TTL_MS;
     $pdo->prepare('DELETE FROM messages WHERE ts < :cutoff')->execute([':cutoff' => $ttl_cutoff]);
 
     $stmt = $pdo->prepare('SELECT msg_id, ts, sender_hash, encrypted_payload

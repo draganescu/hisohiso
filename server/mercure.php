@@ -85,13 +85,16 @@ function publish_event_to(array $topics, string $room_hash, string $type, array 
     if (count($topics) === 0) {
         return;
     }
-    $now = time();
+    // Millisecond precision so two events fired in the same second (tap →
+    // daemon ack → daemon ready) sort in the order they were emitted instead
+    // of tying and falling back to insertion order on the client.
+    $now_ms = (int)round(microtime(true) * 1000);
     $payload = [
         'v' => 0,
         'type' => $type,
         'room_hash' => $room_hash,
         'from' => $from,
-        'ts' => $now,
+        'ts' => $now_ms,
         'body' => $body,
     ];
 

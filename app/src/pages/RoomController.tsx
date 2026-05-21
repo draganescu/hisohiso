@@ -114,7 +114,7 @@ const loadInitialContext = (): OptimisticContext | null => {
 };
 
 const formatMailStamp = (timestamp: number): string => {
-  return new Date(timestamp * 1000).toLocaleString([], {
+  return new Date(timestamp).toLocaleString([], {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -1021,7 +1021,7 @@ const RoomController = () => {
       const record: ChatMessage = {
         id: sysId,
         room_hash: roomHash,
-        timestamp: Math.floor(Date.now() / 1000),
+        timestamp: Date.now(),
         content: text,
         type: 'system',
         direction: 'in'
@@ -1082,7 +1082,7 @@ const RoomController = () => {
       const messageRecord: ChatMessage = {
         id: msgId,
         room_hash: roomHash,
-        timestamp: Math.floor(Date.now() / 1000),
+        timestamp: Date.now(),
         content: trimmed,
         type: 'chat',
         direction: 'out',
@@ -1128,7 +1128,7 @@ const RoomController = () => {
         const messageRecord: ChatMessage = {
           id: msgId,
           room_hash: roomHash,
-          timestamp: Math.floor(Date.now() / 1000),
+          timestamp: Date.now(),
           content: `[${blockType}] ${label}`,
           type: 'chat',
           direction: 'out',

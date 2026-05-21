@@ -36,6 +36,16 @@ class ChatDatabase extends Dexie {
     this.version(2).stores({
       messages: 'id, room_hash, timestamp, [room_hash+timestamp]'
     });
+    // v3: convert legacy second-precision timestamps to ms so they keep their
+    // wall-clock meaning after the server + outgoing-message change. Without
+    // this, every cached message would render as Jan 1970 in formatMailStamp.
+    this.version(3).stores({
+      messages: 'id, room_hash, timestamp, [room_hash+timestamp]'
+    }).upgrade(async (tx) => {
+      await tx.table<ChatMessage>('messages').toCollection().modify((msg) => {
+        msg.timestamp = msg.timestamp * 1000;
+      });
+    });
   }
 }
 
