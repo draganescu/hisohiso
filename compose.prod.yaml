@@ -13,6 +13,19 @@ services:
       - MERCURE_HUB_URL=${MERCURE_HUB_URL}
       - CHAT_DB_PATH=/data/chat.sqlite
     restart: unless-stopped
+    # The FrankenPHP image's default HEALTHCHECK probes 127.0.0.1:2019 (the
+    # Caddy admin API), which we deliberately disable via `admin off` in
+    # Caddyfile (defense-in-depth against an in-container RCE reaching it).
+    # Replace it with an HTTPS probe against our actual API: the room-count
+    # endpoint is unauthenticated, cheap, and proves Caddy + PHP + SQLite
+    # are all wired up. -k tolerates the self-signed cert that Caddy serves
+    # for localhost via auto_https.
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsSk https://localhost/api/stats || exit 1']
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     # no-new-privileges blocks setuid binaries / kernel privilege escalation
     # from inside the container. The container still runs as root internally
     # (FrankenPHP's default), so this is defense-in-depth: a PHP RCE can't
