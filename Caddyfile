@@ -1,6 +1,7 @@
 {
 	frankenphp
 	order mercure before php_server
+	order mercure before php
 	order mercure before handle
 
 	# Disable the Caddy admin API. We never `caddy reload` — every deploy
@@ -45,13 +46,17 @@
 		heartbeat 30s
 	}
 
-	# PHP Backend API
+	# PHP Backend API. Explicit `try_files` + `php` instead of the `php_server`
+	# shorthand: the shorthand's default try_files chain (`{path} {path}/index.php
+	# index.php`) changed between Caddy 2.7 → 2.11 in a way that left unmatched
+	# `/api/*` requests being served as phpinfo() from the FrankenPHP image's
+	# default welcome page. The explicit form below routes every `/api/*` to
+	# `/app/server/index.php`, which then dispatches by REQUEST_URI internally.
 	@api path /api/*
 	handle @api {
-		route {
-			root * /app/server
-			php_server
-		}
+		root * /app/server
+		try_files {path} /index.php
+		php
 	}
 
 	# Landing page + static docs/skills
