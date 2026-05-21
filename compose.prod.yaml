@@ -41,5 +41,5 @@ services:
       # the bind-mount is for live-reload during local dev. Mounting them
       # read-only in production prevents a compromised container from
       # overwriting PHP source on the host (persistent backdoor surface).
-      - ./server:/app/server:ro
+      - ./server:/app/public/api:ro
       - ./public:/app/landing:ro
