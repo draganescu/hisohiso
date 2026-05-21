@@ -225,7 +225,7 @@ const replyBlocks = async (
   messageKey: CryptoKey,
   text: string,
   blocks?: unknown[],
-  action?: { type: string; roomSecret: string; label: string; code?: string }
+  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string }
 ): Promise<void> => {
   await encryptAndSend(server, controlRoomHash, token, messageKey, text, {
     handle: 'hisohiso-daemon',
@@ -423,8 +423,9 @@ const spawnAndAnnounce = async (
   }
 
   // Ready: pairing-code chip + Join action. The action drives the existing
-  // join-room flow in RoomController (room navigation + password prompt); the
-  // code block is a tap-to-copy chip for the operator to read off-screen.
+  // join-room flow in RoomController (room navigation + local metadata seed);
+  // the code block is a tap-to-copy chip for the operator to read off-screen.
+  const roomName = `${titleCase(agentName)} · ${result.agentId}`;
   await replyBlocks(
     server, controlRoomHash, token, messageKey,
     `${agentName} session ready.`,
@@ -434,6 +435,7 @@ const spawnAndAnnounce = async (
       roomSecret: result.roomSecret,
       label: `Join ${agentName}`,
       code: result.roomPassword,
+      roomName,
     }
   );
 };
@@ -564,6 +566,7 @@ const handleControl = async (
               roomSecret: info.roomSecret,
               label: `Join ${info.name}`,
               code: info.roomPassword,
+              roomName: `${titleCase(info.name)} · ${agentId}`,
             }
           );
           return;
