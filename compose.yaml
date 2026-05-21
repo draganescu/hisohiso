@@ -1,8 +1,11 @@
 services:
   app:
     build: .
+    # 8087 is the local dev port. Bound to 127.0.0.1 so it never reaches
+    # the public interface — even in production where compose.prod.yaml
+    # adds 80/443 alongside it, the dev port stays loopback-only.
     ports:
-      - '8087:80'
+      - '127.0.0.1:8087:80'
     environment:
       - SERVER_NAME=:80
       - MERCURE_PUBLISHER_JWT_KEY=!ChangeMe!
