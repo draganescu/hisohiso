@@ -5,7 +5,13 @@ RUN npm install
 COPY ./app/ .
 RUN npm run build
 
-FROM dunglas/frankenphp:latest-php8.3
+# `1-php8.3` follows the latest FrankenPHP 1.x with PHP 8.3.x — `latest-php8.3`
+# is a stale alias frozen on FrankenPHP 1.1.5 / PHP 8.3.7 (May 2024). Combined
+# with `build --pull` in scripts/deploy.sh, every deploy picks up the current
+# FrankenPHP + Caddy + PHP patch. The Caddyfile @api handler uses an explicit
+# `try_files {path} /index.php` + `php` so the routing is robust against
+# php_server's evolving shorthand semantics between Caddy 2.7 → 2.11.
+FROM dunglas/frankenphp:1-php8.3
 RUN install-php-extensions pdo_sqlite
 
 # Production PHP settings: never leak errors to clients, log them server-side
