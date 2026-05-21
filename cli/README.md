@@ -156,16 +156,6 @@ the release doesn't already exist. Custom notes:
 RELEASE_NOTES="Fixes #42; adds X" bun run release v0.3.7
 ```
 
-## Hermes skill
-
-The repo ships a Hermes skill for sessions bridged into hisohiso rooms:
-
-```text
-cli/skills/hisohiso-mobile-ui/SKILL.md
-```
-
-Load that skill when running Hermes through hisohiso so final responses use the JSON envelope and block schemas expected by the mobile renderer.
-
 ## Source
 
 Source lives under `cli/` in this repo. To run from source:
