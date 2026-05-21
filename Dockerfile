@@ -36,6 +36,10 @@ COPY ./server /app/public/api
 # Remove FrankenPHP's default phpinfo() welcome page so a stray /index.php
 # request (or a misrouted /api/*) can't leak our PHP build info.
 RUN rm -f /app/public/index.php
+# FrankenPHP 1.x reads its Caddyfile from /etc/frankenphp/Caddyfile (the
+# /etc/caddy/Caddyfile path the older Caddy/FrankenPHP image used is silently
+# ignored). Copy to both so the image is robust to either lookup path.
+COPY Caddyfile /etc/frankenphp/Caddyfile
 COPY Caddyfile /etc/caddy/Caddyfile
 ENV MERCURE_PUBLISHER_JWT_KEY='!ChangeMe!'
 ENV MERCURE_SUBSCRIBER_JWT_KEY='!ChangeMe!'
