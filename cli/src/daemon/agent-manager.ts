@@ -528,6 +528,12 @@ export class AgentManager {
     }));
   }
 
+  getRoomInfo(agentId: string): { name: string; roomSecret: string; roomPassword: string } | null {
+    const s = this.sessions.get(agentId);
+    if (!s) return null;
+    return { name: s.name, roomSecret: s.roomSecret, roomPassword: s.roomPassword };
+  }
+
   // Close in-process resources without touching the persisted rooms file. Used on
   // daemon shutdown so the next start can restore via loadActiveRooms(). The on-disk
   // record is already current — every successful turn persists the rotated sessionId.
