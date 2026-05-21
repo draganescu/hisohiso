@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:blocks": "tsc --module ES2022 --moduleResolution Bundler --target ES2022 --outDir /tmp/hisohiso-block-test --noEmit false scripts/block-validation.test.ts && node /tmp/hisohiso-block-test/scripts/block-validation.test.js"
   },
   "dependencies": {
     "dexie": "^4.0.4",

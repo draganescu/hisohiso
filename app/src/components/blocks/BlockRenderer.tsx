@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { Block, RunCommandBlock as RunCommandBlockType } from '../../lib/blocks';
+import { sanitizeBlocksForRender } from '../../lib/block-validation';
 import { ConfidenceDot } from './ConfidenceDot';
 import { ButtonsBlockView } from './ButtonsBlock';
 import { SwipeBlockView } from './SwipeBlock';
@@ -38,12 +39,13 @@ const isAutoSubmit = (block: Block): boolean => {
 };
 
 export const BlockRenderer = ({ blocks, onRespond }: Props) => {
+  const safeBlocks = useMemo(() => sanitizeBlocksForRender(blocks), [blocks]);
   const [pending, setPending] = useState<Map<string, PendingSelection>>(new Map());
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
 
   const handleSelect = useCallback((blockId: string, type: string, value: unknown) => {
     // Auto-submit blocks with built-in safety (confirm-danger, dangerous run-command)
-    const block = blocks.find(b => b.id === blockId);
+    const block = safeBlocks.find(b => b.id === blockId);
     if (block && isAutoSubmit(block)) {
       onRespond(blockId, type, value);
       setSubmittedIds(prev => new Set([...prev, blockId]));
@@ -60,7 +62,7 @@ export const BlockRenderer = ({ blocks, onRespond }: Props) => {
     } else {
       setPending(prev => new Map(prev).set(blockId, { type, value }));
     }
-  }, [blocks, onRespond]);
+  }, [safeBlocks, onRespond]);
 
   const submitAll = useCallback(() => {
     if (pending.size === 0) return;
@@ -126,7 +128,7 @@ export const BlockRenderer = ({ blocks, onRespond }: Props) => {
 
   return (
     <div className="space-y-1">
-      {blocks.map((block, i) => {
+      {safeBlocks.map((block, i) => {
         if (!block || typeof block !== 'object' || !block.type) return null;
         let content: React.ReactNode;
         try {
