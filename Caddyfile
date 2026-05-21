@@ -58,6 +58,7 @@
 	# REQUEST_URI=/api/stats (preserved) and dispatches by parse_url(REQUEST_URI).
 	@api path /api/*
 	handle @api {
+		root * /app/public
 		try_files {path} /api/index.php
 		php
 	}
