@@ -13,6 +13,11 @@
 	mercure {
 		publisher_jwt {$MERCURE_PUBLISHER_JWT_KEY}
 		subscriber_jwt {$MERCURE_SUBSCRIBER_JWT_KEY}
+		# Send `: heartbeat\n\n` every 30s so an idle SSE connection produces
+		# regular bytes. Combined with the client-side stall watchdog in
+		# sse-client.ts, this lets a daemon detect a silently dead socket
+		# (NAT/proxy timeout that ate the FIN) within ~90s and reconnect.
+		heartbeat 30s
 	}
 
 	# PHP Backend API
