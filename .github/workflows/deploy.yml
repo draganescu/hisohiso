@@ -38,7 +38,7 @@ jobs:
           printf 'MERCURE_SUBSCRIBER_JWT_KEY=%s\n' "$SUB_KEY" >> .env.new
           printf 'MERCURE_PUBLISHER_JWT_KEY=%s\n' "$PUB_KEY"  >> .env.new
           scp -o StrictHostKeyChecking=no -P "$SSH_PORT" .env.new "$DO_USER@$DO_HOST:$DO_APP_DIR/.env.new"
-          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$DO_USER@$DO_HOST" "mv $DO_APP_DIR/.env.new $DO_APP_DIR/.env"
+          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$DO_USER@$DO_HOST" "mv $DO_APP_DIR/.env.new $DO_APP_DIR/.env && chmod 600 $DO_APP_DIR/.env"
           rm -f .env.current .env.new
 
       - name: Deploy
