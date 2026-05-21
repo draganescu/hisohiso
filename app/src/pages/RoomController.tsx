@@ -1706,7 +1706,6 @@ const RoomController = () => {
                     </p>
                     <input
                       className="mt-4 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base shadow-inner"
-                      style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
                       placeholder="Room key (optional)"
                       type="text"
                       name="room-key"
@@ -2190,7 +2189,6 @@ const RoomController = () => {
 
             <input
               className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-base"
-              style={{ WebkitTextSecurity: 'disc', textSecurity: 'disc' } as React.CSSProperties}
               placeholder="Room key or pairing code"
               type="text"
               name="room-key"
