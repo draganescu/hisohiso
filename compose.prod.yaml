@@ -3,6 +3,9 @@ services:
     ports:
       - '80:80'
       - '443:443'
+      # HTTP/3 / QUIC — Caddy advertises `alt-svc: h3=":443"; ma=2592000`
+      # but the UDP port also needs publishing for it to actually work.
+      - '443:443/udp'
     environment:
       - SERVER_NAME=${SERVER_NAME}
       - MERCURE_PUBLISHER_JWT_KEY=${MERCURE_PUBLISHER_JWT_KEY}
@@ -10,7 +13,17 @@ services:
       - MERCURE_HUB_URL=${MERCURE_HUB_URL}
       - CHAT_DB_PATH=/data/chat.sqlite
     restart: unless-stopped
+    # no-new-privileges blocks setuid binaries / kernel privilege escalation
+    # from inside the container. The container still runs as root internally
+    # (FrankenPHP's default), so this is defense-in-depth: a PHP RCE can't
+    # gain ambient privilege beyond what the container already has.
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./data:/data
-      - ./server:/app/server
-      - ./public:/app/landing
+      # Code and landing assets are baked into the image at build time;
+      # the bind-mount is for live-reload during local dev. Mounting them
+      # read-only in production prevents a compromised container from
+      # overwriting PHP source on the host (persistent backdoor surface).
+      - ./server:/app/server:ro
+      - ./public:/app/landing:ro

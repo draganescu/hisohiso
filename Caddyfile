@@ -2,9 +2,34 @@
 	frankenphp
 	order mercure before php_server
 	order mercure before handle
+
+	# Disable the Caddy admin API. We never `caddy reload` — every deploy
+	# rebuilds the container — so the admin endpoint is pure attack surface.
+	# Without this, a PHP RCE or SSRF could reach 127.0.0.1:2019 from inside
+	# the container and read the running config (which holds the Mercure JWT
+	# keys in cleartext) or hot-swap routes.
+	admin off
 }
 
 {$SERVER_NAME} {
+	# Security headers applied to every response on this site.
+	# - HSTS pins HTTPS for return visits.
+	# - CSP: an XSS in a future dependency could exfiltrate the room secret
+	#   from `location.hash`. `connect-src 'self'` blocks fetch/SSE to any
+	#   other origin; `frame-ancestors 'none'` blocks clickjacking the
+	#   knock-approval UI from an attacker page.
+	# - `-Server` / `-X-Powered-By` strip the version-fingerprinting headers
+	#   Caddy and FrankenPHP set by default.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; connect-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "interest-cohort=(), geolocation=(), camera=(), microphone=()"
+		-Server
+		-X-Powered-By
+	}
+
 	# Mercure Hub — anonymous subscribers are NOT allowed. Every subscriber
 	# must present a JWT (Authorization: Bearer or mercureAuthorization
 	# cookie) whose mercure.subscribe claim lists the topics they want.

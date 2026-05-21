@@ -7,6 +7,19 @@ RUN npm run build
 
 FROM dunglas/frankenphp:latest-php8.3
 RUN install-php-extensions pdo_sqlite
+
+# Production PHP settings: never leak errors to clients, log them server-side
+# to a path inside the writable bind mount, and strip the X-Powered-By header.
+# Use --pull on the deploy build (see scripts/deploy.sh) to refresh the base
+# image's PHP/Caddy/FrankenPHP versions periodically.
+RUN { \
+      echo 'display_errors=Off'; \
+      echo 'display_startup_errors=Off'; \
+      echo 'log_errors=On'; \
+      echo 'error_log=/data/php-errors.log'; \
+      echo 'expose_php=Off'; \
+    } > /usr/local/etc/php/conf.d/zz-prod.ini
+
 COPY ./server /app/server
 COPY ./public /app/landing
 COPY --from=frontend /build/app/dist /app/public

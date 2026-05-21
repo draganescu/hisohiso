@@ -22,23 +22,31 @@ fi
 
 COMPOSE_FILES=(-f compose.yaml -f compose.prod.yaml)
 
-echo "Building + starting containers..."
-# `docker compose up --build` recreates a single-container service by renaming
-# the old container to "<hash>_<service>-1" and creating a new one with the
+# Refresh the base image (`dunglas/frankenphp:latest-php8.3` is a mutable
+# tag; without --pull, docker reuses the first version it ever cached, so
+# PHP/Caddy/FrankenPHP CVEs never reach us). `build --pull` is the only
+# place this option attaches reliably — `up --build` doesn't propagate it
+# to the build phase across all compose versions.
+echo "Refreshing base image + rebuilding..."
+docker compose "${COMPOSE_FILES[@]}" build --pull
+
+echo "Starting containers..."
+# `docker compose up` recreates a single-container service by renaming the
+# old container to "<hash>_<service>-1" and creating a new one with the
 # original name. If two recreates run close together (or one is interrupted),
 # the rename can leave a half-created orphan that blocks the next recreate
 # with: "Conflict. The container name <hash>_<service>-1 is already in use".
 # We try the normal recreate first; on failure we sweep every container
 # labeled with this compose project and retry once. Two-step keeps the
 # happy path zero-downtime and recovers automatically from the orphan case.
-if ! docker compose "${COMPOSE_FILES[@]}" up -d --build --remove-orphans; then
+if ! docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans; then
   echo "Recreate failed — sweeping project containers and retrying..."
   PROJECT="$(basename "$(pwd)" | tr '[:upper:]' '[:lower:]')"
   ORPHANS=$(docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" --format '{{.ID}}' || true)
   if [ -n "$ORPHANS" ]; then
     echo "$ORPHANS" | xargs docker rm -f
   fi
-  docker compose "${COMPOSE_FILES[@]}" up -d --build --remove-orphans
+  docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
 fi
 
 echo "Deploy complete."
