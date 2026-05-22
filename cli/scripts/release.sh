@@ -163,7 +163,7 @@ git push origin main "$TAG"
 
 # --- 4. Create GH release with binaries attached ---
 echo ">> Creating GitHub Release $TAG with 4 binaries..."
-NOTES="${RELEASE_NOTES:-CLI $TAG. Install: curl -fsSL https://hisohiso.org/install.sh | sh}"
+NOTES="${RELEASE_NOTES:-CLI $TAG. Install: curl -fsSL https://raw.githubusercontent.com/draganescu/hisohiso/main/cli/install.sh | sh}"
 gh release create "$TAG" \
   --title "$TAG" \
   --notes "$NOTES" \
