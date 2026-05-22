@@ -1160,6 +1160,7 @@ const RoomController = () => {
           if (prev.find((item) => item.id === msgId)) return prev;
           return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
         });
+        setSelectedId(null);
       }
     },
     [roomHash, token, cryptoKey, tokenHash, handle, persistMessage]
