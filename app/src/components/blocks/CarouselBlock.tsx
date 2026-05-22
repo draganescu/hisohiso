@@ -24,7 +24,7 @@ export const CarouselBlockView = ({ block }: Props) => {
         ref={scrollRef}
         onScroll={onScroll}
         className="mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2"
-        style={{ scrollbarWidth: 'none' }}
+        style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
       >
         {block.cards.map((card, i) => (
           <div
