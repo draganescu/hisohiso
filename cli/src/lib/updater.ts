@@ -142,10 +142,15 @@ async function tick(ctx: TickCtx): Promise<void> {
   ctx.log(`swapping binary and re-execing...`);
   await fs.rename(tmpPath, EXEC_PATH);
 
-  // Re-exec with the original argv. `detached: true` plus `unref` lets the
-  // new process outlive us; `stdio: 'inherit'` so logs continue going to
-  // wherever they were going (daemon log file, user's terminal for wrap).
-  const child = spawn(EXEC_PATH, process.argv.slice(1), {
+  // Re-exec with the USER args only — slice(2), not slice(1). In a Bun-
+  // compiled binary process.argv is [binary, /$bunfs/<entry>, ...userArgs],
+  // mirroring Node's [node, script.js, ...]. If we forward argv[1] (the
+  // /$bunfs entry), the new Bun runtime re-inserts its own entry at argv[1]
+  // and our forwarded one slides to argv[2] — where Commander reads the
+  // subcommand. Result: `unknown command '/$bunfs/root/…'`.
+  // `detached: true` + `unref` lets the new process outlive us; `stdio:
+  // 'inherit'` keeps logs going to the daemon log / user terminal.
+  const child = spawn(EXEC_PATH, process.argv.slice(2), {
     detached: true,
     stdio: 'inherit',
     env: process.env,
