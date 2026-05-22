@@ -9,6 +9,9 @@ export type MessageAction = {
   // reads it off the message and types it as the room password on join. Only
   // present on rooms minted by daemons that ship the pairing-code protection.
   code?: string;
+  // Optional local-only room name suggested by the sender. Used by the
+  // daemon control room to name freshly spawned agent rooms on the phone.
+  roomName?: string;
 };
 
 export type ChatMessage = {

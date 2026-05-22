@@ -251,6 +251,25 @@ const RoomController = () => {
     setRoomSecret(nextSecret);
   }, []);
 
+  const joinActionRoom = useCallback(async (action: MessageAction) => {
+    const nextSecret = action.roomSecret.replace(/^#\/?/, '');
+    if (!nextSecret) return;
+
+    const nextHash = await deriveRoomHash(nextSecret);
+    upsertRoom(nextHash, nextSecret, null);
+
+    const roomName = action.roomName?.trim();
+    if (roomName) {
+      updateRoomNickname(nextHash, roomName);
+    }
+
+    if (action.code) {
+      setRoomPassword(nextHash, action.code);
+    }
+
+    navigateToRoom(nextSecret);
+  }, [navigateToRoom]);
+
   useEffect(() => {
     if (!showEmptyState || !shareUrl) {
       return;
@@ -1537,7 +1556,7 @@ const RoomController = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (msg.action?.type === 'join-room') {
-                                navigateToRoom(msg.action.roomSecret);
+                                void joinActionRoom(msg.action);
                               }
                             }}
                           >
@@ -1793,7 +1812,7 @@ const RoomController = () => {
                         className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white"
                         onClick={() => {
                           if (activeMessage.action?.type === 'join-room') {
-                            navigateToRoom(activeMessage.action.roomSecret);
+                            void joinActionRoom(activeMessage.action);
                           }
                         }}
                       >
