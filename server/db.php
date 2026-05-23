@@ -20,6 +20,11 @@ function db(): PDO
     ]);
 
     $pdo->exec('PRAGMA journal_mode = WAL;');
+    // Without this, concurrent writers (e.g. /presence on room switch racing
+    // the 20s presence interval, plus participant_count's DELETE in /api/rooms)
+    // return SQLITE_BUSY immediately and the uncaught PDOException becomes a 500.
+    // Matches the 5000ms used on the outbox SQLite in outbox.php.
+    $pdo->exec('PRAGMA busy_timeout = 5000;');
     $pdo->exec('PRAGMA foreign_keys = ON;');
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS rooms (

@@ -482,6 +482,13 @@ const RoomController = () => {
 
   useEffect(() => {
     let active = true;
+    // Abort in-flight room fetches when the user switches rooms mid-load.
+    // Without this, stale POST /presence and POST /sub-token requests for the
+    // PREVIOUS room continue executing on the server while the new init also
+    // hits chat.sqlite — under contention SQLite returns BUSY past the
+    // 5s busy_timeout and the request 500s.
+    const controller = new AbortController();
+    const { signal } = controller;
 
     const init = async () => {
       try {
@@ -542,7 +549,8 @@ const RoomController = () => {
             headers: {
               'Content-Type': 'application/json',
               'X-Chat-Token': existingToken
-            }
+            },
+            signal
           });
           if (!active) return;
 
@@ -564,6 +572,7 @@ const RoomController = () => {
               const subRes = await fetch(`/api/rooms/${hash}/sub-token`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Chat-Token': existingToken },
+                signal
               });
               if (!active) return;
               if (subRes.ok) {
@@ -596,7 +605,7 @@ const RoomController = () => {
           }
         }
 
-        const response = await fetch(`/api/rooms/${hash}`);
+        const response = await fetch(`/api/rooms/${hash}`, { signal });
         if (!active) return;
 
         if (response.status === 404) {
@@ -621,6 +630,9 @@ const RoomController = () => {
         }
       } catch (err) {
         if (!active) return;
+        // AbortError fires when the user switched rooms mid-init — that's the
+        // happy path of the abort, not a user-visible failure.
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Unable to load room');
       }
     };
@@ -631,6 +643,7 @@ const RoomController = () => {
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [roomSecret, wipeLocalRoom, initialContext]);
 
@@ -853,6 +866,13 @@ const RoomController = () => {
     }
 
     let active = true;
+    // Abort the in-flight presence ping when the room changes. Clearing the JS
+    // interval stops FUTURE ticks but does not cancel a request already on the
+    // wire — that stale POST keeps writing to chat.sqlite while the new room's
+    // init runs the same write, contending for the SQLite writer lock and
+    // surfacing as a 500 to whichever side loses the busy_timeout race.
+    const controller = new AbortController();
+    const { signal } = controller;
 
     const ping = async () => {
       if (!active) {
@@ -869,10 +889,19 @@ const RoomController = () => {
       if (claimTag) {
         headers['X-Chat-Claim-Tag'] = claimTag;
       }
-      const response = await fetch(`/api/rooms/${roomHash}/presence`, {
-        method: 'POST',
-        headers
-      });
+      let response: Response;
+      try {
+        response = await fetch(`/api/rooms/${roomHash}/presence`, {
+          method: 'POST',
+          headers,
+          signal
+        });
+      } catch (err) {
+        // Swallow the AbortError from a room switch; surface nothing else
+        // either — the next tick (or the new room's effect) will retry.
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        return;
+      }
 
       if (!active) {
         return;
@@ -907,6 +936,7 @@ const RoomController = () => {
     return () => {
       active = false;
       window.clearInterval(interval);
+      controller.abort();
     };
   }, [roomState, token, roomHash, wipeLocalRoom]);
 
