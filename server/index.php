@@ -63,7 +63,9 @@ function presence_prune_stale(): void
     }
     @touch($marker, $now);
     $cutoff = $now - 45;
-    db()->prepare('DELETE FROM presence WHERE last_seen < :cutoff')->execute([':cutoff' => $cutoff]);
+    sqlite_write_with_retry(function () use ($cutoff): void {
+        db()->prepare('DELETE FROM presence WHERE last_seen < :cutoff')->execute([':cutoff' => $cutoff]);
+    });
 }
 
 function participant_count(string $room_hash): int
@@ -174,14 +176,16 @@ function touch_presence(string $room_hash, string $token): void
         return;
     }
 
-    $stmt = $pdo->prepare('INSERT INTO presence (token_hash, room_hash, last_seen) VALUES (:token_hash, :room_hash, :last_seen)
-        ON CONFLICT(token_hash) DO UPDATE SET last_seen = :last_seen_update');
-    $stmt->execute([
-        ':token_hash' => $token_hash,
-        ':room_hash' => $room_hash,
-        ':last_seen' => $now,
-        ':last_seen_update' => $now,
-    ]);
+    sqlite_write_with_retry(function () use ($pdo, $token_hash, $room_hash, $now): void {
+        $stmt = $pdo->prepare('INSERT INTO presence (token_hash, room_hash, last_seen) VALUES (:token_hash, :room_hash, :last_seen)
+            ON CONFLICT(token_hash) DO UPDATE SET last_seen = :last_seen_update');
+        $stmt->execute([
+            ':token_hash' => $token_hash,
+            ':room_hash' => $room_hash,
+            ':last_seen' => $now,
+            ':last_seen_update' => $now,
+        ]);
+    });
 }
 
 if ($path === '/api/stats' && $method === 'GET') {
