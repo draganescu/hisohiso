@@ -6,12 +6,38 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mercure.php';
 require_once __DIR__ . '/outbox.php';
 
+function debug_errors_path(): string
+{
+    $chat = getenv('CHAT_DB_PATH') ?: '/data/chat.sqlite';
+    return dirname($chat) . '/errors.jsonl';
+}
+
+function debug_log_exception(Throwable $e): void
+{
+    $entry = json_encode([
+        'ts' => (int) round(microtime(true) * 1000),
+        'path' => $_SERVER['REQUEST_URI'] ?? null,
+        'method' => $_SERVER['REQUEST_METHOD'] ?? null,
+        'class' => get_class($e),
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString(),
+    ], JSON_UNESCAPED_SLASHES);
+    if ($entry === false) {
+        return;
+    }
+    @file_put_contents(debug_errors_path(), $entry . "\n", FILE_APPEND | LOCK_EX);
+}
+
 // Without this, an uncaught PDOException (SQLite busy past the 5s busy_timeout
 // under heavy room-switch contention) or any other Throwable from a handler
 // produces a bare 500 with no JSON body and no server-side breadcrumb. Log the
-// trace and emit a structured envelope the PWA can surface.
+// trace AND append to /data/errors.jsonl so the remote /api/_debug/recent-errors
+// endpoint can surface it without needing SSH.
 set_exception_handler(function (Throwable $e): void {
     error_log('hisohiso unhandled: ' . $e);
+    debug_log_exception($e);
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: application/json; charset=utf-8');
@@ -466,6 +492,46 @@ if (preg_match('#^/api/rooms/([^/]+)/disband$#', $path, $matches) && $method ===
     // only to the lobby topic) also tears down their lobby waiting UI.
     publish_room_and_lobby($room_hash, 'destroy', [], sha256_hex($sender));
     json_response(['status' => 'ok']);
+}
+
+// Self-serve diagnostic surface: read tail of /data/errors.jsonl, gated by a
+// bearer matching MERCURE_PUBLISHER_JWT_KEY. The publisher key is already a
+// server-side secret; anyone who has it can already forge publishes, so re-
+// using it for debug auth doesn't widen the threat model and avoids minting a
+// new env var. Operator runs from their laptop:
+//   curl -H "Authorization: Bearer $MERCURE_PUBLISHER_JWT_KEY" \
+//        https://hisohiso.org/api/_debug/recent-errors | jq
+// DELETE on the same path truncates the log after a fix lands.
+if ($path === '/api/_debug/recent-errors' && ($method === 'GET' || $method === 'DELETE')) {
+    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $bearer = '';
+    if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m) === 1) {
+        $bearer = trim($m[1]);
+    }
+    $expected = getenv('MERCURE_PUBLISHER_JWT_KEY') ?: '';
+    if ($expected === '' || $bearer === '' || !hash_equals($expected, $bearer)) {
+        json_response(['error' => 'forbidden'], 403);
+    }
+    $log = debug_errors_path();
+    if ($method === 'DELETE') {
+        @file_put_contents($log, '', LOCK_EX);
+        json_response(['status' => 'cleared']);
+    }
+    if (!is_file($log)) {
+        json_response(['errors' => [], 'count' => 0]);
+    }
+    $limit_raw = $_GET['limit'] ?? '100';
+    $limit = is_numeric($limit_raw) ? max(1, min(500, (int) $limit_raw)) : 100;
+    $lines = @file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+    $tail = array_slice($lines, -$limit);
+    $entries = [];
+    foreach ($tail as $line) {
+        $decoded = json_decode($line, true);
+        if (is_array($decoded)) {
+            $entries[] = $decoded;
+        }
+    }
+    json_response(['errors' => $entries, 'count' => count($entries), 'total_lines' => count($lines)]);
 }
 
 json_response(['error' => 'not_found'], 404);
