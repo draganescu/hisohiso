@@ -167,6 +167,11 @@ export class AgentManager {
     const dropped: string[] = [];
     const details: string[] = [];
 
+    // Load registry once so wrap-registered agents (e.g. hermes) resolve here,
+    // not just in spawn(). Without this, any non-builtin room on disk gets
+    // dropped as "unknown agent profile" after a daemon restart.
+    const registry = await loadRegistry();
+
     for (const r of rooms) {
       try {
         let serverOk = false;
@@ -183,7 +188,13 @@ export class AgentManager {
           continue;
         }
 
-        const profile = getAgent(r.name);
+        let profile = getAgent(r.name);
+        if (!profile) {
+          const entry = registry.find((a) => a.name === r.name);
+          if (entry) {
+            profile = { command: entry.command, args: [], description: entry.name, mode: 'oneshot' };
+          }
+        }
         if (!profile) {
           dropped.push(r.agentId);
           details.push(`${r.name} (${r.agentId}): unknown agent profile`);
