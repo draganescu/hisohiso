@@ -18,6 +18,11 @@ export type SSEHandlers = {
   onToken?: (event: RoomEvent) => void;
   onOpen?: () => void;
   onError?: (error: unknown) => void;
+  // Fires for every successfully parsed event of any type, before the
+  // type-specific handler. Used to track last-event timestamps for SSE
+  // liveness — Mercure keepalive comments don't surface here, so a stale
+  // timestamp is a hint, not a verdict.
+  onAnyEvent?: (event: RoomEvent) => void;
 };
 
 export type SSESubscription = {
@@ -106,6 +111,7 @@ export const subscribeToRoom = (server: string, roomHash: string, jwt: string, h
   const dispatch = (event: MessageEvent) => {
     try {
       const data = JSON.parse(event.data) as RoomEvent;
+      handlers.onAnyEvent?.(data);
       switch (data.type) {
         case 'chat': handlers.onChat?.(data); break;
         case 'knock': handlers.onKnock?.(data); break;

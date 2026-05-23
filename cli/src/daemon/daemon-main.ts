@@ -62,10 +62,26 @@ export const runDaemon = async (): Promise<void> => {
   let currentPresence: PresenceHandle | null = null;
   let shuttingDown = false;
 
+  // Periodic reconciliation against the server. Catches silent SSE death,
+  // missed destroy events, and any other failure mode where local in-memory
+  // session state drifts from server truth. Five-minute cadence is a
+  // tradeoff: tight enough that ghost agents disappear before the next
+  // operator interaction, loose enough that we're not hammering the API.
+  const reconcileTimer = setInterval(() => {
+    void manager.reconcileAll().then((result) => {
+      if (result.cleaned.length > 0) {
+        console.log(`Background reconcile: cleaned ${result.cleaned.length} ghost session(s) [${result.cleaned.join(', ')}]`);
+      }
+    }).catch((err) => {
+      console.error('Background reconcile failed:', err);
+    });
+  }, 5 * 60 * 1000);
+
   const shutdown = async (): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log('Shutting down daemon...');
+    clearInterval(reconcileTimer);
     currentSse?.close();
     currentPresence?.stop();
     manager.detachAll();
@@ -360,6 +376,11 @@ const sendList = async (
   token: string,
   messageKey: CryptoKey
 ): Promise<void> => {
+  // Reconcile before reading so the user-facing list is never stale. The
+  // SSE-delivered destroy path is best-effort; the only authoritative
+  // truth for "is this room still alive" is the server. Cheap on the
+  // common path (handful of HEAD-equivalent GETs in parallel).
+  await manager.reconcileAll();
   const agents = manager.listRunning();
   if (agents.length === 0) {
     await replyBlocks(

@@ -54,6 +54,24 @@ export const checkRoom = async (server: string, roomHash: string): Promise<{ sta
   return res.json() as Promise<{ status: string; has_participants: boolean }>;
 };
 
+// Tri-state room existence check for reconciliation paths. Differs from
+// checkRoom() in that it distinguishes "server says room is gone (404)"
+// from "couldn't reach server (network / 5xx)". Callers that act on
+// 'gone' (destroying local sessions) MUST NOT treat 'unknown' the same
+// way — a transient 503 should not nuke a live agent.
+export type RoomStatus = 'alive' | 'gone' | 'unknown';
+
+export const roomStatus = async (server: string, roomHash: string): Promise<RoomStatus> => {
+  try {
+    const res = await fetch(`${server}/api/rooms/${roomHash}`);
+    if (res.ok) return 'alive';
+    if (res.status === 404) return 'gone';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+};
+
 export const sendKnock = async (
   server: string,
   roomHash: string,
