@@ -20,13 +20,20 @@ function db(): PDO
     ]);
 
     $pdo->exec('PRAGMA journal_mode = WAL;');
+    // synchronous=NORMAL is SQLite's recommended pairing with WAL: it skips the
+    // post-commit DB-header fsync (still fsyncs WAL at checkpoint time), which
+    // dropped per-commit latency and eliminated the writer-lock pile-up that
+    // produced "database is locked" 500s past the 60s busy_timeout. The cost
+    // is that a power loss can lose the very latest committed transactions —
+    // for chat presence (which is sampled, not authoritative) that's fine.
+    // synchronous=FULL (the PDO_SQLite default) was double-fsyncing every
+    // commit and stalling concurrent writers behind disk i/o.
+    $pdo->exec('PRAGMA synchronous = NORMAL;');
     // Do NOT set PRAGMA busy_timeout here. PDO_SQLite's default is 60000ms;
     // a previous version of this file set 5000ms thinking the default was 0,
     // which actively REDUCED tolerance for writer contention and produced
-    // hundreds of 'database is locked' 500s/day under normal load. The real
-    // fix is in index.php (throttling touch_presence + participant_count
-    // cleanup); the 60s default is more than enough once write frequency
-    // drops. Setting an explicit value here would mask future regressions.
+    // hundreds of 'database is locked' 500s/day under normal load. The 60s
+    // default is more than enough once synchronous=NORMAL drops commit latency.
     $pdo->exec('PRAGMA foreign_keys = ON;');
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS rooms (
