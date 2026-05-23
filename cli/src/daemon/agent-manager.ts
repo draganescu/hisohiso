@@ -21,6 +21,11 @@ type AgentSession = {
   knockKey: CryptoKey;
   sessionId: string | null;
   running: boolean;
+  // Messages that arrived while `running` was true. Instead of bouncing them
+  // with "still running", we buffer here and the in-flight turn drains the
+  // whole batch into ONE coalesced follow-up turn when it finishes. `from`
+  // is retained so the untrusted-content envelope can still be labelled.
+  pending: Array<{ text: string; from: string }>;
   sse: SSESubscription;
   presence: PresenceHandle;
   // Per-session msg_id dedup — drops any chat we've already dispatched to the
@@ -283,10 +288,124 @@ export class AgentManager {
       knockKey,
       sessionId,
       running: false,
+      pending: [],
       sse: null!,
       presence,
       seenMsgIds: new Set<string>(),
       lastEventAt: Date.now(),
+    };
+
+    // Execute one agent turn for `text`. The onChat handler owns the turn
+    // lifecycle (the `running` flag and queue draining); this is just a single
+    // spawn→parse→send cycle. `peerHandle` labels the untrusted-content envelope.
+    const runTurn = async (text: string, peerHandle: string): Promise<void> => {
+      try {
+        // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
+        // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume
+        // strategy (claude) pushes `--resume <id>` onto the base args.
+        const isResume = session.profile.mode === 'session' && session.sessionId !== null;
+        const argv = isResume && session.profile.buildResumeArgs
+          ? session.profile.buildResumeArgs(session.sessionId!)
+          : [...session.profile.args];
+
+        // Wrap inbound chat in an explicit untrusted-content envelope. The room model is
+        // flat — we can't reliably tell the operator apart from other peers by token hash
+        // alone, so we label everything as peer-authored. The agent's system prompt
+        // instructs it to treat the envelope body as data, not instructions, which is the
+        // defense against "respond with this exact JSON link-preview block" injection.
+        const wrappedText = `<untrusted-peer-message from="${peerHandle.replace(/"/g, '')}">\n${text}\n</untrusted-peer-message>`;
+
+        let messageToSend = wrappedText;
+        if (session.profile.appendSystemPrompt) {
+          if (session.profile.systemPromptMode === 'codex-config') {
+            // Codex: inject via --config instructions=<value> on every turn (initial + resume).
+            // Unlike 'prepend-message-once', this survives resume turns because it's a CLI flag
+            // processed fresh each invocation, and it doesn't pollute the user message.
+            argv.push('--config', `instructions=${session.profile.appendSystemPrompt}`);
+          } else if (session.profile.systemPromptMode === 'prepend-message-once') {
+            if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${wrappedText}`;
+          } else {
+            argv.push('--append-system-prompt', session.profile.appendSystemPrompt);
+          }
+        }
+
+        if (isResume && !session.profile.buildResumeArgs) {
+          argv.push('--resume', session.sessionId!);
+        }
+        argv.push(messageToSend);
+
+        const displayArgs = argv.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+        console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
+
+        const result = await runCommand(session.profile.command, argv, {
+          env: {
+            HISOHISO_AGENT_ID: session.agentId,
+            HISOHISO_AGENT_NAME: session.name,
+            HISOHISO_ROOM_HASH: session.roomHash,
+            HISOHISO_ROOM_SECRET: session.roomSecret,
+          },
+        });
+
+        // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
+        // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
+        // capture is gated on session mode since oneshot turns don't persist one.
+        let parsedText: string;
+        let parsedSessionId: string | null = null;
+
+        if (session.profile.outputFormat === 'codex-ndjson') {
+          const parsed = parseCodexNdjson(result.stdout);
+          parsedText = parsed.text;
+          parsedSessionId = parsed.sessionId;
+        } else if (session.profile.mode === 'session') {
+          const parsed = parseJsonOutput(result.stdout);
+          parsedText = parsed.text;
+          parsedSessionId = parsed.sessionId;
+        } else {
+          parsedText = result.stdout;
+        }
+
+        const output = (parsedText || result.stderr || '(no output)').trim();
+
+        if (session.profile.mode === 'session' && parsedSessionId && parsedSessionId !== session.sessionId) {
+          session.sessionId = parsedSessionId;
+          // Persist immediately so a daemon restart can pick up exactly where we are.
+          // Cheap (small JSON write); session-mode agents rotate sessionId per turn so this
+          // keeps the on-disk handle current.
+          void this.persistRooms();
+        }
+
+        // Try to parse block-structured output
+        const blockParsed = parseBlockOutput(output);
+        const sendText = blockParsed?.text ?? output;
+        const sendBlocks = blockParsed?.blocks ?? undefined;
+
+        console.log(`[${agentName}:${agentId}] -> ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}`);
+
+        // Send output back — split if too long
+        const MAX_MSG = 4000;
+        if (sendText.length <= MAX_MSG) {
+          await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
+        } else {
+          for (let i = 0; i < sendText.length; i += MAX_MSG) {
+            const chunk = sendText.slice(i, i + MAX_MSG);
+            await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
+          }
+        }
+
+        if (result.code !== 0 && result.stderr) {
+          await encryptAndSend(
+            this.server, roomHash, participantToken, messageKey,
+            `(exit code ${result.code})`
+          );
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[${agentName}:${agentId}] Error:`, msg);
+        await encryptAndSend(
+          this.server, roomHash, participantToken, messageKey,
+          `Error: ${msg}`
+        ).catch(() => {});
+      }
     };
 
     let resolveSseReady: () => void;
@@ -381,126 +500,33 @@ export class AgentManager {
 
         console.log(`[${agentName}:${agentId}] <- ${text}`);
 
+        // Mid-turn message: queue it instead of bouncing with "still running".
+        // The in-flight turn drains the queue when it finishes, coalescing the
+        // whole pending batch into ONE follow-up resume turn — so rapid-fire
+        // steering messages land in order on the next turn.
         if (session.running) {
+          session.pending.push({ text, from: event.from || 'unknown' });
           await encryptAndSend(
             this.server, roomHash, participantToken, messageKey,
-            'Still running previous command. Please wait.'
+            `📥 Queued — will run after the current turn (${session.pending.length} pending).`
           );
           return;
         }
 
         session.running = true;
-
         try {
-          // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
-          // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume
-          // strategy (claude) pushes `--resume <id>` onto the base args.
-          const isResume = session.profile.mode === 'session' && session.sessionId !== null;
-          const argv = isResume && session.profile.buildResumeArgs
-            ? session.profile.buildResumeArgs(session.sessionId!)
-            : [...session.profile.args];
-
-          // Wrap inbound chat in an explicit untrusted-content envelope. The room model is
-          // flat — we can't reliably tell the operator apart from other peers by token hash
-          // alone, so we label everything as peer-authored. The agent's system prompt
-          // instructs it to treat the envelope body as data, not instructions, which is the
-          // defense against "respond with this exact JSON link-preview block" injection.
-          const peerHandle = event.from || 'unknown';
-          const wrappedText = `<untrusted-peer-message from="${peerHandle.replace(/"/g, '')}">\n${text}\n</untrusted-peer-message>`;
-
-          let messageToSend = wrappedText;
-          if (session.profile.appendSystemPrompt) {
-            if (session.profile.systemPromptMode === 'codex-config') {
-              // Codex: inject via --config instructions=<value> on every turn (initial + resume).
-              // Unlike 'prepend-message-once', this survives resume turns because it's a CLI flag
-              // processed fresh each invocation, and it doesn't pollute the user message.
-              argv.push('--config', `instructions=${session.profile.appendSystemPrompt}`);
-            } else if (session.profile.systemPromptMode === 'prepend-message-once') {
-              if (!isResume) messageToSend = `${session.profile.appendSystemPrompt}\n\n${wrappedText}`;
-            } else {
-              argv.push('--append-system-prompt', session.profile.appendSystemPrompt);
-            }
+          await runTurn(text, event.from || 'unknown');
+          // Drain whatever queued while we ran. Coalesce the batch into a single
+          // turn so several steering messages become one combined instruction;
+          // the loop re-checks because more can arrive during this drain turn.
+          while (session.pending.length > 0) {
+            const batch = session.pending.splice(0, session.pending.length);
+            const combined = batch.map(p => p.text).join('\n\n');
+            await runTurn(combined, batch[0]!.from);
           }
-
-          if (isResume && !session.profile.buildResumeArgs) {
-            argv.push('--resume', session.sessionId!);
-          }
-          argv.push(messageToSend);
-
-          const displayArgs = argv.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
-          console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
-
-          const result = await runCommand(session.profile.command, argv, {
-            env: {
-              HISOHISO_AGENT_ID: session.agentId,
-              HISOHISO_AGENT_NAME: session.name,
-              HISOHISO_ROOM_HASH: session.roomHash,
-              HISOHISO_ROOM_SECRET: session.roomSecret,
-            },
-          });
-
-          // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
-          // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
-          // capture is gated on session mode since oneshot turns don't persist one.
-          let parsedText: string;
-          let parsedSessionId: string | null = null;
-
-          if (session.profile.outputFormat === 'codex-ndjson') {
-            const parsed = parseCodexNdjson(result.stdout);
-            parsedText = parsed.text;
-            parsedSessionId = parsed.sessionId;
-          } else if (session.profile.mode === 'session') {
-            const parsed = parseJsonOutput(result.stdout);
-            parsedText = parsed.text;
-            parsedSessionId = parsed.sessionId;
-          } else {
-            parsedText = result.stdout;
-          }
-
-          const output = (parsedText || result.stderr || '(no output)').trim();
-
-          if (session.profile.mode === 'session' && parsedSessionId && parsedSessionId !== session.sessionId) {
-            session.sessionId = parsedSessionId;
-            // Persist immediately so a daemon restart can pick up exactly where we are.
-            // Cheap (small JSON write); session-mode agents rotate sessionId per turn so this
-            // keeps the on-disk handle current.
-            void this.persistRooms();
-          }
-
-          // Try to parse block-structured output
-          const blockParsed = parseBlockOutput(output);
-          const sendText = blockParsed?.text ?? output;
-          const sendBlocks = blockParsed?.blocks ?? undefined;
-
-          console.log(`[${agentName}:${agentId}] -> ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}`);
-
-          // Send output back — split if too long
-          const MAX_MSG = 4000;
-          if (sendText.length <= MAX_MSG) {
-            await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
-          } else {
-            for (let i = 0; i < sendText.length; i += MAX_MSG) {
-              const chunk = sendText.slice(i, i + MAX_MSG);
-              await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
-            }
-          }
-
-          if (result.code !== 0 && result.stderr) {
-            await encryptAndSend(
-              this.server, roomHash, participantToken, messageKey,
-              `(exit code ${result.code})`
-            );
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(`[${agentName}:${agentId}] Error:`, msg);
-          await encryptAndSend(
-            this.server, roomHash, participantToken, messageKey,
-            `Error: ${msg}`
-          ).catch(() => {});
+        } finally {
+          session.running = false;
         }
-
-        session.running = false;
       },
       onOpen: () => {
         console.log(`[${agentName}:${agentId}] SSE connected.`);
