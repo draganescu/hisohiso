@@ -29,6 +29,13 @@ type AgentSession = {
   // the agent would re-execute a captured turn. In-memory only — replay
   // window is the session lifetime, which is what we care about.
   seenMsgIds: Set<string>;
+  // Wall-clock ms of the most recently delivered SSE event on this session.
+  // Bumped by onAnyEvent in sse-client. Initialized at attach time. Stale
+  // values mean either the room is genuinely idle OR the SSE silently died —
+  // we can't tell those apart without server-side heartbeats, so this is a
+  // diagnostic breadcrumb, not a kill switch. Reconcile is the authoritative
+  // liveness check; this timestamp just tells you which session to suspect.
+  lastEventAt: number;
 };
 
 type AttachArgs = {
@@ -279,12 +286,17 @@ export class AgentManager {
       sse: null!,
       presence,
       seenMsgIds: new Set<string>(),
+      lastEventAt: Date.now(),
     };
 
     let resolveSseReady: () => void;
     const sseReady = new Promise<void>((resolve) => { resolveSseReady = resolve; });
 
     const sse = subscribeToRoom(this.server, roomHash, subscriberJwt, {
+      onAnyEvent: (event: RoomEvent) => {
+        session.lastEventAt = Date.now();
+        void event;
+      },
       onKnock: async (knockEvent: RoomEvent) => {
         // Gate the auto-approve on TWO checks:
         //   1. The encrypted_payload must decrypt with k_knock (which means the
@@ -331,10 +343,7 @@ export class AgentManager {
       },
       onDestroy: () => {
         console.log(`[${agentName}:${agentId}] Room destroyed. Cleaning up.`);
-        session.sse.close();
-        session.presence.stop();
-        this.sessions.delete(agentId);
-        void this.persistRooms();
+        this.closeSession(agentId, 'destroyed');
         void this.sendControlMessage(`${agentName} (${agentId}) session ended — room was closed.`);
       },
       onChat: async (event: RoomEvent) => {
@@ -526,10 +535,64 @@ export class AgentManager {
     if (!session) {
       throw new Error(`No agent with ID "${agentId}"`);
     }
-    session.sse.close();
-    session.presence.stop();
-    this.sessions.delete(agentId);
+    this.closeSession(agentId, 'killed');
     await this.persistRooms();
+  }
+
+  // Shared local-cleanup primitive used by onDestroy (SSE delivered the
+  // destroy event), kill (operator typed `kill <id>`), and reconcile
+  // (authoritative server check said the room is gone). Does NOT call
+  // disbandRoom — that's a separate decision the operator drives. Idempotent:
+  // safe to call for an agentId that's already been removed.
+  private closeSession(agentId: string, reason: 'destroyed' | 'killed' | 'reconciled-gone'): void {
+    const session = this.sessions.get(agentId);
+    if (!session) return;
+    try { session.sse.close(); } catch { /* */ }
+    try { session.presence.stop(); } catch { /* */ }
+    this.sessions.delete(agentId);
+    void this.persistRooms();
+    console.log(`[${session.name}:${agentId}] Session closed (${reason}).`);
+  }
+
+  // Tri-state reconciliation against the server for a single session.
+  // 'gone'    → server returned 404, runs closeSession and returns 'gone'
+  // 'alive'   → server says room exists, no local change
+  // 'unknown' → couldn't determine (network / 5xx), no local change
+  // Designed for periodic backgrounding AND on-demand calls from sendList,
+  // so any operator-visible `list` is always reading reconciled state.
+  async reconcileSession(agentId: string): Promise<api.RoomStatus> {
+    const session = this.sessions.get(agentId);
+    if (!session) return 'gone';
+    const status = await api.roomStatus(this.server, session.roomHash);
+    if (status === 'gone') {
+      // SSE missed the destroy event (silent death, race during reconnect,
+      // missed publish — root cause doesn't matter, the server is the truth).
+      this.closeSession(agentId, 'reconciled-gone');
+      void this.sendControlMessage(`${session.name} (${agentId}) cleaned up — room was gone server-side.`);
+    } else if (status === 'alive') {
+      const quietForMs = Date.now() - session.lastEventAt;
+      const STALE_AFTER_MS = 5 * 60 * 1000;
+      if (quietForMs > STALE_AFTER_MS) {
+        // Diagnostic only — could legitimately be an idle alive SSE OR a
+        // silently broken one. Logged so log-grep can correlate complaints
+        // ("agent went dark") with the actual quiescent window.
+        console.warn(`[${session.name}:${agentId}] SSE quiet for ${Math.round(quietForMs / 1000)}s but room is alive — possible silent SSE death.`);
+      }
+    }
+    return status;
+  }
+
+  // Reconcile every session in parallel. Used by sendList and by the
+  // periodic background tick. Returns a summary so callers can log /
+  // surface cleanup counts. Errors per session are swallowed inside
+  // reconcileSession (they become 'unknown'), so this never throws.
+  async reconcileAll(): Promise<{ cleaned: string[]; alive: number; unknown: number }> {
+    const ids = Array.from(this.sessions.keys());
+    const results = await Promise.all(ids.map(async (id) => ({ id, status: await this.reconcileSession(id) })));
+    const cleaned = results.filter((r) => r.status === 'gone').map((r) => r.id);
+    const alive = results.filter((r) => r.status === 'alive').length;
+    const unknown = results.filter((r) => r.status === 'unknown').length;
+    return { cleaned, alive, unknown };
   }
 
   listRunning(): Array<{ agentId: string; name: string }> {
