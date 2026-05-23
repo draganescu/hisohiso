@@ -6,6 +6,19 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mercure.php';
 require_once __DIR__ . '/outbox.php';
 
+// Without this, an uncaught PDOException (SQLite busy past the 5s busy_timeout
+// under heavy room-switch contention) or any other Throwable from a handler
+// produces a bare 500 with no JSON body and no server-side breadcrumb. Log the
+// trace and emit a structured envelope the PWA can surface.
+set_exception_handler(function (Throwable $e): void {
+    error_log('hisohiso unhandled: ' . $e);
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => 'internal_error']);
+    }
+});
+
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 if (!is_string($path) || strpos($path, '/api/') !== 0) {
     json_response(['error' => 'not_found'], 404);
