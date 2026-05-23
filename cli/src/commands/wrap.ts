@@ -127,6 +127,10 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
   const ownTokenHash = await sha256Hex(room.participantToken);
   let running = false;
+  // Messages that arrived mid-turn. Rather than bounce them with "still
+  // running", we buffer here and the in-flight turn drains the whole batch
+  // into ONE coalesced follow-up turn when it finishes.
+  const pending: string[] = [];
   let sessionId: string | null = null;
   // Per-session msg_id dedup: drops any chat we've already dispatched. AAD
   // matching is necessary but not sufficient — server can replay captured
@@ -142,6 +146,97 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
   // phone (the new wrap would create yet another room). Users with long-
   // running wrap sessions pick up updates by Ctrl-C-ing and rescanning, or
   // by switching to the daemon which IS auto-updated.
+
+  // Execute one agent turn for `text`. The onChat handler owns the turn
+  // lifecycle (the `running` flag and queue draining); this is one
+  // spawn→parse→send cycle and mutates the outer `sessionId` on resume.
+  const runTurn = async (text: string): Promise<void> => {
+    // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
+    // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume strategy
+    // (claude) pushes `--resume <id>` onto the base args.
+    const isResume = profile.mode === 'session' && sessionId !== null;
+    const args = isResume && profile.buildResumeArgs
+      ? profile.buildResumeArgs(sessionId!)
+      : [...profile.args];
+
+    let messageToSend = text;
+    if (profile.appendSystemPrompt) {
+      if (profile.systemPromptMode === 'codex-config') {
+        args.push('--config', `instructions=${profile.appendSystemPrompt}`);
+      } else if (profile.systemPromptMode === 'prepend-message-once') {
+        if (!isResume) messageToSend = `${profile.appendSystemPrompt}\n\n${text}`;
+      } else {
+        args.push('--append-system-prompt', profile.appendSystemPrompt);
+      }
+    }
+
+    if (isResume && !profile.buildResumeArgs) {
+      args.push('--resume', sessionId!);
+    }
+    args.push(messageToSend);
+
+    const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+    console.log(`  $ ${profile.command} ${displayArgs.join(' ')}`);
+
+    const result = await runCommand(profile.command, args, {
+      env: {
+        HISOHISO_AGENT_ID: room.roomHash.slice(0, 12),
+        HISOHISO_AGENT_NAME: agentName,
+        HISOHISO_ROOM_HASH: room.roomHash,
+        HISOHISO_ROOM_SECRET: room.roomSecret,
+      },
+    });
+
+    // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
+    // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
+    // capture is gated on session mode since oneshot turns don't persist one.
+    let parsedText: string;
+    let parsedSessionId: string | null = null;
+
+    if (profile.outputFormat === 'codex-ndjson') {
+      const parsed = parseCodexNdjson(result.stdout);
+      parsedText = parsed.text;
+      parsedSessionId = parsed.sessionId;
+    } else if (profile.mode === 'session') {
+      // Default for session mode: Claude's single-JSON {result, session_id} shape.
+      const parsed = parseJsonOutput(result.stdout);
+      parsedText = parsed.text;
+      parsedSessionId = parsed.sessionId;
+    } else {
+      parsedText = result.stdout;
+    }
+
+    const output = (parsedText || result.stderr || '(no output)').trim();
+
+    if (profile.mode === 'session' && parsedSessionId) {
+      sessionId = parsedSessionId;
+      console.log(`  [session: ${sessionId}]`);
+    }
+
+    // Try to parse block-structured output from Claude
+    const blockParsed = parseBlockOutput(output);
+    const sendText = blockParsed?.text ?? output;
+    const sendBlocks = blockParsed?.blocks ?? undefined;
+
+    console.log(`→ ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}\n`);
+
+    // Send output back to room — split into chunks if too long
+    const MAX_MSG = 4000;
+    if (sendText.length <= MAX_MSG) {
+      await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, sendText, { blocks: sendBlocks });
+    } else {
+      // Can't attach blocks to chunked messages — send blocks with first chunk
+      for (let i = 0; i < sendText.length; i += MAX_MSG) {
+        const chunk = sendText.slice(i, i + MAX_MSG);
+        await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
+      }
+    }
+
+    if (result.code !== 0 && result.stderr) {
+      await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey,
+        `(exit code ${result.code})`);
+    }
+  };
 
   // Message loop: phone message → run agent → send output
   const sse = subscribeToRoom(server, room.roomHash, room.subscriberJwt, {
@@ -174,101 +269,28 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       console.log(`← ${text}`);
 
+      // Mid-turn message: queue instead of bouncing with "still running". The
+      // in-flight turn drains the queue when it finishes, coalescing the pending
+      // batch into one follow-up resume turn so steering messages run in order.
       if (running) {
+        pending.push(text);
         await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey,
-          'Still running previous command. Please wait.');
+          `📥 Queued — will run after the current turn (${pending.length} pending).`);
         return;
       }
 
       running = true;
-
-      // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
-      // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume strategy
-      // (claude) pushes `--resume <id>` onto the base args.
-      const isResume = profile.mode === 'session' && sessionId !== null;
-      const args = isResume && profile.buildResumeArgs
-        ? profile.buildResumeArgs(sessionId!)
-        : [...profile.args];
-
-      let messageToSend = text;
-      if (profile.appendSystemPrompt) {
-        if (profile.systemPromptMode === 'codex-config') {
-          args.push('--config', `instructions=${profile.appendSystemPrompt}`);
-        } else if (profile.systemPromptMode === 'prepend-message-once') {
-          if (!isResume) messageToSend = `${profile.appendSystemPrompt}\n\n${text}`;
-        } else {
-          args.push('--append-system-prompt', profile.appendSystemPrompt);
+      try {
+        await runTurn(text);
+        // Drain whatever queued while we ran, coalescing the batch into a single
+        // turn; the loop re-checks because more can arrive during the drain turn.
+        while (pending.length > 0) {
+          const batch = pending.splice(0, pending.length);
+          await runTurn(batch.join('\n\n'));
         }
+      } finally {
+        running = false;
       }
-
-      if (isResume && !profile.buildResumeArgs) {
-        args.push('--resume', sessionId!);
-      }
-      args.push(messageToSend);
-
-      const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
-      console.log(`  $ ${profile.command} ${displayArgs.join(' ')}`);
-
-      const result = await runCommand(profile.command, args, {
-        env: {
-          HISOHISO_AGENT_ID: room.roomHash.slice(0, 12),
-          HISOHISO_AGENT_NAME: agentName,
-          HISOHISO_ROOM_HASH: room.roomHash,
-          HISOHISO_ROOM_SECRET: room.roomSecret,
-        },
-      });
-
-      // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
-      // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
-      // capture is gated on session mode since oneshot turns don't persist one.
-      let parsedText: string;
-      let parsedSessionId: string | null = null;
-
-      if (profile.outputFormat === 'codex-ndjson') {
-        const parsed = parseCodexNdjson(result.stdout);
-        parsedText = parsed.text;
-        parsedSessionId = parsed.sessionId;
-      } else if (profile.mode === 'session') {
-        // Default for session mode: Claude's single-JSON {result, session_id} shape.
-        const parsed = parseJsonOutput(result.stdout);
-        parsedText = parsed.text;
-        parsedSessionId = parsed.sessionId;
-      } else {
-        parsedText = result.stdout;
-      }
-
-      const output = (parsedText || result.stderr || '(no output)').trim();
-
-      if (profile.mode === 'session' && parsedSessionId) {
-        sessionId = parsedSessionId;
-        console.log(`  [session: ${sessionId}]`);
-      }
-
-      // Try to parse block-structured output from Claude
-      const blockParsed = parseBlockOutput(output);
-      const sendText = blockParsed?.text ?? output;
-      const sendBlocks = blockParsed?.blocks ?? undefined;
-
-      console.log(`→ ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}\n`);
-
-      // Send output back to room — split into chunks if too long
-      const MAX_MSG = 4000;
-      if (sendText.length <= MAX_MSG) {
-        await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, sendText, { blocks: sendBlocks });
-      } else {
-        // Can't attach blocks to chunked messages — send blocks with first chunk
-        for (let i = 0; i < sendText.length; i += MAX_MSG) {
-          const chunk = sendText.slice(i, i + MAX_MSG);
-          await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
-        }
-      }
-
-      if (result.code !== 0 && result.stderr) {
-        await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey,
-          `(exit code ${result.code})`);
-      }
-
-      running = false;
     },
     onDestroy: () => {
       console.log('Room destroyed. Exiting.');
