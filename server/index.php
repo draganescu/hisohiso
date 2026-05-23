@@ -49,11 +49,28 @@ function room_exists(string $room_hash): bool
     return (bool) $stmt->fetchColumn();
 }
 
+// Throttled — only runs the DELETE at most once every PRESENCE_CLEANUP_INTERVAL
+// seconds across the whole server, gated by the mtime of a lockfile in /data.
+// Previously the DELETE ran on every /presence and /api/rooms call, which
+// generated a steady stream of writer contention with touch_presence's UPSERT.
+function presence_prune_stale(): void
+{
+    $marker = (getenv('CHAT_DB_PATH') ? dirname((string) getenv('CHAT_DB_PATH')) : '/data') . '/.presence_cleanup_at';
+    $now = time();
+    $last = @filemtime($marker);
+    if ($last !== false && ($now - $last) < 30) {
+        return;
+    }
+    @touch($marker, $now);
+    $cutoff = $now - 45;
+    db()->prepare('DELETE FROM presence WHERE last_seen < :cutoff')->execute([':cutoff' => $cutoff]);
+}
+
 function participant_count(string $room_hash): int
 {
     $pdo = db();
+    presence_prune_stale();
     $cutoff = time() - 45;
-    $pdo->prepare('DELETE FROM presence WHERE last_seen < :cutoff')->execute([':cutoff' => $cutoff]);
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM presence WHERE room_hash = :room_hash AND last_seen >= :cutoff');
     $stmt->execute([':room_hash' => $room_hash, ':cutoff' => $cutoff]);
     return (int)$stmt->fetchColumn();
@@ -138,13 +155,27 @@ function room_catch_up_enabled(string $room_hash): bool
     return (bool) $stmt->fetchColumn();
 }
 
+// Skips the write entirely when the row already exists and was touched less
+// than PRESENCE_TOUCH_FRESHNESS seconds ago. SELECT takes only a shared lock
+// (cheap in WAL); the UPSERT (which contends with participant_count's prune
+// and with parallel touches) only runs when the row is genuinely stale. With
+// the PWA pinging /presence every 20s this drops the write rate to ~1 per
+// 20s per token instead of ~1 per request.
 function touch_presence(string $room_hash, string $token): void
 {
     $pdo = db();
     $token_hash = sha256_hex($token);
+    $now = time();
+
+    $check = $pdo->prepare('SELECT last_seen FROM presence WHERE token_hash = :token_hash');
+    $check->execute([':token_hash' => $token_hash]);
+    $row = $check->fetch();
+    if ($row !== false && ($now - (int) $row['last_seen']) < 10) {
+        return;
+    }
+
     $stmt = $pdo->prepare('INSERT INTO presence (token_hash, room_hash, last_seen) VALUES (:token_hash, :room_hash, :last_seen)
         ON CONFLICT(token_hash) DO UPDATE SET last_seen = :last_seen_update');
-    $now = time();
     $stmt->execute([
         ':token_hash' => $token_hash,
         ':room_hash' => $room_hash,
@@ -155,8 +186,8 @@ function touch_presence(string $room_hash, string $token): void
 
 if ($path === '/api/stats' && $method === 'GET') {
     $pdo = db();
+    presence_prune_stale();
     $cutoff = time() - 45;
-    $pdo->prepare('DELETE FROM presence WHERE last_seen < :cutoff')->execute([':cutoff' => $cutoff]);
 
     $total_rooms = (int) $pdo->query('SELECT COUNT(*) FROM rooms')->fetchColumn();
 
