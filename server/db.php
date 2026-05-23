@@ -20,11 +20,13 @@ function db(): PDO
     ]);
 
     $pdo->exec('PRAGMA journal_mode = WAL;');
-    // Without this, concurrent writers (e.g. /presence on room switch racing
-    // the 20s presence interval, plus participant_count's DELETE in /api/rooms)
-    // return SQLITE_BUSY immediately and the uncaught PDOException becomes a 500.
-    // Matches the 5000ms used on the outbox SQLite in outbox.php.
-    $pdo->exec('PRAGMA busy_timeout = 5000;');
+    // Do NOT set PRAGMA busy_timeout here. PDO_SQLite's default is 60000ms;
+    // a previous version of this file set 5000ms thinking the default was 0,
+    // which actively REDUCED tolerance for writer contention and produced
+    // hundreds of 'database is locked' 500s/day under normal load. The real
+    // fix is in index.php (throttling touch_presence + participant_count
+    // cleanup); the 60s default is more than enough once write frequency
+    // drops. Setting an explicit value here would mask future regressions.
     $pdo->exec('PRAGMA foreign_keys = ON;');
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS rooms (
