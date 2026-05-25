@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#12100c" />
+    <title>Coding agents over hisohiso</title>
+    <meta name="description" content="Use hisohiso as a private encrypted phone channel for local coding agents. It is a channel layer, not a full mobile agent cockpit like Paseo or Happy." />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://hisohiso.org/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/launch/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="room-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/launch/" aria-label="hisohiso launch home">
+          <span class="wave wave--brand" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="brand-name">hisohiso</span>
+        </a>
+        <nav class="topnav" aria-label="Primary">
+          <a class="topnav-link" href="/launch/">Home</a>
+          <a class="topnav-link" href="/launch/security/">How it works</a>
+          <a class="topnav-link" href="/launch/coding-agents/" aria-current="page">Agents</a>
+          <a class="topnav-link" href="/launch/hermes/">Hermes</a>
+          <a class="topnav-link" href="/launch/alternatives/">Alternatives</a>
+          <a class="topnav-link" href="https://github.com/draganescu/hisohiso">GitHub</a>
+          <a class="topnav-cta" href="/new">Start a channel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow"><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span> coding agents</p>
+        <h1 id="hero-title"><span class="accent">Private agents</span><br />need a private channel.</h1>
+        <p class="lead">
+          You can already control coding agents from polished apps and full cockpits. Hisohiso is deliberately narrower: the agent runs beside your repo, the phone gets touch-friendly controls, and the conversation travels through an accountless encrypted channel instead of another workspace or vendor thread.
+        </p>
+        <div class="hero-actions">
+          <a class="cta" href="#install">Install the CLI</a>
+          <a class="link" href="/launch/hermes/">Compare Hermes</a>
+          <a class="link" href="/launch/alternatives/">Compare alternatives</a>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="fit-title">
+        <h2 id="fit-title">First: the human privacy model comes with it.</h2>
+        <p>
+          Hisohiso starts as a private channel for people: no account, no phone number, no contact graph, no forwarding network, no readable server-side history. That same encrypted channel is what the agent bridge uses.
+        </p>
+        <ul class="bullets">
+          <li><strong>You can self-host the router.</strong> Run the message router yourself when the work is sensitive.</li>
+          <li><strong>The default router still sees ciphertext.</strong> If you use hisohiso.org, the end-to-end encryption is the same.</li>
+          <li><strong>The conversation is not social.</strong> No contact list, workspace, team channel, forwarded thread, or accidental audience.</li>
+          <li><strong>Private machines stay private.</strong> A local agent can work near local files, credentials, tests, and private models without moving the conversation into a chat company.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="purpose-title">
+        <h2 id="purpose-title">Then: the agent UI fits the job.</h2>
+        <p>
+          Slack, WhatsApp, and Telegram are chat apps. They do not know that an agent answer might be a diff, a terminal log, a carousel of choices, or a yes/no approval. Hisohiso replies can be touch-optimized interactions instead of walls of text you have to answer by typing.
+        </p>
+        <ul class="bullets">
+          <li><strong>Output fits the task.</strong> Diffs, command output, buttons, carousels, and danger confirmations can become phone-friendly blocks.</li>
+          <li><strong>Multiple agents are natural.</strong> One phone can hold separate channels for Claude, Codex, Hermes, a local model, or a one-off task.</li>
+          <li><strong>The code stays local.</strong> The agent runs where your working tree, tests, git config, and credentials already live.</li>
+          <li><strong>You type less.</strong> Common decisions can become taps instead of mobile keyboard work.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="fit-title-2">
+        <h2 id="fit-title-2">Not a coding-agent cockpit.</h2>
+        <p>
+          If you want a native mobile app that manages providers, worktrees, schedules, voice, GitHub PR loops, and many agent sessions, products like Paseo or Happy are the direct comparison. Hisohiso should win only when the channel itself is the product: private, accountless, self-hostable, readable, and good at small touch decisions.
+        </p>
+        <ul class="bullets">
+          <li><strong>It does not replace Claude Code or Codex.</strong> Those tools still do the coding and own their login, model behavior, and repo workflow.</li>
+          <li><strong>It does not pretend the phone is a dev machine.</strong> The phone is for steering, approving, reading diffs, and checking output.</li>
+          <li><strong>It avoids social/workspace assumptions.</strong> No team graph, account directory, shared workspace history, or accidental channel audience.</li>
+          <li><strong>It keeps blocks visible.</strong> Buttons, diffs, terminal output, confirmations, and carousels are native phone surfaces, not Markdown decoration.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="choose-title">
+        <h2 id="choose-title">Use the agent you already trust.</h2>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">Claude Code</p>
+            <h3>Good for larger code changes</h3>
+            <p>Claude Code still does the coding. Hisohiso only gives that local session a cleaner phone surface than a general chat app.</p>
+            <a class="link" href="/launch/claude/">Claude page &rarr;</a>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">Codex</p>
+            <h3>Good for direct coding loops</h3>
+            <p>Codex still runs in the repo. Hisohiso keeps the back-and-forth focused on the task instead of turning it into another messaging thread.</p>
+            <a class="link" href="/launch/codex/">Codex page &rarr;</a>
+          </article>
+        </div>
+      </section>
+
+      <section id="install" class="section numbered" aria-labelledby="install-title">
+        <h2 id="install-title">Start with the hisohiso CLI.</h2>
+        <p>
+          Install hisohiso, then wrap the coding agent you already use. Hisohiso does not install Claude or Codex for you, and it does not manage their login. It only carries the encrypted channel messages.
+        </p>
+        <div class="codebox" data-copy>
+          <code id="install-coding-cmd">curl -fsSL https://raw.githubusercontent.com/draganescu/hisohiso/main/cli/install.sh | sh</code>
+          <button class="copy-btn" type="button" data-copy-target="install-coding-cmd" aria-label="Copy install command">Copy</button>
+        </div>
+        <div class="split" style="margin-top: 24px;">
+          <article class="split-card">
+            <p class="split-tag">Claude</p>
+            <h3>Wrap Claude Code</h3>
+            <pre class="codebox codebox--block"><code>hisohiso wrap claude</code></pre>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">Codex</p>
+            <h3>Wrap Codex</h3>
+            <pre class="codebox codebox--block"><code>hisohiso wrap codex</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="care-title">
+        <h2 id="care-title">The safety model stays clear.</h2>
+        <p>
+          Hisohiso keeps the channel private from the server. It does not make code changes correct. Keep using the boring habits that already work: small diffs, tests, git status, and real review before you ship anything.
+        </p>
+      </section>
+
+      <section class="cta-band" aria-labelledby="end-title">
+        <h2 id="end-title">Use the phone for private steering, not for hosting the work.</h2>
+        <p>The repo stays on your machine. Hisohiso carries the small decisions through a channel built for privacy and touch.</p>
+        <div class="hero-actions">
+          <a class="cta" href="/launch/claude/">Claude</a>
+          <a class="link" href="/launch/codex/">Codex</a>
+          <a class="link" href="/launch/hermes/">Hermes</a>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p>Hisohiso is the channel between you and the agent.</p>
+      <p class="footer-links">
+        <a class="link" href="/launch/">Launch home</a>
+        <a class="link" href="/launch/security/">How it works</a>
+        <a class="link" href="/launch/coding-agents/">Coding agents</a>
+        <a class="link" href="/launch/hermes/">Hermes</a>
+        <a class="link" href="/launch/alternatives/">Alternatives</a>
+        <a class="link" href="https://github.com/draganescu/hisohiso">GitHub</a>
+      </p>
+      <p class="footer-license">GPLv3 · self-host it, fork it, read the code</p>
+    </footer>
+
+    <script src="/launch/app.js" defer></script>
+  </body>
+</html>
