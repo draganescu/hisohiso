@@ -188,6 +188,53 @@ a {
   color: #09091f;
 }
 
+/* Hamburger toggle — hidden until the nav needs to collapse (see media query) */
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.nav-toggle:hover,
+.nav-toggle:focus-visible {
+  border-color: var(--ember);
+  color: var(--ember-soft);
+}
+.nav-toggle-bars,
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.nav-toggle-bars {
+  position: relative;
+  transition: background 0.15s ease;
+}
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  transition: transform 0.2s ease, top 0.2s ease;
+}
+.nav-toggle-bars::before { top: -6px; }
+.nav-toggle-bars::after { top: 6px; }
+/* Morph to an X while the menu is open */
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars { background: transparent; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars::before { top: 0; transform: rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars::after { top: 0; transform: rotate(-45deg); }
+
 /* ---- Layout ---- */
 .page {
   position: relative;
@@ -873,11 +920,45 @@ code {
 @media (max-width: 760px) {
   .bridge-grid { grid-template-columns: 1fr; }
   .phone { max-width: 230px; margin-top: 8px; }
+
+  /* Collapse the primary nav behind a hamburger */
+  .topbar-inner { position: relative; }
+  .nav-toggle { display: inline-flex; }
+
+  /* With JS on, the nav becomes a dropdown panel under the bar.
+     With JS off (no .js-nav class) the links stay visible and wrap. */
+  body.js-nav .topnav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 8px 16px 16px;
+    background: rgba(7, 8, 24, 0.97);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line-soft);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  }
+  body.js-nav .topnav.is-open { display: flex; }
+  body.js-nav .topnav .topnav-link {
+    width: 100%;
+    padding: 12px 12px;
+    font-size: 1rem;
+    border-radius: 9px;
+  }
+  body.js-nav .topnav .topnav-cta {
+    width: 100%;
+    margin-top: 8px;
+    text-align: center;
+    font-size: 1rem;
+    padding: 12px 16px;
+  }
 }
 
 @media (max-width: 640px) {
-  .topnav { gap: 0; }
-  .topnav-link { padding: 8px 6px; font-size: 0.78rem; }
   .page { padding: 28px 16px 56px; }
   .section { padding: 44px 4px; }
   .hero { padding: 44px 4px 36px; }
