@@ -63,8 +63,8 @@
 		php
 	}
 
-	# Landing page + static docs/skills
-	@landing path / /styles.css /security /security.html /hermes /hermes.html /skills/* /og.png
+	# Landing page + static docs/skills/launch pages
+	@landing path / /styles.css /security /security.html /hermes /hermes.html /skills/* /launch* /icons/* /og.png
 	handle @landing {
 		rewrite /security /security.html
 		rewrite /hermes /hermes.html
