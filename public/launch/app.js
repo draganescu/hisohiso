@@ -7,6 +7,48 @@
   var reduceMotion =
     window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* ---- Responsive nav ----
+     Markup ships with the links visible; only when this runs do we opt into the
+     collapsed hamburger behaviour, so a failed/disabled script leaves nav usable. */
+  var navToggle = document.querySelector(".nav-toggle");
+  var topnav = document.getElementById("topnav");
+  if (navToggle && topnav) {
+    document.body.classList.add("js-nav");
+
+    var setNav = function (open) {
+      topnav.classList.toggle("is-open", open);
+      navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      navToggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    };
+
+    navToggle.addEventListener("click", function () {
+      setNav(navToggle.getAttribute("aria-expanded") !== "true");
+    });
+
+    // Picking a destination closes the menu.
+    topnav.addEventListener("click", function (e) {
+      if (e.target.closest("a")) setNav(false);
+    });
+
+    // Escape closes and returns focus to the toggle.
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && navToggle.getAttribute("aria-expanded") === "true") {
+        setNav(false);
+        navToggle.focus();
+      }
+    });
+
+    // A tap anywhere outside the bar dismisses an open menu.
+    document.addEventListener("click", function (e) {
+      if (
+        navToggle.getAttribute("aria-expanded") === "true" &&
+        !e.target.closest(".topbar")
+      ) {
+        setNav(false);
+      }
+    });
+  }
+
   /* ---- Copy-to-clipboard for the install command ---- */
   document.querySelectorAll(".copy-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
