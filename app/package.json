@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test:blocks": "tsc --module ES2022 --moduleResolution Bundler --target ES2022 --outDir /tmp/hisohiso-block-test --noEmit false scripts/block-validation.test.ts && node /tmp/hisohiso-block-test/scripts/block-validation.test.js",
-    "test:app-lock": "tsc --module ES2022 --moduleResolution Bundler --target ES2022 --outDir /tmp/hisohiso-app-lock-test --noEmit false scripts/app-lock.test.ts && node /tmp/hisohiso-app-lock-test/scripts/app-lock.test.js"
+    "test:app-lock": "tsc --module ES2022 --moduleResolution Bundler --target ES2022 --outDir /tmp/hisohiso-app-lock-test --noEmit false scripts/app-lock.test.ts && node /tmp/hisohiso-app-lock-test/scripts/app-lock.test.js",
+    "test:app-passkey": "tsc --module ES2022 --moduleResolution Bundler --target ES2022 --outDir /tmp/hisohiso-passkey-test --noEmit false scripts/app-passkey.test.ts && node /tmp/hisohiso-passkey-test/scripts/app-passkey.test.js"
   },
   "dependencies": {
     "dexie": "^4.0.4",
