@@ -37,6 +37,7 @@ import {
   type StoredRoom
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
+import { createSuspendLockController } from '../lib/app-lock';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import type { Block, BlockResponse } from '../lib/blocks';
 import { BlockRenderer } from '../components/blocks/BlockRenderer';
@@ -207,6 +208,43 @@ const RoomController = () => {
   const [emptyQrSrc, setEmptyQrSrc] = useState<string>('');
   const [catchUpEnabled, setCatchUpEnabled] = useState(false);
   const [catchUpBusy, setCatchUpBusy] = useState(false);
+  const [roomLocked, setRoomLocked] = useState(false);
+
+  const lockRoom = useCallback(() => {
+    setRoomLocked(true);
+    setCryptoKey(null);
+    setKnockKey(null);
+    knockKeyRef.current = null;
+    setShowMenu(false);
+    setShowHelp(false);
+    setShowQueue(false);
+    setShowComposer(false);
+    setShowSwitcher(false);
+    setShowDisband(false);
+    setShowQr(false);
+    setSelectedId(null);
+  }, []);
+
+  const unlockRoom = useCallback(async () => {
+    if (!roomSecret || !roomPassword) {
+      setError('Cannot unlock this room because the local room secret or password is missing. Reopen the room link and enter the room password again.');
+      return;
+    }
+    const nextMessageKey = await deriveMessageKey(roomSecret, roomPassword);
+    const nextKnockKey = await deriveKnockKey(roomSecret, roomPassword);
+    setCryptoKey(nextMessageKey);
+    setKnockKey(nextKnockKey);
+    knockKeyRef.current = nextKnockKey;
+    setRoomLocked(false);
+  }, [roomPassword, roomSecret]);
+
+  useEffect(() => {
+    return createSuspendLockController({
+      hasActiveParticipantSecret: () => roomState === 'PARTICIPANT' && Boolean(cryptoKey && token),
+      isAlreadyLocked: () => roomLocked,
+      lock: lockRoom,
+    });
+  }, [cryptoKey, lockRoom, roomLocked, roomState, token]);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1331,6 +1369,30 @@ const RoomController = () => {
           <div className="rounded-2xl border border-[#b43d1f] bg-[#f7e7e1] p-6 text-sm text-[#6b2411]">
             {error}
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (roomState === 'PARTICIPANT' && roomLocked) {
+    return (
+      <main className="min-h-screen bg-[#171613] text-[#f4efe4]">
+        <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-16 text-center">
+          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#f4efe455] bg-[#f4efe414] text-3xl">
+            🔐
+          </div>
+          <p className="text-[11px] uppercase tracking-[0.35em] text-[#c9bda8]">Hisohiso locked</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Unlock room</h1>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-[#d8cebd]">
+            This room locked when the app was suspended. Unlock to restore the in-memory encryption keys and resume reading messages.
+          </p>
+          <button
+            type="button"
+            onClick={unlockRoom}
+            className="mt-8 w-full rounded-full bg-[#f4efe4] px-5 py-3 text-sm font-semibold text-[#171613] shadow-lg shadow-black/20 transition hover:-translate-y-0.5"
+          >
+            Unlock
+          </button>
         </div>
       </main>
     );
