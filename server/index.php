@@ -172,6 +172,16 @@ function touch_presence(string $room_hash, string $token): void
     $check = $pdo->prepare('SELECT last_seen FROM presence WHERE token_hash = :token_hash');
     $check->execute([':token_hash' => $token_hash]);
     $row = $check->fetch();
+    // Release the read cursor before the UPSERT. PDO_SQLite keeps the implicit
+    // read transaction (and its snapshot) open while $check has an unfinalized
+    // cursor — and a single-row fetch() leaves it unfinalized. The INSERT below
+    // then has to upgrade that now-stale snapshot to a write, which SQLite
+    // refuses with an *immediate* SQLITE_BUSY ("database is locked") that the
+    // 60s busy_timeout deliberately does NOT wait on (it's a deadlock-avoidance
+    // path, not lock contention). sqlite_write_with_retry can't recover either:
+    // the snapshot stays pinned across all 4 attempts, so the request 500s.
+    // Closing the cursor drops the snapshot so the write takes the lock normally.
+    $check->closeCursor();
     if ($row !== false && ($now - (int) $row['last_seen']) < 10) {
         return;
     }
@@ -464,6 +474,13 @@ if (preg_match('#^/api/rooms/([^/]+)/presence$#', $path, $matches) && $method ==
     $stmt = $pdo->prepare('SELECT pending, claim_tag_hash FROM participants WHERE token_hash = :token_hash AND room_hash = :room_hash');
     $stmt->execute([':token_hash' => $token_hash, ':room_hash' => $room_hash]);
     $row = $stmt->fetch();
+    // Same read-snapshot release as in touch_presence(): this $stmt stays in
+    // scope through the activation UPDATE, delete_participant() and
+    // touch_presence() below — all writes on this same connection. Leaving its
+    // cursor open pins a snapshot and turns those writes into the un-retryable
+    // "database is locked" upgrade error. This is the request the client fires
+    // when switching into a room, so it was the dominant source of the 500s.
+    $stmt->closeCursor();
     if (!$row) {
         json_response(['error' => 'invalid_token'], 403);
     }
