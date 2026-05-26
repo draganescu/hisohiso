@@ -1834,59 +1834,33 @@ const RoomController = () => {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
-                  <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room name</p>
-                    <input
-                      className="mt-2 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base font-semibold shadow-inner"
-                      placeholder="Give this room a name"
-                      value={roomNickname}
-                      onChange={(e) => {
-                        setRoomNickname(e.target.value);
-                        if (roomHash) {
-                          updateRoomNickname(roomHash, e.target.value);
-                        }
-                      }}
-                    />
-                    <p className="mt-2 text-xs leading-5 text-[#6a6358]">
-                      Stored locally. Helps you tell rooms apart.
-                    </p>
+                <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room name</p>
+                  <input
+                    className="mt-2 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base font-semibold shadow-inner"
+                    placeholder="Give this room a name"
+                    value={roomNickname}
+                    onChange={(e) => {
+                      setRoomNickname(e.target.value);
+                      if (roomHash) {
+                        updateRoomNickname(roomHash, e.target.value);
+                      }
+                    }}
+                  />
+                  <p className="mt-2 text-xs leading-5 text-[#6a6358]">
+                    Stored locally. Helps you tell rooms apart.
+                  </p>
 
-                    <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Sender</p>
-                    <p className="mt-2 text-lg font-semibold">{handle || 'No sender set yet'}</p>
-                    <p className="mt-3 text-sm leading-7 text-[#5d564d]">
-                      Use <span className="font-semibold">/iam name</span> in the composer to change the sender label shown on your cards.
-                    </p>
+                  <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Sender</p>
+                  <p className="mt-2 text-lg font-semibold">{handle || 'No sender set yet'}</p>
+                  <p className="mt-3 text-sm leading-7 text-[#5d564d]">
+                    Use <span className="font-semibold">/iam name</span> in the composer to change the sender label shown on your cards.
+                  </p>
 
-                    <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Storage</p>
-                    <p className="mt-3 text-sm leading-7 text-[#5d564d]">
-                      Messages stay on this device. If you clear local browser storage, this inbox disappears here.
-                    </p>
-                  </div>
-
-                  <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room key</p>
-                    <p className="mt-2 text-sm leading-7 text-[#5d564d]">
-                      Optional key used to encrypt knocks and message cards for this room.
-                    </p>
-                    <input
-                      className="mt-4 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base shadow-inner"
-                      placeholder="Room key (optional)"
-                      type="text"
-                      name="room-key"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      spellCheck={false}
-                      data-1p-ignore=""
-                      data-lpignore="true"
-                      value={roomPassword}
-                      onChange={(event) => updateRoomPassword(event.target.value)}
-                    />
-                    <p className="mt-3 text-xs leading-5 text-[#6a6358]">
-                      Saved only on this device. Everyone who should read the room needs the same key.
-                    </p>
-                  </div>
+                  <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Storage</p>
+                  <p className="mt-3 text-sm leading-7 text-[#5d564d]">
+                    Messages stay on this device. If you clear local browser storage, this inbox disappears here.
+                  </p>
                 </div>
               </div>
             </div>
