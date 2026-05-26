@@ -37,15 +37,6 @@ import {
   type StoredRoom
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
-import { createSuspendLockController } from '../lib/app-lock';
-import {
-  clearStoredPasskeyCredential,
-  enrollPasskey,
-  getStoredPasskeyCredential,
-  isPasskeySupported,
-  verifyPasskey,
-  type StoredPasskeyCredential,
-} from '../lib/app-passkey';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import type { Block, BlockResponse } from '../lib/blocks';
 import { BlockRenderer } from '../components/blocks/BlockRenderer';
@@ -223,88 +214,6 @@ const RoomController = () => {
   // leaves the device — it's pulled from roomPassword (already in state from
   // localStorage); this just gates display.
   const [pairingCodeRevealed, setPairingCodeRevealed] = useState(false);
-  const [roomLocked, setRoomLocked] = useState(false);
-  const [passkeyCredential, setPasskeyCredential] = useState<StoredPasskeyCredential | null>(() => (
-    initialContext?.roomHash ? getStoredPasskeyCredential(initialContext.roomHash) : null
-  ));
-  const [passkeyBusy, setPasskeyBusy] = useState(false);
-  const [passkeyNotice, setPasskeyNotice] = useState('');
-
-  useEffect(() => {
-    setPasskeyCredential(roomHash ? getStoredPasskeyCredential(roomHash) : null);
-    setPasskeyNotice('');
-  }, [roomHash]);
-
-  const lockRoom = useCallback(() => {
-    setRoomLocked(true);
-    setCryptoKey(null);
-    setKnockKey(null);
-    knockKeyRef.current = null;
-    setShowMenu(false);
-    setShowHelp(false);
-    setShowQueue(false);
-    setShowComposer(false);
-    setShowSwitcher(false);
-    setShowDisband(false);
-    setShowLeave(false);
-    setShowQr(false);
-    setSelectedId(null);
-  }, []);
-
-  const unlockRoom = useCallback(async () => {
-    if (!roomSecret || !roomPassword) {
-      setError('Cannot unlock this room because the local room secret or password is missing. Reopen the room link and enter the room password again.');
-      return;
-    }
-    try {
-      setPasskeyBusy(true);
-      setPasskeyNotice('');
-      if (passkeyCredential) {
-        await verifyPasskey(passkeyCredential);
-      }
-      const nextMessageKey = await deriveMessageKey(roomSecret, roomPassword);
-      const nextKnockKey = await deriveKnockKey(roomSecret, roomPassword);
-      setCryptoKey(nextMessageKey);
-      setKnockKey(nextKnockKey);
-      knockKeyRef.current = nextKnockKey;
-      setRoomLocked(false);
-    } catch (err) {
-      setPasskeyNotice(err instanceof Error ? err.message : 'Passkey unlock failed.');
-    } finally {
-      setPasskeyBusy(false);
-    }
-  }, [passkeyCredential, roomPassword, roomSecret]);
-
-  const handleEnrollPasskey = useCallback(async () => {
-    if (!roomHash) return;
-    try {
-      setPasskeyBusy(true);
-      setPasskeyNotice('');
-      const credential = await enrollPasskey(roomHash, handle);
-      setPasskeyCredential(credential);
-      setPasskeyNotice('Passkey lock enabled for this room on this device.');
-    } catch (err) {
-      setPasskeyNotice(err instanceof Error ? err.message : 'Passkey enrollment failed.');
-    } finally {
-      setPasskeyBusy(false);
-    }
-  }, [handle, roomHash]);
-
-  const handleDisablePasskey = useCallback(() => {
-    if (!roomHash) return;
-    clearStoredPasskeyCredential(roomHash);
-    setPasskeyCredential(null);
-    setPasskeyNotice('Passkey lock disabled for this room on this device.');
-  }, [roomHash]);
-
-  useEffect(() => {
-    return createSuspendLockController({
-      hasActiveParticipantSecret: () => roomState === 'PARTICIPANT' && Boolean(cryptoKey && token),
-      isAlreadyLocked: () => roomLocked,
-      lock: lockRoom,
-    });
-  }, [cryptoKey, lockRoom, roomLocked, roomState, token]);
-
   const listRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusProxyRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1507,32 +1416,6 @@ const RoomController = () => {
     );
   }
 
-  if (roomState === 'PARTICIPANT' && roomLocked) {
-    return (
-      <main className="min-h-screen bg-[#171613] text-[#f4efe4]">
-        <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-16 text-center">
-          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#f4efe455] bg-[#f4efe414] text-3xl">
-            🔐
-          </div>
-          <p className="text-[11px] uppercase tracking-[0.35em] text-[#c9bda8]">Hisohiso locked</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Unlock room</h1>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-[#d8cebd]">
-            This room locked when the app was suspended. {passkeyCredential ? 'Use your device passkey to restore the in-memory encryption keys.' : 'Unlock to restore the in-memory encryption keys and resume reading messages.'}
-          </p>
-          {passkeyNotice && <p className="mt-4 rounded-2xl bg-[#f4efe414] px-4 py-2 text-sm text-[#f0caa8]">{passkeyNotice}</p>}
-          <button
-            type="button"
-            onClick={unlockRoom}
-            disabled={passkeyBusy}
-            className="mt-8 w-full rounded-full bg-[#f4efe4] px-5 py-3 text-sm font-semibold text-[#171613] shadow-lg shadow-black/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {passkeyBusy ? 'Unlocking…' : passkeyCredential ? 'Unlock with passkey' : 'Unlock'}
-          </button>
-        </div>
-      </main>
-    );
-  }
-
   if (roomState === 'PARTICIPANT') {
     return (
       <main className="app-shell relative text-[#171613] md:px-4 md:py-4 lg:px-6">
@@ -2303,29 +2186,6 @@ const RoomController = () => {
                   Show QR
                 </button>
                 {pairingCodePanel}
-                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">Passkey lock</p>
-                    <p className="mt-1 text-xs text-[#3a362f]">
-                      {passkeyCredential ? 'On: unlock after suspend with Face ID, Touch ID, fingerprint, PIN, pattern, or passcode.' : 'Off: lock screen appears after suspend, but unlock does not ask the OS for device verification.'}
-                    </p>
-                    {passkeyNotice && <p className="mt-2 text-xs text-[#8a4b20]">{passkeyNotice}</p>}
-                  </div>
-                  <button
-                    type="button"
-                    disabled={passkeyBusy || !isPasskeySupported()}
-                    onClick={() => {
-                      if (passkeyCredential) {
-                        handleDisablePasskey();
-                      } else {
-                        void handleEnrollPasskey();
-                      }
-                    }}
-                    className="shrink-0 rounded-full border border-[#171613] px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {passkeyBusy ? 'Wait…' : passkeyCredential ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
                 <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">Offline catch-up</p>

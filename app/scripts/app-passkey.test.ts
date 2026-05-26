@@ -1,7 +1,7 @@
 import {
   buildPasskeyCreateOptions,
   buildPasskeyGetOptions,
-  passkeyStorageKey,
+  PASSKEY_STORAGE_KEY,
   type StoredPasskeyCredential,
 } from '../src/lib/app-passkey.js';
 
@@ -23,25 +23,31 @@ const credential: StoredPasskeyCredential = {
 };
 
 assertEqual(
-  passkeyStorageKey('abc123'),
-  'hisohiso.passkey.abc123',
-  'uses a per-room passkey storage key'
+  PASSKEY_STORAGE_KEY,
+  'hisohiso.passkey',
+  'uses a single global passkey storage key (not per room)'
 );
 
 const createOptions = buildPasskeyCreateOptions({
-  roomHash: 'room-hash-1234567890',
-  handle: 'Andrei',
   challenge,
+  label: 'Andrei',
 });
 
 assertEqual(createOptions.publicKey.challenge, challenge, 'create options use the supplied challenge');
 assertEqual(createOptions.publicKey.rp.name, 'Hisohiso', 'create options set the relying party name');
-assertEqual(createOptions.publicKey.user.name, 'Andrei', 'create options use the handle as user name');
+assertEqual(createOptions.publicKey.user.name, 'Andrei', 'create options use the supplied label as user name');
 assertEqual(createOptions.publicKey.authenticatorSelection?.userVerification, 'required', 'create requires device verification');
 assertEqual(createOptions.publicKey.attestation, 'none', 'create avoids attestation collection');
 assert(
   createOptions.publicKey.pubKeyCredParams.some((param) => param.alg === -7),
   'create options allow ES256 credentials'
+);
+
+const defaultLabelOptions = buildPasskeyCreateOptions({ challenge });
+assertEqual(
+  defaultLabelOptions.publicKey.user.name,
+  'Hisohiso app lock',
+  'create options fall back to a generic app-lock label'
 );
 
 const getOptions = buildPasskeyGetOptions({
