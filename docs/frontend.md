@@ -47,7 +47,9 @@ stateDiagram-v2
     LOBBY_WAITING --> LOBBY_WAITING: knock rejected
 
     PARTICIPANT --> DESTROYED: room disbanded
+    PARTICIPANT --> LEFT: you leave (room stays up for others)
     DESTROYED --> [*]: wipe local token + history
+    LEFT --> [*]: wipe local token + history
 ```
 
 - **INIT** reads the secret from the URL fragment, derives the hash, and asks

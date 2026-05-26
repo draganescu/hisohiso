@@ -74,6 +74,7 @@ table. A token that's still `pending` is rejected everywhere **except**
 | `POST /api/rooms/{hash}/message` | token | Publish a chat ciphertext to the room (and append to the outbox if catch-up is on) |
 | `GET /api/rooms/{hash}/outbox` | token | Fetch missed messages since a timestamp (catch-up) |
 | `POST /api/rooms/{hash}/settings` | token | Flip catch-up on/off. Turning it off wipes the stored ciphertext. |
+| `POST /api/rooms/{hash}/leave` | token | Remove just the caller. Drops their participant token + presence row; the room and everyone else stay put. |
 | `POST /api/rooms/{hash}/disband` | token | Delete the room. Wipes its outbox, fans a `destroy` event to everyone. |
 
 ### Room creation, concretely

@@ -43,7 +43,7 @@ import { BlockRenderer } from '../components/blocks/BlockRenderer';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
 
-type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED';
+type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED' | 'LEFT';
 
 type RoomLookupResponse = {
   status: 'exists';
@@ -178,6 +178,7 @@ const RoomController = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [showDisband, setShowDisband] = useState(false);
+  const [showLeave, setShowLeave] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -1239,6 +1240,26 @@ const RoomController = () => {
     }
   }, [roomHash, token, wipeLocalRoom]);
 
+  // Leave drops just this participant server-side; the room lives on for
+  // everyone else. We still wipe local state (the token is now revoked) and
+  // land on the LEFT screen rather than the disbanded DESTROYED one.
+  const leaveRoom = useCallback(async () => {
+    if (!roomHash || !token) {
+      return;
+    }
+    const response = await fetch(`/api/rooms/${roomHash}/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Chat-Token': token
+      }
+    });
+    if (response.ok || response.status === 404) {
+      await wipeLocalRoom(roomHash);
+      setRoomState('LEFT');
+    }
+  }, [roomHash, token, wipeLocalRoom]);
+
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(shareUrl);
   }, [shareUrl]);
@@ -1303,7 +1324,7 @@ const RoomController = () => {
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-        if (showComposer || showMenu || showHelp || showQueue || showDisband || showQr || selectedId) {
+        if (showComposer || showMenu || showHelp || showQueue || showDisband || showLeave || showQr || selectedId) {
           return;
         }
         event.preventDefault();
@@ -1314,7 +1335,7 @@ const RoomController = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [roomState, showComposer, showMenu, showHelp, showQueue, showDisband, showQr, selectedId, openComposer]);
+  }, [roomState, showComposer, showMenu, showHelp, showQueue, showDisband, showLeave, showQr, selectedId, openComposer]);
 
   const scrollToLatest = useCallback(() => {
     // Reset render window to newest BEFORE scrolling so scrollTop=0 lands on the
@@ -2089,6 +2110,36 @@ const RoomController = () => {
           </div>
         )}
 
+        {showLeave && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
+            <div className="w-full max-w-sm rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 text-[#171613] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
+              <h2 className="text-xl font-semibold">Leave this room?</h2>
+              <p className="mt-2 text-sm text-[#3a362f]">
+                You'll be removed from this room and its messages are wiped from this device. The room stays open for everyone else. You can rejoin later with the link.
+              </p>
+              <div className="mt-6 flex gap-3">
+                <button
+                  className="flex-1 rounded-full border-2 border-[#171613] px-4 py-2 text-sm font-semibold"
+                  onClick={() => setShowLeave(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="flex-1 rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-sm font-semibold text-[#f6f0e8]"
+                  onClick={() => {
+                    setShowLeave(false);
+                    void leaveRoom();
+                  }}
+                  type="button"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showMenu && (
           <div className="fixed inset-0 z-40 bg-black/40">
             <div
@@ -2155,6 +2206,16 @@ const RoomController = () => {
                     />
                   </button>
                 </div>
+                <button
+                  className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+                  onClick={() => {
+                    setShowLeave(true);
+                    setShowMenu(false);
+                  }}
+                  type="button"
+                >
+                  Leave room
+                </button>
                 <button
                   className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
                   onClick={() => {
@@ -2346,6 +2407,21 @@ const RoomController = () => {
           <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
             <h1 className="text-3xl font-semibold">Room unavailable</h1>
             <p className="mt-3 text-[#3a362f]">This room was disbanded or no longer exists.</p>
+            <a
+              className="mt-6 inline-block rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+              href="/rooms"
+            >
+              Your rooms
+            </a>
+          </div>
+        )}
+
+        {roomState === 'LEFT' && (
+          <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
+            <h1 className="text-3xl font-semibold">You left this room</h1>
+            <p className="mt-3 text-[#3a362f]">
+              Its messages were wiped from this device. The room is still open for everyone else — open the link again to rejoin.
+            </p>
             <a
               className="mt-6 inline-block rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
               href="/rooms"
