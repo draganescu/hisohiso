@@ -486,6 +486,29 @@ if (preg_match('#^/api/rooms/([^/]+)/presence$#', $path, $matches) && $method ==
     json_response(['status' => 'ok', 'active_participants' => $count]);
 }
 
+if (preg_match('#^/api/rooms/([^/]+)/leave$#', $path, $matches) && $method === 'POST') {
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    $token = require_participant_token($room_hash);
+    $token_hash = sha256_hex($token);
+    // Leaving removes only this participant. Unlike /disband — which deletes the
+    // whole room — the room, its outbox, and every other member stay intact. We
+    // drop the participant token (revoking /message and any future JWT mint) and
+    // the presence row, so the live participant count falls immediately instead
+    // of waiting out the 45s presence timeout.
+    sqlite_write_with_retry(function () use ($room_hash, $token_hash): void {
+        $pdo = db();
+        $pdo->prepare('DELETE FROM participants WHERE token_hash = :token_hash AND room_hash = :room_hash')
+            ->execute([':token_hash' => $token_hash, ':room_hash' => $room_hash]);
+        $pdo->prepare('DELETE FROM presence WHERE token_hash = :token_hash')
+            ->execute([':token_hash' => $token_hash]);
+    });
+    touch_room($room_hash);
+    json_response(['status' => 'ok']);
+}
+
 if (preg_match('#^/api/rooms/([^/]+)/disband$#', $path, $matches) && $method === 'POST') {
     $room_hash = $matches[1];
     if (!room_exists($room_hash)) {
