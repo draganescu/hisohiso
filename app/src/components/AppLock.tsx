@@ -1,17 +1,28 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { createSuspendLockController } from '../lib/app-lock';
-import { getAppLockConfig, isAppLockArmed } from '../lib/storage';
+import { createSuspendLockController, shouldStartLocked } from '../lib/app-lock';
+import {
+  clearAppUnlockedForSession,
+  getAppLockConfig,
+  isAppLockArmed,
+  isAppUnlockedForSession,
+  markAppUnlockedForSession,
+} from '../lib/storage';
 import { getStoredPasskeyCredential, isPasskeySupported, verifyPasskey } from '../lib/app-passkey';
 import { verifyPin } from '../lib/app-pin';
 
 type AppLockProps = { children: ReactNode };
 
-// Wraps the whole app. When the lock is armed, the app starts locked on load
-// (so a backgrounded-then-killed PWA reopens locked) and re-locks every time the
-// page is suspended/hidden. While locked, children are unmounted entirely — no
-// app state, and no in-memory room keys, stay behind the lock screen.
+// Wraps the whole app. When the lock is armed, the app starts locked on a fresh
+// launch (so a backgrounded-then-killed PWA reopens locked) and re-locks every
+// time the page is suspended/hidden. A successful unlock is remembered for the
+// browser session, so it sticks across in-app navigation (each of which is a
+// full page load here) but not across a process kill. While locked, children
+// are unmounted entirely — no app state, and no in-memory room keys, stay
+// behind the lock screen.
 const AppLock = ({ children }: AppLockProps) => {
-  const [locked, setLocked] = useState<boolean>(() => isAppLockArmed());
+  const [locked, setLocked] = useState<boolean>(() =>
+    shouldStartLocked({ isArmed: isAppLockArmed(), isUnlockedForSession: isAppUnlockedForSession() }),
+  );
   const lockedRef = useRef(locked);
   useEffect(() => {
     lockedRef.current = locked;
@@ -23,11 +34,19 @@ const AppLock = ({ children }: AppLockProps) => {
       // effect without a reload.
       isArmed: () => isAppLockArmed(),
       isAlreadyLocked: () => lockedRef.current,
-      lock: () => setLocked(true),
+      // Drop the session unlock too: once backgrounded, a reload or relaunch
+      // must require the PIN/passkey again.
+      lock: () => {
+        clearAppUnlockedForSession();
+        setLocked(true);
+      },
     });
   }, []);
 
-  const unlock = useCallback(() => setLocked(false), []);
+  const unlock = useCallback(() => {
+    markAppUnlockedForSession();
+    setLocked(false);
+  }, []);
 
   if (locked) {
     return <LockScreen onUnlock={unlock} />;

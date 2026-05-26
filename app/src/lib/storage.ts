@@ -88,6 +88,38 @@ export const isAppLockArmed = (config: AppLockConfig = getAppLockConfig()): bool
   return config.enabled && Boolean(config.pin);
 };
 
+// "Unlocked for this session" lives in sessionStorage — deliberately NOT
+// localStorage. It survives in-app navigations (full page loads in this
+// multi-page PWA) so a single unlock sticks while you move between rooms and
+// the home screen, but it is gone when the PWA process is killed, so a fresh
+// launch starts locked again.
+const APP_UNLOCK_SESSION_KEY = 'hisohiso.app_unlocked';
+
+export const isAppUnlockedForSession = (): boolean => {
+  try {
+    return sessionStorage.getItem(APP_UNLOCK_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+export const markAppUnlockedForSession = (): void => {
+  try {
+    sessionStorage.setItem(APP_UNLOCK_SESSION_KEY, '1');
+  } catch {
+    // sessionStorage unavailable (e.g. some private-mode quirks): fall back to
+    // in-memory unlock only — the app still works, it just re-locks on reload.
+  }
+};
+
+export const clearAppUnlockedForSession = (): void => {
+  try {
+    sessionStorage.removeItem(APP_UNLOCK_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+};
+
 export type StoredRoom = {
   roomHash: string;
   roomSecret: string;
