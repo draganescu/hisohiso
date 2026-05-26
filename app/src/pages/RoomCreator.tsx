@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { deriveRoomHash, generateRoomSecret } from '../lib/crypto';
 import { setRoomPassword, setToken, setSubscriberJwt } from '../lib/storage';
+import { navigateTo } from '../lib/navigation';
 
 const RoomCreator = () => {
   const [status, setStatus] = useState<'form' | 'creating' | 'error'>('form');
@@ -43,7 +44,7 @@ const RoomCreator = () => {
         setRoomPassword(hash, trimmedKey);
       }
 
-      window.location.href = `/room#${secret}`;
+      navigateTo(`/room#${secret}`);
     } catch (err) {
       setStatus('error');
       setError(err instanceof Error ? err.message : 'Unable to create room');

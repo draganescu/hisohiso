@@ -10,6 +10,7 @@ const hidden = (overrides: Partial<PageLifecycleSnapshot> = {}): PageLifecycleSn
   visibilityState: 'hidden',
   isArmed: true,
   isAlreadyLocked: false,
+  isInAppNavigation: false,
   ...overrides,
 });
 
@@ -35,6 +36,12 @@ assertEqual(
   shouldLockForPageLifecycle(hidden({ isAlreadyLocked: true })),
   false,
   'does not re-lock repeatedly while already locked'
+);
+
+assertEqual(
+  shouldLockForPageLifecycle(hidden({ isInAppNavigation: true })),
+  false,
+  'does not lock when the page is hidden as part of an in-app navigation'
 );
 
 assertEqual(

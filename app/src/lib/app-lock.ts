@@ -3,14 +3,19 @@ export type PageLifecycleSnapshot = {
   // The lock is "armed" when it is enabled and configured (a PIN exists).
   isArmed: boolean;
   isAlreadyLocked: boolean;
+  // True when the page is being hidden as part of a deliberate in-app
+  // navigation (a full page load to another screen) rather than the app being
+  // sent to the background. A navigation must never re-lock the app.
+  isInAppNavigation: boolean;
 };
 
 export const shouldLockForPageLifecycle = ({
   visibilityState,
   isArmed,
   isAlreadyLocked,
+  isInAppNavigation,
 }: PageLifecycleSnapshot): boolean => {
-  return visibilityState === 'hidden' && isArmed && !isAlreadyLocked;
+  return visibilityState === 'hidden' && isArmed && !isAlreadyLocked && !isInAppNavigation;
 };
 
 // Decides the lock state at app *startup* (a fresh mount / page load). The app
@@ -31,6 +36,7 @@ export const shouldStartLocked = ({
 export type SuspendLockControllerOptions = {
   isArmed: () => boolean;
   isAlreadyLocked: () => boolean;
+  isInAppNavigation: () => boolean;
   lock: () => void;
   doc?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>;
   win?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
@@ -39,6 +45,7 @@ export type SuspendLockControllerOptions = {
 export const createSuspendLockController = ({
   isArmed,
   isAlreadyLocked,
+  isInAppNavigation,
   lock,
   doc = document,
   win = window,
@@ -49,6 +56,7 @@ export const createSuspendLockController = ({
         visibilityState: doc.visibilityState,
         isArmed: isArmed(),
         isAlreadyLocked: isAlreadyLocked(),
+        isInAppNavigation: isInAppNavigation(),
       })
     ) {
       lock();

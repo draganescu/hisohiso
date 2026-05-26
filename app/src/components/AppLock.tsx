@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { createSuspendLockController, shouldStartLocked } from '../lib/app-lock';
 import {
   clearAppUnlockedForSession,
+  clearInAppNavigation,
   getAppLockConfig,
   isAppLockArmed,
   isAppUnlockedForSession,
+  isInAppNavigationPending,
   markAppUnlockedForSession,
 } from '../lib/storage';
 import { getStoredPasskeyCredential, isPasskeySupported, verifyPasskey } from '../lib/app-passkey';
@@ -29,11 +31,17 @@ const AppLock = ({ children }: AppLockProps) => {
   }, [locked]);
 
   useEffect(() => {
+    // Consume the navigation marker that carried us into this page, so a later
+    // genuine backgrounding of THIS page is not mistaken for a navigation.
+    clearInAppNavigation();
     return createSuspendLockController({
       // Read config fresh on each suspend so a toggle on the home screen takes
       // effect without a reload.
       isArmed: () => isAppLockArmed(),
       isAlreadyLocked: () => lockedRef.current,
+      // A full-page in-app navigation fires the same hide events as
+      // backgrounding; skip locking while one is in flight.
+      isInAppNavigation: () => isInAppNavigationPending(),
       // Drop the session unlock too: once backgrounded, a reload or relaunch
       // must require the PIN/passkey again.
       lock: () => {
