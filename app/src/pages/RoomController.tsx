@@ -207,6 +207,12 @@ const RoomController = () => {
   const [emptyQrSrc, setEmptyQrSrc] = useState<string>('');
   const [catchUpEnabled, setCatchUpEnabled] = useState(false);
   const [catchUpBusy, setCatchUpBusy] = useState(false);
+  // Reveal-on-tap for the pairing code in the room menu. Auto-hides after a few
+  // seconds and on backgrounding so a phone left open on the menu doesn't sit
+  // there broadcasting the code to anyone walking by. The code itself never
+  // leaves the device — it's pulled from roomPassword (already in state from
+  // localStorage); this just gates display.
+  const [pairingCodeRevealed, setPairingCodeRevealed] = useState(false);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -449,6 +455,27 @@ const RoomController = () => {
   useEffect(() => {
     knockKeyRef.current = knockKey;
   }, [knockKey]);
+
+  // Auto-hide the revealed pairing code: 30s timer + immediate hide when the
+  // menu closes or the tab is backgrounded. The intent is "a glance, then
+  // gone" — long enough to read four digits aloud, short enough that a phone
+  // accidentally left on the menu screen doesn't keep displaying them.
+  useEffect(() => {
+    if (!pairingCodeRevealed) return;
+    if (!showMenu) {
+      setPairingCodeRevealed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setPairingCodeRevealed(false), 30_000);
+    const onVisibility = (): void => {
+      if (document.visibilityState !== 'visible') setPairingCodeRevealed(false);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [pairingCodeRevealed, showMenu]);
 
   useEffect(() => {
     if (!showComposer) {
@@ -1324,6 +1351,39 @@ const RoomController = () => {
     }
   }, [messages, autoScroll, scrollToLatest]);
 
+  // Reveal-on-tap pairing code panel for the room menu drawer. Rendered in
+  // both the main and fallback menu drawers below; defining it once here keeps
+  // them in sync. Only renders when a password is actually stored — peer
+  // rooms with no pairing factor stay clean. The intended use is "I'm on
+  // phone 1, my other phone has the room link but no code; I tap, read off
+  // four digits, type them on the other phone." Auto-hide is handled by the
+  // pairingCodeRevealed effect.
+  const pairingCodePanel = roomPassword ? (
+    <div className="mt-2 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Pairing code</p>
+          <p className="mt-1 text-xs text-[#3a362f]">
+            Needed alongside the room link to join from another device. Read it
+            off, don't share it together with the link.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPairingCodeRevealed((v) => !v)}
+          className="shrink-0 rounded-full border-2 border-[#171613] px-3 py-1 text-xs font-semibold"
+        >
+          {pairingCodeRevealed ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {pairingCodeRevealed && (
+        <p className="mt-3 text-center font-mono text-2xl font-semibold tracking-[0.3em]">
+          {roomPassword}
+        </p>
+      )}
+    </div>
+  ) : null;
+
   if (error) {
     return (
       <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
@@ -2101,6 +2161,7 @@ const RoomController = () => {
                 >
                   Show QR
                 </button>
+                {pairingCodePanel}
                 <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">Offline catch-up</p>
@@ -2403,6 +2464,7 @@ const RoomController = () => {
               >
                 Show QR
               </button>
+              {pairingCodePanel}
               <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">Offline catch-up</p>
