@@ -26,9 +26,8 @@ export type StoredPasskeyCredential = {
 };
 
 type CreateOptionsInput = {
-  roomHash: string;
-  handle: string;
   challenge: Uint8Array;
+  label?: string;
 };
 
 type GetOptionsInput = {
@@ -36,14 +35,16 @@ type GetOptionsInput = {
   credential: StoredPasskeyCredential;
 };
 
-export const passkeyStorageKey = (roomHash: string): string => `hisohiso.passkey.${roomHash}`;
+// The app lock is a single GLOBAL setting, so the passkey credential is stored
+// under one key, not per room.
+export const PASSKEY_STORAGE_KEY = 'hisohiso.passkey';
 
 export const isPasskeySupported = (): boolean => {
   return typeof window !== 'undefined' && 'PublicKeyCredential' in window && Boolean(navigator.credentials);
 };
 
-export const getStoredPasskeyCredential = (roomHash: string): StoredPasskeyCredential | null => {
-  const raw = localStorage.getItem(passkeyStorageKey(roomHash));
+export const getStoredPasskeyCredential = (): StoredPasskeyCredential | null => {
+  const raw = localStorage.getItem(PASSKEY_STORAGE_KEY);
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as StoredPasskeyCredential;
@@ -51,33 +52,31 @@ export const getStoredPasskeyCredential = (roomHash: string): StoredPasskeyCrede
       return parsed;
     }
   } catch {
-    // Ignore malformed local state and treat passkey lock as disabled.
+    // Ignore malformed local state and treat passkey unlock as unavailable.
   }
   return null;
 };
 
-export const setStoredPasskeyCredential = (roomHash: string, credential: StoredPasskeyCredential): void => {
-  localStorage.setItem(passkeyStorageKey(roomHash), JSON.stringify(credential));
+export const setStoredPasskeyCredential = (credential: StoredPasskeyCredential): void => {
+  localStorage.setItem(PASSKEY_STORAGE_KEY, JSON.stringify(credential));
 };
 
-export const clearStoredPasskeyCredential = (roomHash: string): void => {
-  localStorage.removeItem(passkeyStorageKey(roomHash));
+export const clearStoredPasskeyCredential = (): void => {
+  localStorage.removeItem(PASSKEY_STORAGE_KEY);
 };
 
 export const buildPasskeyCreateOptions = ({
-  roomHash,
-  handle,
   challenge,
+  label = 'Hisohiso app lock',
 }: CreateOptionsInput): CredentialCreationOptions => {
-  const userLabel = handle || `room-${roomHash.slice(0, 10)}`;
   return {
     publicKey: {
       challenge: challenge as BufferSource,
       rp: { name: 'Hisohiso' },
       user: {
-        id: new TextEncoder().encode(roomHash) as BufferSource,
-        name: userLabel,
-        displayName: userLabel,
+        id: randomBytes(16) as BufferSource,
+        name: label,
+        displayName: label,
       },
       pubKeyCredParams: [
         { type: 'public-key', alg: -7 },
@@ -112,12 +111,12 @@ export const buildPasskeyGetOptions = ({
   };
 };
 
-export const enrollPasskey = async (roomHash: string, handle: string): Promise<StoredPasskeyCredential> => {
+export const enrollPasskey = async (label?: string): Promise<StoredPasskeyCredential> => {
   if (!isPasskeySupported()) {
     throw new Error('Passkeys are not available in this browser.');
   }
   const created = await navigator.credentials.create(
-    buildPasskeyCreateOptions({ roomHash, handle, challenge: randomBytes(32) })
+    buildPasskeyCreateOptions({ challenge: randomBytes(32), label })
   );
   if (!(created instanceof PublicKeyCredential) || !created.rawId) {
     throw new Error('Passkey enrollment did not return a public-key credential.');
@@ -127,7 +126,7 @@ export const enrollPasskey = async (roomHash: string, handle: string): Promise<S
     rawId: base64UrlEncode(new Uint8Array(created.rawId)),
     createdAt: Math.floor(Date.now() / 1000),
   };
-  setStoredPasskeyCredential(roomHash, credential);
+  setStoredPasskeyCredential(credential);
   return credential;
 };
 

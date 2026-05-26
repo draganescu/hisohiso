@@ -8,7 +8,7 @@ const assertEqual = (actual: unknown, expected: unknown, message: string): void 
 
 const hidden = (overrides: Partial<PageLifecycleSnapshot> = {}): PageLifecycleSnapshot => ({
   visibilityState: 'hidden',
-  hasActiveParticipantSecret: true,
+  isArmed: true,
   isAlreadyLocked: false,
   ...overrides,
 });
@@ -16,7 +16,7 @@ const hidden = (overrides: Partial<PageLifecycleSnapshot> = {}): PageLifecycleSn
 assertEqual(
   shouldLockForPageLifecycle(hidden()),
   true,
-  'locks when a participant room is suspended or hidden'
+  'locks when an armed app is suspended or hidden'
 );
 
 assertEqual(
@@ -26,9 +26,9 @@ assertEqual(
 );
 
 assertEqual(
-  shouldLockForPageLifecycle(hidden({ hasActiveParticipantSecret: false })),
+  shouldLockForPageLifecycle(hidden({ isArmed: false })),
   false,
-  'does not show a lock screen before a room secret is active'
+  'does not lock when the app lock is disabled or unconfigured'
 );
 
 assertEqual(

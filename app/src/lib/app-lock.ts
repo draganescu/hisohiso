@@ -1,19 +1,20 @@
 export type PageLifecycleSnapshot = {
   visibilityState: DocumentVisibilityState;
-  hasActiveParticipantSecret: boolean;
+  // The lock is "armed" when it is enabled and configured (a PIN exists).
+  isArmed: boolean;
   isAlreadyLocked: boolean;
 };
 
 export const shouldLockForPageLifecycle = ({
   visibilityState,
-  hasActiveParticipantSecret,
+  isArmed,
   isAlreadyLocked,
 }: PageLifecycleSnapshot): boolean => {
-  return visibilityState === 'hidden' && hasActiveParticipantSecret && !isAlreadyLocked;
+  return visibilityState === 'hidden' && isArmed && !isAlreadyLocked;
 };
 
 export type SuspendLockControllerOptions = {
-  hasActiveParticipantSecret: () => boolean;
+  isArmed: () => boolean;
   isAlreadyLocked: () => boolean;
   lock: () => void;
   doc?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>;
@@ -21,7 +22,7 @@ export type SuspendLockControllerOptions = {
 };
 
 export const createSuspendLockController = ({
-  hasActiveParticipantSecret,
+  isArmed,
   isAlreadyLocked,
   lock,
   doc = document,
@@ -31,7 +32,7 @@ export const createSuspendLockController = ({
     if (
       shouldLockForPageLifecycle({
         visibilityState: doc.visibilityState,
-        hasActiveParticipantSecret: hasActiveParticipantSecret(),
+        isArmed: isArmed(),
         isAlreadyLocked: isAlreadyLocked(),
       })
     ) {

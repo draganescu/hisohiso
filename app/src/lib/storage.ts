@@ -54,6 +54,40 @@ export const clearRoomPassword = (roomHash: string): void => {
   localStorage.removeItem(roomPasswordKey(roomHash));
 };
 
+// --- App lock: a single GLOBAL setting (not per room). On by default, but it
+// only actually engages once a PIN has been set — see isAppLockArmed. The
+// passkey credential, when enrolled, lives separately in app-passkey.ts. ---
+
+const APP_LOCK_KEY = 'hisohiso.app_lock';
+
+export type AppLockPin = { salt: string; hash: string };
+
+export type AppLockConfig = {
+  enabled: boolean;
+  pin?: AppLockPin;
+};
+
+export const getAppLockConfig = (): AppLockConfig => {
+  try {
+    const raw = localStorage.getItem(APP_LOCK_KEY);
+    if (!raw) return { enabled: true };
+    const parsed = JSON.parse(raw) as Partial<AppLockConfig>;
+    return { enabled: parsed.enabled ?? true, pin: parsed.pin };
+  } catch {
+    return { enabled: true };
+  }
+};
+
+export const setAppLockConfig = (config: AppLockConfig): void => {
+  localStorage.setItem(APP_LOCK_KEY, JSON.stringify(config));
+};
+
+// Armed = the lock will actually engage: enabled by the user AND a PIN exists
+// to verify against. Default-on with no PIN is "on but not yet protecting".
+export const isAppLockArmed = (config: AppLockConfig = getAppLockConfig()): boolean => {
+  return config.enabled && Boolean(config.pin);
+};
+
 export type StoredRoom = {
   roomHash: string;
   roomSecret: string;

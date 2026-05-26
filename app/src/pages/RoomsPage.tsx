@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { getToken, listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import AppLockSettings from '../components/AppLockSettings';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -309,6 +310,8 @@ const RoomsPage = () => {
             })}
           </div>
         )}
+
+        <AppLockSettings />
 
         <a className="text-sm underline" href="/">
           Back to landing
