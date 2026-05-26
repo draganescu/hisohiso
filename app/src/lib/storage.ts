@@ -120,6 +120,46 @@ export const clearAppUnlockedForSession = (): void => {
   }
 };
 
+// In-app navigation here is a real full page load (we move between screens with
+// window.location / <a href>, not client-side routing). That unload fires the
+// same visibilitychange/pagehide events as sending the app to the background,
+// so the suspend lock can't tell the two apart and used to wipe the session
+// unlock mid-navigation — booting the next screen locked. We drop a short-lived
+// marker right before an intentional navigation; the suspend controller treats
+// a hide as a real backgrounding only when no fresh marker is present. The
+// marker is a timestamp so a stray set (a click that never navigates) can only
+// suppress locking briefly, never indefinitely.
+const APP_NAV_INTENT_KEY = 'hisohiso.app_nav_intent';
+const NAV_INTENT_MAX_AGE_MS = 5_000;
+
+export const markInAppNavigation = (): void => {
+  try {
+    sessionStorage.setItem(APP_NAV_INTENT_KEY, String(Date.now()));
+  } catch {
+    // sessionStorage unavailable: fall back to prior behaviour (may re-lock on
+    // navigation) — never less secure.
+  }
+};
+
+export const isInAppNavigationPending = (maxAgeMs: number = NAV_INTENT_MAX_AGE_MS): boolean => {
+  try {
+    const raw = sessionStorage.getItem(APP_NAV_INTENT_KEY);
+    if (!raw) return false;
+    const at = Number(raw);
+    return Number.isFinite(at) && Date.now() - at <= maxAgeMs;
+  } catch {
+    return false;
+  }
+};
+
+export const clearInAppNavigation = (): void => {
+  try {
+    sessionStorage.removeItem(APP_NAV_INTENT_KEY);
+  } catch {
+    // ignore
+  }
+};
+
 export type StoredRoom = {
   roomHash: string;
   roomSecret: string;

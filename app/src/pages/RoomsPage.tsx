@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { getToken, listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import { navigateTo } from '../lib/navigation';
 import AppLockSettings from '../components/AppLockSettings';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
@@ -57,7 +58,7 @@ const RoomsPage = () => {
       return;
     }
     setJoinError('');
-    window.location.href = `/room#${secret}`;
+    navigateTo(`/room#${secret}`);
   };
 
   const stopCamera = useCallback(() => {
@@ -106,7 +107,7 @@ const RoomsPage = () => {
           if (secret) {
             active = false;
             stopCamera();
-            window.location.href = `/room#${secret}`;
+            navigateTo(`/room#${secret}`);
             return;
           }
         }
