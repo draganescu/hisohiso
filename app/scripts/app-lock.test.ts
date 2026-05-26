@@ -1,4 +1,4 @@
-import { shouldLockForPageLifecycle, type PageLifecycleSnapshot } from '../src/lib/app-lock.js';
+import { shouldLockForPageLifecycle, shouldStartLocked, type PageLifecycleSnapshot } from '../src/lib/app-lock.js';
 
 const assertEqual = (actual: unknown, expected: unknown, message: string): void => {
   if (actual !== expected) {
@@ -35,6 +35,24 @@ assertEqual(
   shouldLockForPageLifecycle(hidden({ isAlreadyLocked: true })),
   false,
   'does not re-lock repeatedly while already locked'
+);
+
+assertEqual(
+  shouldStartLocked({ isArmed: true, isUnlockedForSession: false }),
+  true,
+  'starts locked when armed and the session has not been unlocked (fresh launch)'
+);
+
+assertEqual(
+  shouldStartLocked({ isArmed: true, isUnlockedForSession: true }),
+  false,
+  'stays unlocked across in-app navigation once the session is unlocked'
+);
+
+assertEqual(
+  shouldStartLocked({ isArmed: false, isUnlockedForSession: false }),
+  false,
+  'never starts locked when the lock is disabled or unconfigured'
 );
 
 console.log('app-lock behavior ok');

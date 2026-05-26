@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getAppLockConfig, setAppLockConfig, type AppLockConfig } from '../lib/storage';
+import { getAppLockConfig, markAppUnlockedForSession, setAppLockConfig, type AppLockConfig } from '../lib/storage';
 import { hashPin } from '../lib/app-pin';
 import {
   clearStoredPasskeyCredential,
@@ -72,6 +72,10 @@ const AppLockSettings = () => {
       }
     }
     persist({ enabled: true, pin: pinRecord });
+    // Setting a PIN arms the lock immediately; the user is obviously present, so
+    // count this session as unlocked rather than bouncing them to the lock
+    // screen on their next navigation.
+    markAppUnlockedForSession();
     setHasPasskey(enrolledPasskey);
     setBusy(false);
     closeSetup();

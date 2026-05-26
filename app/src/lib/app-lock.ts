@@ -13,6 +13,21 @@ export const shouldLockForPageLifecycle = ({
   return visibilityState === 'hidden' && isArmed && !isAlreadyLocked;
 };
 
+// Decides the lock state at app *startup* (a fresh mount / page load). The app
+// starts locked only when the lock is armed AND the current browser session has
+// not already been unlocked. The session-unlocked flag lives in sessionStorage,
+// which survives in-app navigations (these are full page loads in this
+// multi-page PWA) but is wiped when the PWA process is killed — so a relaunch
+// starts locked, while tapping "Your rooms" keeps you unlocked. Without this,
+// every navigation remounted AppLock and re-locked the app.
+export const shouldStartLocked = ({
+  isArmed,
+  isUnlockedForSession,
+}: {
+  isArmed: boolean;
+  isUnlockedForSession: boolean;
+}): boolean => isArmed && !isUnlockedForSession;
+
 export type SuspendLockControllerOptions = {
   isArmed: () => boolean;
   isAlreadyLocked: () => boolean;
