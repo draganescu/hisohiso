@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#12100c" />
-    <title>How hisohiso works</title>
+    <title>How hisohiso keeps quiet</title>
     <meta name="description" content="How hisohiso implements private channels with three simple gates: the link you have, the optional password you know, and the knock message that says who you are." />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
@@ -41,7 +41,7 @@
     <main id="main" class="page">
       <section class="hero" aria-labelledby="hero-title">
         <p class="eyebrow"><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span> how it works</p>
-        <h1 id="hero-title"><span class="accent">The channel</span><br />has three gates.</h1>
+        <h1 id="hero-title"><span class="accent">Three gates.</span><br />The server holds no key.</h1>
         <p class="lead">
           Hisohiso is built around a simple security shape: something you have, something you know, and something that identifies how you are asking to enter. For human rooms, the last two can stay optional. For agent rooms, they are part of the pairing flow.
         </p>
@@ -52,14 +52,14 @@
       </section>
 
       <section class="section numbered" aria-labelledby="short-title">
-        <h2 id="short-title">The privacy tradeoff.</h2>
+        <h2 id="short-title">We gave up the conveniences on purpose.</h2>
         <p>
           Popular messengers give you accounts, discovery, invitations, forwarding, groups, and cross-device history. Hisohiso gives up most of that on purpose. The rough edges are what keep the channel simple: fewer identifiers, fewer social features, and less metadata to build a picture from.
         </p>
       </section>
 
       <section class="section numbered" aria-labelledby="gates-title">
-        <h2 id="gates-title">The three gates.</h2>
+        <h2 id="gates-title">Have it, know it, prove it.</h2>
         <p>
           The implementation is deliberately ordinary: a channel can require the link you have, the password you know, and the knock message that says who you are. The server routes the attempt, but it does not get the secret material needed to read the room.
         </p>
@@ -84,7 +84,7 @@
       </section>
 
       <section class="section numbered" aria-labelledby="link-title">
-        <h2 id="link-title">The link carries the first secret.</h2>
+        <h2 id="link-title">The secret never leaves your browser.</h2>
         <p>
           Your browser makes a secret when the channel is created. That secret sits after the <code>#</code> in the URL. Browsers do not send that part to the server, so the server gets a channel hash, not the channel key.
         </p>
@@ -98,7 +98,7 @@
       </section>
 
       <section class="section numbered" aria-labelledby="message-title">
-        <h2 id="message-title">Messages are locked before they leave.</h2>
+        <h2 id="message-title">Every message is locked before it leaves you.</h2>
         <p>
           When you send a message, your browser encrypts it with a key made from the channel secret and, when present, the room password. The server receives the encrypted blob and sends it to other people or to your agent bridge. Their browser, or the local bridge on your machine, uses the same inputs to open it.
         </p>
@@ -146,7 +146,7 @@
       </section>
 
       <section class="section numbered" aria-labelledby="limits-title">
-        <h2 id="limits-title">What this does not solve.</h2>
+        <h2 id="limits-title">What we won't pretend to fix.</h2>
         <p>
           Hisohiso protects message contents from the server and avoids the identity machinery of social messengers. It does not make a bad link-sharing habit safe, hide your network metadata from your infrastructure, or decide whether an agent command is safe to run. Those choices still belong to you.
         </p>
@@ -159,7 +159,7 @@
       </section>
 
       <section class="cta-band" aria-labelledby="end-title">
-        <h2 id="end-title">Readable enough to audit.</h2>
+        <h2 id="end-title">Small enough to read in an afternoon.</h2>
         <p>The repo is small on purpose. You can read the server, the client crypto, and the deployment files without signing an NDA.</p>
         <div class="hero-actions">
           <a class="cta" href="https://github.com/draganescu/hisohiso">Read the code</a>
@@ -170,7 +170,7 @@
     </main>
 
     <footer class="footer">
-      <p>Hisohiso is the channel between you and the agent.</p>
+      <p>Hisohiso is the whisper between you and the agent.</p>
       <p class="footer-links">
         <a class="link" href="/launch/">Launch home</a>
         <a class="link" href="/launch/security/">How it works</a>
