@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { deriveRoomHash, generateRoomSecret } from '../lib/crypto';
-import { setToken, setSubscriberJwt } from '../lib/storage';
+import { setRoomPassword, setToken, setSubscriberJwt } from '../lib/storage';
 
 const RoomCreator = () => {
   const [status, setStatus] = useState<'form' | 'creating' | 'error'>('form');
   const [error, setError] = useState<string>('');
   const [catchUp, setCatchUp] = useState(false);
+  const [roomKey, setRoomKey] = useState('');
 
   const create = async () => {
     setStatus('creating');
@@ -34,6 +35,13 @@ const RoomCreator = () => {
       if (data.subscriber_jwt) {
         setSubscriberJwt(hash, data.subscriber_jwt);
       }
+      // Persist before navigating so RoomController's optimistic init path
+      // picks the key up on first paint instead of deriving with an empty
+      // string and re-deriving on the next render.
+      const trimmedKey = roomKey.trim();
+      if (trimmedKey) {
+        setRoomPassword(hash, trimmedKey);
+      }
 
       window.location.href = `/room#${secret}`;
     } catch (err) {
@@ -52,7 +60,29 @@ const RoomCreator = () => {
               Messages stay on this device only. Anyone with the link can join.
             </p>
 
-            <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-4">
+            <div className="mt-6 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-4">
+              <p className="text-sm font-semibold">Room key</p>
+              <p className="mt-1 text-xs text-[#3a362f]">
+                Optional. Encrypts knocks and message cards. Everyone joining this room needs the
+                same key — share it out of band.
+              </p>
+              <input
+                className="mt-3 w-full rounded-xl border border-[#17161333] bg-white px-3 py-2 text-base"
+                placeholder="Room key (optional)"
+                type="text"
+                name="room-key"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore=""
+                data-lpignore="true"
+                value={roomKey}
+                onChange={(event) => setRoomKey(event.target.value)}
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-4">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold">Offline catch-up</p>
                 <p className="mt-1 text-xs text-[#3a362f]">
