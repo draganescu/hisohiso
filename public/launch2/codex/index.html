@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f5f3" />
+    <title>codex — Codex stays in the repo, you stay on the couch</title>
+    <meta name="description" content="A private phone channel into a local Codex session. Describe the task, watch the test pass, tap to see the diff. No chat thread in the middle." />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://hisohiso.org/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/launch2/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="room-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/launch2/" aria-label="hisohiso home">
+          <span class="wave wave--brand" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="brand-name">hisohiso</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="topnav" aria-expanded="false">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
+        <nav class="topnav" id="topnav" aria-label="Primary">
+          <a class="topnav-link" href="/launch2/">index</a>
+          <a class="topnav-link" href="/launch2/security/">protocol</a>
+          <a class="topnav-link" href="/launch2/coding-agents/" aria-current="page">agents</a>
+          <a class="topnav-link" href="/launch2/hermes/">hermes</a>
+          <a class="topnav-link" href="/launch2/alternatives/">alternatives</a>
+          <a class="topnav-link" href="https://github.com/draganescu/hisohiso">source</a>
+          <a class="topnav-cta" href="/new">open channel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">codex</p>
+        <h1 id="hero-title">
+          Codex stays in the repo.<br /><span class="accent">You stay on the couch.</span>
+        </h1>
+        <p class="lead">
+          Codex already gives you an agent in your git tree. We give that session a private phone channel — describe the task in plain language, watch a passing test, tap to show the diff — without turning the loop into another chat app.
+        </p>
+        <div class="hero-actions">
+          <a class="cta" href="#run">run with hisohiso</a>
+          <a class="link" href="/launch2/coding-agents/">all agents</a>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="use-title">
+        <h2 id="use-title">Why this <span class="accent">over a chat app.</span></h2>
+        <ul class="bullets">
+          <li><strong>Keep Codex private.</strong> No account, no phone number, no contact graph, no workspace, no readable history on our server.</li>
+          <li><strong>Keep Codex local.</strong> The CLI works against your repo, tests, shell, and git state — on the machine where the project already lives.</li>
+          <li><strong>Keep chat apps out of it.</strong> Slack and Telegram are built for people. Diffs and approvals deserve a real surface.</li>
+          <li><strong>Keep the phone useful.</strong> Tap to decide. Glance at the result. Nudge the loop. Don't pretend the phone is a dev environment.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="line-title">
+        <h2 id="line-title">We're a line. <span class="accent">Not a cockpit.</span></h2>
+        <p>
+          We don't try to out-feature Codex-oriented apps with worktree managers, schedules, voice, or PR dashboards. We wrap Codex with a private encrypted channel — for the moments when you need to steer, approve, read, or interrupt from a phone.
+        </p>
+      </section>
+
+      <section id="run" class="section numbered" aria-labelledby="run-title">
+        <h2 id="run-title">Two minutes to <span class="accent">a phone-driven Codex.</span></h2>
+        <p>Install and sign in to Codex first. Then wrap it from inside a git repo.</p>
+        <pre class="codebox codebox--block"><code>npm install -g @openai/codex
+codex
+hisohiso wrap codex</code></pre>
+        <p class="footnote">Codex expects a git repo. We don't change that. We open an encrypted channel around the session.</p>
+      </section>
+
+      <section class="section numbered" aria-labelledby="phone-title">
+        <h2 id="phone-title">What lands <span class="accent">on the phone.</span></h2>
+        <div class="bridge-grid">
+          <div class="install">
+            <p>Describe the task. Answer questions. Glance at the result. The file edits and the commands still happen on the machine running Codex.</p>
+            <p class="install-note">Hisohiso carries the conversation. Git carries the truth.</p>
+          </div>
+          <div class="phone" aria-hidden="true">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="phone-head"><span class="phone-dot"></span> codex · repo</div>
+              <div class="msg msg--you">clean up the parser test</div>
+              <div class="block block--diff">
+                <div class="block-head">terminal</div>
+                <div class="diff-line diff-add">PASS parser.test.ts</div>
+                <div class="diff-line">1 file changed</div>
+              </div>
+              <div class="block block--buttons">
+                <button class="fake-btn fake-btn--go" tabindex="-1">show diff</button>
+                <button class="fake-btn" tabindex="-1">run again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-band" aria-labelledby="end-title">
+        <h2 id="end-title">Codex handles the repo. <span class="accent">We carry the line.</span></h2>
+        <p>Use it when a normal messaging app is too broad and a phone app is too far from the working tree.</p>
+        <div class="hero-actions">
+          <a class="cta" href="/launch2/claude/">claude</a>
+          <a class="link" href="/launch2/hermes/">hermes</a>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p>hisohiso — the quiet line between you and your agent.</p>
+      <p class="footer-links">
+        <a class="link" href="/launch2/">index</a>
+        <a class="link" href="/launch2/security/">protocol</a>
+        <a class="link" href="/launch2/coding-agents/">agents</a>
+        <a class="link" href="/launch2/hermes/">hermes</a>
+        <a class="link" href="/launch2/alternatives/">alternatives</a>
+        <a class="link" href="https://github.com/draganescu/hisohiso">source</a>
+      </p>
+      <p class="footer-license">GPLv3 · self-host it · fork it · read the code</p>
+    </footer>
+
+    <script src="/launch2/app.js" defer></script>
+  </body>
+</html>
