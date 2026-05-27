@@ -114,11 +114,23 @@ export class AgentManager {
   }
 
   private async sendControlMessage(text: string, options?: SendOptions): Promise<void> {
-    const key = await this.getControlKey();
-    await encryptAndSend(this.server, this.controlRoomHash, this.controlToken, key, text, {
-      handle: 'hisohiso-daemon',
-      ...options,
-    });
+    // Best-effort, informational only. Every caller is `void` fire-and-forget, so
+    // we swallow failures here instead of letting them become unhandled
+    // rejections that crash the daemon. The realistic failure mode is racing a
+    // control-room re-pair: the phone disbands control, the operator then
+    // disbands an agent room before updateControlRoom() has landed, and our
+    // controlRoomHash still points at the now-404 room. Losing the "session
+    // ended" notification is fine; crashing the daemon over it isn't.
+    try {
+      const key = await this.getControlKey();
+      await encryptAndSend(this.server, this.controlRoomHash, this.controlToken, key, text, {
+        handle: 'hisohiso-daemon',
+        ...options,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[daemon] sendControlMessage dropped: ${msg}`);
+    }
   }
 
   async spawn(agentName: string): Promise<{ agentId: string; roomSecret: string; roomPassword: string }> {
