@@ -37,7 +37,7 @@ export const ErrorBlockView = ({ block }: Props) => {
       {block.suggestion && (
         <div className="flex gap-2 px-4 py-3">
           <span className="shrink-0 text-base">&#128161;</span>
-          <p className="text-sm leading-6 text-[#3f3529]">{block.suggestion}</p>
+          <p className="text-sm leading-6 text-[#1a1a1a]">{block.suggestion}</p>
         </div>
       )}
     </div>

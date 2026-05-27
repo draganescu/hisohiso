@@ -85,26 +85,26 @@ export const SortableBlockView = ({ block, onSelect, submitted }: Props) => {
               submitted
                 ? 'border-[#e8e0d0] bg-[#f9f5ee]'
                 : draggingIdx === idx
-                ? 'border-[#d9592f] bg-[#fdf1ec] shadow-lg'
-                : 'border-[#d5c8b2] bg-[#fdf9f2]'
+                ? 'border-[#0a0a0a] bg-[#efefec] shadow-lg'
+                : 'border-[#c4c4c4] bg-[#ffffff]'
             }`}
           >
             {!submitted && (
               <span
                 onTouchStart={(e) => onTouchStart(idx, e)}
-                className="flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center rounded-lg text-lg text-[#8d816c] active:bg-[#e8dfd0]"
+                className="flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center rounded-lg text-lg text-[#9a9a9a] active:bg-[#efefec]"
               >
                 &#9776;
               </span>
             )}
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8dfd0] text-xs font-bold text-[#6a5e4e]">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#efefec] text-xs font-bold text-[#9a9a9a]">
               {idx + 1}
             </span>
-            <span className="flex-1 text-sm text-[#171613]">{item.label}</span>
+            <span className="flex-1 text-sm text-[#0a0a0a]">{item.label}</span>
             {!submitted && (
               <span className="flex shrink-0 gap-1">
-                <button type="button" onClick={() => moveUp(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-[#8d816c] active:bg-[#e8dfd0] active:text-[#171613]" aria-label="Move up">&#8593;</button>
-                <button type="button" onClick={() => moveDown(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-[#8d816c] active:bg-[#e8dfd0] active:text-[#171613]" aria-label="Move down">&#8595;</button>
+                <button type="button" onClick={() => moveUp(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-[#9a9a9a] active:bg-[#efefec] active:text-[#0a0a0a]" aria-label="Move up">&#8593;</button>
+                <button type="button" onClick={() => moveDown(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-[#9a9a9a] active:bg-[#efefec] active:text-[#0a0a0a]" aria-label="Move down">&#8595;</button>
               </span>
             )}
           </div>

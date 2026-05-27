@@ -29,14 +29,14 @@ export const CarouselBlockView = ({ block }: Props) => {
         {block.cards.map((card, i) => (
           <div
             key={i}
-            className="w-[75vw] max-w-[280px] shrink-0 snap-start last:snap-end rounded-2xl border border-[#d5c8b2] bg-[#fdf9f2] p-4"
+            className="w-[75vw] max-w-[280px] shrink-0 snap-start last:snap-end rounded-2xl border border-[#c4c4c4] bg-[#ffffff] p-4"
           >
-            <p className="text-sm font-semibold text-[#171613]">{card.title}</p>
-            {card.subtitle && <p className="mt-1 font-mono text-xs text-[#8d816c]">{card.subtitle}</p>}
+            <p className="text-sm font-semibold text-[#0a0a0a]">{card.title}</p>
+            {card.subtitle && <p className="mt-1 font-mono text-xs text-[#9a9a9a]">{card.subtitle}</p>}
             {card.preview && (
-              <p className="mt-2 font-mono text-[13px] leading-5 text-[#3f3529]">{card.preview}</p>
+              <p className="mt-2 font-mono text-[13px] leading-5 text-[#1a1a1a]">{card.preview}</p>
             )}
-            {card.meta && <p className="mt-2 text-xs text-[#a89e90]">{card.meta}</p>}
+            {card.meta && <p className="mt-2 text-xs text-[#9a9a9a]">{card.meta}</p>}
           </div>
         ))}
       </div>
@@ -45,7 +45,7 @@ export const CarouselBlockView = ({ block }: Props) => {
           {block.cards.map((_, i) => (
             <div
               key={i}
-              className={`h-1.5 w-1.5 rounded-full ${i === active ? 'bg-[#d9592f]' : 'bg-[#d5c8b2]'}`}
+              className={`h-1.5 w-1.5 rounded-full ${i === active ? 'bg-[#0a0a0a]' : 'bg-[#c4c4c4]'}`}
             />
           ))}
         </div>

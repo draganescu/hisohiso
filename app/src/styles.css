@@ -3,15 +3,29 @@
 @tailwind utilities;
 
 :root {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 100%;
   --app-height: 100vh;
   --app-offset: 0px;
+  /* Launch2 design tokens. Kept as CSS vars so global tweaks survive a
+     follow-up Tailwind config migration without re-greping arbitrary values. */
+  --bg: #f5f5f3;
+  --bg-2: #ffffff;
+  --ink: #0a0a0a;
+  --ink-soft: #6b6b6b;
+  --ink-dim: #9a9a9a;
+  --ink-fade: #c4c4c4;
+  --rule: rgba(10, 10, 10, 0.08);
+  --rule-soft: rgba(10, 10, 10, 0.05);
+  --danger: #b91c1c;
 }
 
 body {
   margin: 0;
   -webkit-text-size-adjust: 100%;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -47,7 +61,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: contain;
-  background: #f7f2e6;
+  background: var(--bg);
   padding-top: env(safe-area-inset-top);
 }
 
@@ -59,34 +73,6 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
-}
-
-.composer-scroll,
-.detail-scroll {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-}
-
-.composer-overlay {
-  height: var(--app-height);
-  top: var(--app-offset);
-  padding-top: env(safe-area-inset-top);
-  will-change: height, top;
-  contain: layout style;
-}
-
-@media (min-width: 768px) {
-  .composer-overlay {
-    height: auto;
-    top: 0;
-    will-change: auto;
-    contain: none;
-  }
-}
-
-.chat-input {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 .drawer-right {

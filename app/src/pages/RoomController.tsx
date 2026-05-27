@@ -1379,11 +1379,11 @@ const RoomController = () => {
   // four digits, type them on the other phone." Auto-hide is handled by the
   // pairingCodeRevealed effect.
   const pairingCodePanel = roomPassword ? (
-    <div className="mt-2 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3 text-sm">
+    <div className="mt-2 rounded-xl border border-[#0a0a0a1f] bg-[#efefec] p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Pairing code</p>
-          <p className="mt-1 text-xs text-[#3a362f]">
+          <p className="mt-1 text-xs text-[#6b6b6b]">
             Needed alongside the room link to join from another device. Read it
             off, don't share it together with the link.
           </p>
@@ -1391,7 +1391,7 @@ const RoomController = () => {
         <button
           type="button"
           onClick={() => setPairingCodeRevealed((v) => !v)}
-          className="shrink-0 rounded-full border-2 border-[#171613] px-3 py-1 text-xs font-semibold"
+          className="shrink-0 rounded-full border border-[#0a0a0a] px-3 py-1 text-xs font-semibold"
         >
           {pairingCodeRevealed ? 'Hide' : 'Show'}
         </button>
@@ -1403,301 +1403,358 @@ const RoomController = () => {
       )}
     </div>
   ) : null;
+  // ---------- Render ----------
 
   if (error) {
     return (
-      <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
-        <div className="mx-auto flex max-w-xl flex-col px-6 py-16">
-          <div className="rounded-2xl border border-[#b43d1f] bg-[#f7e7e1] p-6 text-sm text-[#6b2411]">
+      <main className="min-h-screen bg-[#f5f5f3] text-[#0a0a0a]">
+        <div className="mx-auto flex max-w-xl flex-col gap-5 px-6 py-16">
+          <p className="text-[11px] uppercase tracking-[0.35em] text-[#9a9a9a]">hisohiso</p>
+          <div className="rounded-[22px] border border-[#b91c1c] bg-[#fee2e2] p-6 text-sm leading-7 text-[#7f1d1d]">
             {error}
           </div>
+          <a
+            className="text-sm font-medium text-[#0a0a0a] underline decoration-[#0a0a0a14] underline-offset-4"
+            href="/rooms"
+          >
+            ← Your channels
+          </a>
         </div>
       </main>
     );
   }
 
   if (roomState === 'PARTICIPANT') {
+    const connectionLabel =
+      connection === 'connected' ? 'Live' : connection === 'error' ? 'Reconnecting…' : 'Connecting…';
+    const connectionColor =
+      connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
+
     return (
-      <main className="app-shell relative text-[#171613] md:px-4 md:py-4 lg:px-6">
-        <textarea ref={focusProxyRef} aria-hidden="true" className="fixed -left-[9999px] top-0 h-0 w-0 opacity-0" tabIndex={-1} />
-        <div className="relative mx-auto flex h-full w-full max-w-[1320px] flex-col overflow-hidden bg-[#f4efe4] md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_90px_rgba(23,22,19,0.16)]">
-          <div className="relative">
+      <main className="app-shell relative text-[#0a0a0a]">
+        {/* Off-screen focus proxy. Keeps Safari's user-gesture trust when a
+            click handler programmatically focuses the inline composer textarea. */}
+        <textarea
+          ref={focusProxyRef}
+          aria-hidden="true"
+          className="fixed -left-[9999px] top-0 h-0 w-0 opacity-0"
+          tabIndex={-1}
+        />
+
+        {/* ---- Sticky one-row header ---- */}
+        <header className="z-30 border-b border-[#0a0a0a14] bg-[#f5f5f3]/90 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-[820px] items-center gap-3 px-4 py-3 sm:px-6">
+            <button
+              type="button"
+              onClick={openSwitcher}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ring-[#0a0a0a14] transition hover:ring-[#0a0a0a]"
+              style={{ backgroundColor: roomColor }}
+              aria-label="Switch channels"
+              title="Switch channels"
+            />
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-base font-semibold tracking-[-0.015em] sm:text-lg">
+                {roomNickname || 'Channel'}
+              </h1>
+              <p className="truncate text-xs text-[#9a9a9a]">
+                {handle ? `signed as ${handle}` : 'sender not set'}
+              </p>
+            </div>
             <div
-              className={`overflow-hidden px-4 transition-[max-height,padding,opacity,border-color,background-color] duration-300 ease-out sm:px-6 lg:px-8 ${
-                headerCondensed
-                  ? 'max-h-0 border-b border-transparent bg-transparent py-0 opacity-0'
-                  : 'max-h-48 border-b border-[#1716131f] bg-gradient-to-b from-[#f9f6ee] to-[#ebe4d7] py-4 opacity-100 sm:py-5'
-              }`}
+              className="hidden items-center gap-1.5 text-xs text-[#9a9a9a] sm:flex"
+              title={connectionLabel}
             >
-              <div
-                className={`min-w-0 max-w-3xl pr-36 transition-[transform,opacity] duration-300 ease-out sm:pr-40 ${
-                  headerCondensed ? '-translate-y-4 opacity-0' : 'translate-y-0 opacity-100'
-                }`}
-              >
-                <p className="text-[11px] uppercase tracking-[0.35em] text-[#6a6358]">Hisohiso Mail</p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={openSwitcher}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition hover:scale-110"
-                    style={{ backgroundColor: roomColor }}
-                    aria-label="Switch rooms"
-                    title="Switch rooms"
-                  >
-                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
-                      <path d="M2 4h12M2 8h12M2 12h12" />
-                    </svg>
-                  </button>
-                  <h1 className="truncate text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
-                    {roomNickname || 'Inbox'}
-                  </h1>
-                </div>
-                <p className="mt-1 text-sm text-[#5a5349] sm:text-base">
-                  {connection === 'connected' ? 'Live room' : connection === 'error' ? 'Reconnecting…' : 'Connecting…'}
-                </p>
-                <div className="mt-2 overflow-hidden">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#8c7f6a]">
-                    {handle ? `Signed as ${handle}` : 'Set sender with /iam name'}
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: connectionColor }}
+                aria-hidden="true"
+              />
+              <span>{connectionLabel}</span>
+            </div>
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full sm:hidden"
+              style={{ backgroundColor: connectionColor }}
+              aria-label={connectionLabel}
+              title={connectionLabel}
+            />
+            <button
+              aria-label={knocks.length === 0 ? 'Open join queue' : `Open join queue, ${knocks.length} waiting`}
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0a0a0a14] bg-white text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+              onClick={() => setShowQueue(true)}
+              type="button"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                <path d="M10 17a2 2 0 0 0 4 0" />
+              </svg>
+              {knocks.length > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-[#b91c1c] px-1 text-[10px] font-semibold leading-tight text-white">
+                  {knocks.length}
+                </span>
+              )}
+            </button>
+            <button
+              aria-label="Channel info"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0a0a0a14] bg-white text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+              onClick={() => setShowHelp(true)}
+              type="button"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M9.6 9.2a2.6 2.6 0 1 1 4.1 2.1c-.9.6-1.7 1.1-1.7 2.2" />
+                <path d="M12 17h.01" />
+              </svg>
+            </button>
+            <button
+              className="inline-flex h-9 items-center justify-center rounded-full border border-[#0a0a0a14] bg-white px-3.5 text-xs font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+              onClick={() => setShowMenu(true)}
+              type="button"
+            >
+              Menu
+            </button>
+          </div>
+        </header>
+
+        {/* ---- Inline composer (always visible, sits under header) ---- */}
+        <div className="border-b border-[#0a0a0a14] bg-white">
+          <div className="mx-auto w-full max-w-[820px] px-4 py-3 sm:px-6">
+            {replyTarget && (
+              <div className="mb-2 flex items-center justify-between gap-3 rounded-[10px] border border-[#0a0a0a14] bg-[#efefec] px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[#9a9a9a]">Replying to</p>
+                  <p className="truncate text-xs text-[#0a0a0a]">
+                    <span className="font-medium">{getMessageLabel(replyTarget)}</span>
+                    <span className="text-[#9a9a9a]"> · {getMessagePreview(replyTarget.content)}</span>
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyToId(null)}
+                  className="shrink-0 text-xs text-[#9a9a9a] hover:text-[#0a0a0a]"
+                  aria-label="Cancel reply"
+                >
+                  ✕
+                </button>
               </div>
-            </div>
-
-            <div
-              className={`absolute right-4 z-20 flex flex-wrap items-center justify-end gap-2 transition-[top,transform] duration-300 ease-out sm:right-6 sm:gap-3 lg:right-8 ${
-                headerCondensed ? 'top-2.5 sm:top-3' : 'top-4 sm:top-5'
-              }`}
-            >
+            )}
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={composerInputRef}
+                value={chatInput}
+                placeholder="Write a message…"
+                rows={1}
+                onChange={(e) => {
+                  setChatInput(e.target.value);
+                  const ta = e.currentTarget;
+                  ta.style.height = 'auto';
+                  ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+                }}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    void sendMessage();
+                  }
+                }}
+                className="min-h-[44px] flex-1 resize-none rounded-[14px] border border-[#0a0a0a14] bg-[#f5f5f3] px-4 py-2.5 text-base leading-6 text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a]"
+              />
               <button
-                aria-label={knocks.length === 0 ? 'Open join queue' : `Open join queue, ${knocks.length} waiting`}
-                className={`relative inline-flex items-center justify-center rounded-full border border-[#17161326] bg-white/85 text-[#332f2a] shadow-sm transition-all duration-300 hover:-translate-y-[1px] ${
-                  headerCondensed ? 'h-10 w-10' : 'h-12 w-12'
-                }`}
-                onClick={() => setShowQueue(true)}
                 type="button"
+                onClick={() => void sendMessage()}
+                disabled={!chatInput.trim()}
+                className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#0a0a0a] disabled:hover:text-white"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                  <path d="M10 17a2 2 0 0 0 4 0" />
-                </svg>
-                {knocks.length > 0 && (
-                  <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#d9592f] px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
-                    {knocks.length}
-                  </span>
-                )}
-              </button>
-
-              <button
-                aria-label="Open help"
-                className={`inline-flex items-center justify-center rounded-full border border-[#17161326] bg-white/85 text-[#332f2a] shadow-sm transition-all duration-300 hover:-translate-y-[1px] ${
-                  headerCondensed ? 'h-10 w-10' : 'h-12 w-12'
-                }`}
-                onClick={() => setShowHelp(true)}
-                type="button"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M9.6 9.2a2.6 2.6 0 1 1 4.1 2.1c-.9.6-1.7 1.1-1.7 2.2" />
-                  <path d="M12 17h.01" />
-                </svg>
-              </button>
-
-              <button
-                className={`rounded-full border border-[#17161326] bg-white/80 font-semibold text-[#332f2a] shadow-sm transition-all duration-300 ${
-                  headerCondensed ? 'px-4 py-2 text-xs sm:text-sm' : 'px-4 py-2 text-xs sm:px-5 sm:text-sm'
-                }`}
-                onClick={() => setShowMenu(true)}
-                type="button"
-              >
-                Menu
+                Send
               </button>
             </div>
           </div>
+        </div>
 
-          <div
-            ref={listRef}
-            onScroll={handleScroll}
-            className={`flex-1 overflow-x-hidden overflow-y-auto px-4 pb-40 transition-[padding] duration-300 ease-out chat-scroll sm:px-6 lg:px-8 lg:pb-44 ${
-              headerCondensed ? 'pt-16 sm:pt-[4.5rem] lg:pt-20' : 'pt-5 sm:pt-6 lg:pt-7'
-            }`}
-          >
-            <section style={{ minHeight: 'calc(100% + 1px)' }}>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8d816c]">Messages</h2>
-                <span className="text-xs text-[#7a7266]">{visibleMessages.length} card{visibleMessages.length === 1 ? '' : 's'}</span>
+        {/* ---- Message list (newest at top — preserves windowing logic) ---- */}
+        <div
+          ref={listRef}
+          onScroll={handleScroll}
+          className="chat-scroll relative flex-1 overflow-x-hidden overflow-y-auto"
+        >
+          <div className="mx-auto w-full max-w-[820px] px-4 py-5 sm:px-6">
+            {showEmptyState && (
+              <div className="rounded-[22px] border border-dashed border-[#0a0a0a14] bg-white p-6 text-center sm:p-8">
+                <p className="text-lg font-semibold tracking-[-0.02em] text-[#0a0a0a] sm:text-xl">
+                  Invite someone.
+                </p>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6b6b6b]">
+                  Share this link. Anyone with it can request to join.
+                </p>
+
+                <div className="mx-auto mt-5 flex max-w-md items-center gap-2 rounded-full border border-[#0a0a0a14] bg-[#efefec] px-3 py-1.5">
+                  <p className="min-w-0 flex-1 truncate text-left text-xs text-[#6b6b6b]">{shareUrl}</p>
+                  <button
+                    className="shrink-0 rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-3 py-1 text-xs font-medium text-white"
+                    onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
+                    type="button"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                {emptyQrSrc && (
+                  <div className="mt-5 flex justify-center">
+                    <img
+                      src={emptyQrSrc}
+                      alt="Channel QR code"
+                      className="h-40 w-40 rounded-[10px] border border-[#0a0a0a14] sm:h-44 sm:w-44"
+                    />
+                  </div>
+                )}
+
+                <p className="mt-5 text-xs text-[#9a9a9a]">Or just start typing above.</p>
               </div>
+            )}
 
-              {showEmptyState && (
-                <div className="rounded-[30px] border border-dashed border-[#cdbfa8] bg-[#faf5eb] px-5 py-8 text-center shadow-[0_14px_30px_rgba(23,22,19,0.04)] sm:px-8 lg:px-10 lg:py-12">
-                  <p className="text-xl font-semibold text-[#171613] sm:text-2xl">Invite someone</p>
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-[#5d564d] sm:text-base">
-                    Share this link to invite someone into the room. Anyone with the link can request to join.
-                  </p>
+            {!showEmptyState && visibleMessages.length === 0 && (
+              <div className="rounded-[22px] border border-dashed border-[#0a0a0a14] bg-white p-8 text-center">
+                <p className="text-base font-semibold text-[#0a0a0a]">No messages yet.</p>
+                <p className="mt-2 text-sm leading-6 text-[#6b6b6b]">Start with a note.</p>
+              </div>
+            )}
 
-                  <div className="mx-auto mt-6 max-w-sm">
-                    <div className="flex items-center gap-2 rounded-xl border border-[#d5c8b2] bg-white px-4 py-3">
-                      <p className="min-w-0 flex-1 truncate text-left text-xs text-[#5d564d]">{shareUrl}</p>
+            <div className="flex flex-col gap-3">
+              {hasNewer && (
+                <div ref={topSentinelRef} aria-hidden="true" className="h-px w-full shrink-0" />
+              )}
+
+              {renderedMessages.map((msg) => {
+                const isSystem = msg.type === 'system';
+                const isMine = msg.direction === 'out' && !isSystem;
+
+                if (isSystem) {
+                  return (
+                    <div key={msg.id} className="my-1 flex justify-center">
+                      <p className="rounded-full bg-[#efefec] px-3 py-1 text-[11px] text-[#9a9a9a]">
+                        {getMessagePreview(msg.content)} · {formatMailStamp(msg.timestamp)}
+                      </p>
+                    </div>
+                  );
+                }
+
+                const senderLabel = msg.handle || (isMine ? 'You' : null);
+                const hasBlocks = !!(msg.blocks && msg.blocks.length > 0);
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex w-full flex-col ${isMine ? 'items-end' : 'items-start'}`}
+                  >
+                    {senderLabel && (
+                      <p className="mb-1 px-2 text-[11px] text-[#9a9a9a]">{senderLabel}</p>
+                    )}
+                    <div
+                      className={`max-w-[82%] sm:max-w-[72%] ${
+                        hasBlocks ? 'w-full sm:w-auto sm:min-w-[420px]' : ''
+                      } rounded-[18px] px-4 py-2.5 leading-6 ${
+                        isMine
+                          ? 'rounded-br-[6px] bg-[#0a0a0a] text-white'
+                          : 'rounded-bl-[6px] border border-[#0a0a0a14] bg-white text-[#0a0a0a]'
+                      }`}
+                    >
+                      <p className="whitespace-pre-line break-words text-[15px]">
+                        {msg.block_response ? (
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={`inline-block h-1.5 w-1.5 rounded-full ${
+                                isMine ? 'bg-white/60' : 'bg-[#0a0a0a]'
+                              }`}
+                            />
+                            {formatBlockResponse(msg) || getMessagePreview(msg.content)}
+                          </span>
+                        ) : (
+                          getMessagePreview(msg.content)
+                        )}
+                      </p>
+
+                      {hasBlocks && msg.blocks && (
+                        <div
+                          className={`mt-3 rounded-[12px] p-3 ${
+                            isMine ? 'bg-white/5' : 'bg-[#f5f5f3]'
+                          }`}
+                        >
+                          <BlockRenderer blocks={msg.blocks} onRespond={sendBlockResponse} />
+                        </div>
+                      )}
+
+                      {msg.action?.type === 'join-room' && (
+                        <div className="mt-3 flex flex-col items-start gap-2">
+                          <button
+                            type="button"
+                            className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium ${
+                              isMine
+                                ? 'bg-white text-[#0a0a0a]'
+                                : 'border border-[#0a0a0a] bg-[#0a0a0a] text-white'
+                            }`}
+                            onClick={() => {
+                              if (msg.action?.type === 'join-room') void joinActionRoom(msg.action);
+                            }}
+                          >
+                            {msg.action.label} →
+                          </button>
+                          {msg.action.code && (
+                            <div
+                              className={`text-[11px] font-mono ${
+                                isMine ? 'text-white/70' : 'text-[#9a9a9a]'
+                              }`}
+                            >
+                              code:{' '}
+                              <span className="font-semibold tracking-[0.25em]">
+                                {msg.action.code}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      className={`mt-1 flex items-center gap-2 px-2 text-[10px] text-[#9a9a9a] ${
+                        isMine ? 'flex-row-reverse' : ''
+                      }`}
+                    >
+                      <span>{formatMailStamp(msg.timestamp)}</span>
+                      <span aria-hidden="true">·</span>
                       <button
-                        className="shrink-0 rounded-full border border-[#171613] bg-[#171613] px-4 py-1.5 text-xs font-semibold text-[#f6f0e8]"
-                        onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
                         type="button"
+                        className="hover:text-[#0a0a0a]"
+                        onClick={() => openComposer(msg.id)}
+                      >
+                        Reply
+                      </button>
+                      <span aria-hidden="true">·</span>
+                      <button
+                        type="button"
+                        className="hover:text-[#0a0a0a]"
+                        onClick={() => void handleCopyMessage(msg.content)}
                       >
                         Copy
                       </button>
+                      <span aria-hidden="true">·</span>
+                      <button
+                        type="button"
+                        className="hover:text-[#b91c1c]"
+                        onClick={() => void handleDeleteMessage(msg.id)}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
+                );
+              })}
 
-                  {emptyQrSrc && (
-                    <div className="mt-6 flex justify-center">
-                      <img src={emptyQrSrc} alt="Room QR code" className="h-40 w-40 rounded-xl sm:h-48 sm:w-48" />
-                    </div>
-                  )}
-
-                  <p className="mt-6 text-xs text-[#8d816c]">
-                    Or compose a message to get started.
-                  </p>
-                </div>
+              {hasOlder && (
+                <div ref={bottomSentinelRef} aria-hidden="true" className="h-px w-full shrink-0" />
               )}
-
-              {!showEmptyState && visibleMessages.length === 0 && (
-                <div className="rounded-[30px] border border-dashed border-[#cdbfa8] bg-[#faf5eb] px-5 py-10 text-center shadow-[0_14px_30px_rgba(23,22,19,0.04)] sm:px-8 lg:px-10 lg:py-14">
-                  <p className="text-base font-semibold text-[#171613] sm:text-xl">Inbox empty</p>
-                  <p className="mt-2 text-sm leading-7 text-[#5d564d] sm:text-base">
-                    Start with a note. Incoming messages and your own sent mail will collect here as separate cards.
-                  </p>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3 lg:gap-4">
-                {hasNewer && (
-                  <div
-                    ref={topSentinelRef}
-                    aria-hidden="true"
-                    className="h-px w-full shrink-0"
-                  />
-                )}
-                {renderedMessages.map((msg) => {
-                  const isSystem = msg.type === 'system';
-                  const isMine = msg.direction === 'out' && !isSystem;
-
-                  return (
-                    <div
-                      key={msg.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        if ((e.target as HTMLElement).closest('a,button')) return;
-                        setSelectedId(msg.id);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedId(msg.id);
-                        }
-                      }}
-                      className={`w-full cursor-pointer rounded-[30px] border p-5 text-left shadow-[0_18px_36px_rgba(23,22,19,0.08)] transition hover:-translate-y-[1px] sm:p-6 lg:max-w-[min(100%,58rem)] ${
-                        isSystem
-                          ? 'border-[#e0d2bc] bg-[#fff7ea] text-[#3f3529]'
-                          : isMine
-                          ? 'ml-3 border-[#16233c] bg-[#1b2a46] text-[#f8f4ec] sm:ml-8 lg:ml-auto'
-                          : 'mr-3 border-[#d5c8b2] bg-[#fdf9f2] text-[#171613] sm:mr-8'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className={`truncate text-sm font-semibold ${isMine ? 'text-white' : 'text-[#171613]'}`}>{getMessageLabel(msg)}</p>
-                          <p className={`mt-1 text-[11px] uppercase tracking-[0.22em] ${isMine ? 'text-[#d2ddf5]' : 'text-[#8d816c]'}`}>
-                            {isSystem ? 'Room event' : isMine ? 'Sent from this device' : 'Incoming message'}
-                          </p>
-                        </div>
-                        <div
-                          className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-                            isMine
-                              ? 'border-white/20 bg-white/10 text-white'
-                              : 'border-[#d7ccb8] bg-[#f4ede1] text-[#6a5e4e]'
-                          }`}
-                        >
-                          {isMine ? 'Mine' : isSystem ? 'Notice' : 'Room'}
-                        </div>
-                      </div>
-                      <p
-                        className={`mt-4 whitespace-pre-line break-words text-base leading-7 sm:text-lg ${
-                          isMine ? 'text-[#f8f4ec]' : 'text-[#2f2a24]'
-                        }`}
-                      >
-                        {msg.block_response ? (
-                          <span className="flex items-center gap-2">
-                            <span className={`inline-block h-2 w-2 rounded-full ${isMine ? 'bg-[#d2ddf5]' : 'bg-[#d9592f]'}`} />
-                            {formatBlockResponse(msg) || getMessagePreview(msg.content)}
-                          </span>
-                        ) : getMessagePreview(msg.content)}
-                      </p>
-                      {msg.blocks && msg.blocks.length > 0 && (
-                        <span
-                          className={`mt-2 inline-block rounded-full px-3 py-1 text-[11px] font-semibold ${
-                            isMine ? 'bg-white/10 text-[#d2ddf5]' : 'bg-[#f4ede1] text-[#6a5e4e]'
-                          }`}
-                        >
-                          {msg.blocks.length} interactive {msg.blocks.length === 1 ? 'block' : 'blocks'} — tap to view
-                        </span>
-                      )}
-                      {msg.action?.type === 'join-room' && (
-                        <>
-                          <button
-                            type="button"
-                            className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-5 py-2.5 text-sm font-semibold text-white"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (msg.action?.type === 'join-room') {
-                                void joinActionRoom(msg.action);
-                              }
-                            }}
-                          >
-                            {msg.action.label} &rarr;
-                          </button>
-                          {msg.action.code && (
-                            <div className={`mt-2 text-xs font-mono tracking-widest ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>
-                              Pairing code: <span className="font-semibold text-base tracking-[0.3em]">{msg.action.code}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      <div className={`mt-4 text-xs sm:text-sm ${isMine ? 'text-[#d2ddf5]' : 'text-[#766f63]'}`}>{formatMailStamp(msg.timestamp)}</div>
-                    </div>
-                  );
-                })}
-                {hasOlder && (
-                  <div
-                    ref={bottomSentinelRef}
-                    aria-hidden="true"
-                    className="h-px w-full shrink-0"
-                  />
-                )}
-              </div>
-            </section>
+            </div>
           </div>
 
           {!autoScroll && unreadCount > 0 && (
             <button
-              className="absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#d9592f] bg-[#d9592f] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(98,40,20,0.3)]"
+              className="sticky bottom-4 left-1/2 z-20 ml-[-90px] inline-flex items-center gap-2 rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-xs font-medium text-white shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
               onClick={() => {
                 scrollToLatest();
                 setAutoScroll(true);
@@ -1705,71 +1762,65 @@ const RoomController = () => {
               }}
               type="button"
             >
-              {unreadCount} new message{unreadCount === 1 ? '' : 's'} ↑
+              ↑ {unreadCount} new
             </button>
           )}
         </div>
 
-        <button
-          className="fixed bottom-4 left-4 right-4 z-30 rounded-full border border-[#171613] bg-[#d9592f] px-5 py-4 text-base font-semibold text-[#fff7ee] shadow-[0_18px_40px_rgba(98,40,20,0.35)] sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto sm:text-sm"
-          onClick={() => openComposer()}
-          type="button"
-        >
-          Compose
-        </button>
-
         <QrModal open={showQr} onClose={() => setShowQr(false)} value={shareUrl} />
 
+        {/* ---- Knock queue ---- */}
         {showQueue && (
-          <div className="overlay-safe-top fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 pb-6 text-[#171613] md:px-5">
-            <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-[34px] border border-[#1716131f] bg-[#f4efe4] shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
-              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4 sm:px-6">
+          <div className="fixed inset-0 z-40 bg-[rgba(10,10,10,0.45)] px-4 pt-[env(safe-area-inset-top)]">
+            <div className="mx-auto mt-6 flex h-[calc(100%-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-[#0a0a0a14] bg-[#f5f5f3] shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+              <div className="flex items-center justify-between border-b border-[#0a0a0a14] bg-white px-5 py-4">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">Notifications</p>
-                  <h2 className="mt-1 text-lg font-semibold">Join queue</h2>
+                  <p className="text-[11px] uppercase tracking-[0.32em] text-[#9a9a9a]">Notifications</p>
+                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Join queue</h2>
                 </div>
-                <button className="text-sm font-semibold text-[#4f473e]" onClick={() => setShowQueue(false)} type="button">
+                <button
+                  className="text-sm font-medium text-[#6b6b6b] hover:text-[#0a0a0a]"
+                  onClick={() => setShowQueue(false)}
+                  type="button"
+                >
                   Close
                 </button>
               </div>
-
-              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+              <div className="flex-1 overflow-y-auto px-5 py-5">
                 {knocks.length === 0 && (
-                  <div className="rounded-[28px] border border-dashed border-[#cdbfa8] bg-[#faf5eb] px-5 py-10 text-center shadow-[0_14px_30px_rgba(23,22,19,0.04)]">
-                    <p className="text-base font-semibold">No one is waiting</p>
-                    <p className="mt-2 text-sm leading-7 text-[#5d564d]">
-                      New join requests will appear here. The bell badge will light up when someone knocks.
+                  <div className="rounded-[22px] border border-dashed border-[#0a0a0a14] bg-white p-8 text-center">
+                    <p className="text-base font-semibold">No one is waiting.</p>
+                    <p className="mt-2 text-sm text-[#6b6b6b]">
+                      New join requests appear here. The bell badge lights up when someone knocks.
                     </p>
                   </div>
                 )}
-
                 {knocks.length > 0 && (
-                  <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="grid gap-3">
                     {knocks.map((knock) => (
                       <div
                         key={knock.id}
-                        className="rounded-[28px] border border-[#d2c5ae] bg-[#fffaf1] p-4 shadow-[0_16px_34px_rgba(23,22,19,0.06)] sm:p-5"
+                        className="rounded-[18px] border border-[#0a0a0a14] bg-white p-4"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-[#171613]">Join request</p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[#8d816c]">{formatMailStamp(knock.ts)}</p>
-                          </div>
-                          <div className="rounded-full border border-[#d7ccb8] bg-[#f7efe3] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6a5e4e]">
-                            Knock
+                            <p className="text-sm font-medium text-[#0a0a0a]">Join request</p>
+                            <p className="mt-0.5 text-xs text-[#9a9a9a]">{formatMailStamp(knock.ts)}</p>
                           </div>
                         </div>
-                        <p className="mt-4 text-sm leading-7 text-[#40382f]">{knock.message ? knock.message : 'No note included.'}</p>
-                        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                        <p className="mt-3 text-sm leading-6 text-[#1a1a1a]">
+                          {knock.message || 'No note included.'}
+                        </p>
+                        <div className="mt-4 flex gap-2">
                           <button
-                            className="flex-1 rounded-full border border-[#171613] bg-[#171613] px-4 py-2 text-sm font-semibold text-[#f6f0e8]"
+                            className="flex-1 rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
                             onClick={() => approveKnock(knock.id)}
                             type="button"
                           >
                             Approve
                           </button>
                           <button
-                            className="flex-1 rounded-full border border-[#17161333] bg-white px-4 py-2 text-sm font-semibold text-[#171613]"
+                            className="flex-1 rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
                             onClick={() => rejectKnock(knock.id)}
                             type="button"
                           >
@@ -1785,361 +1836,92 @@ const RoomController = () => {
           </div>
         )}
 
+        {/* ---- Help / channel settings (includes Sender field, replaces /iam) ---- */}
         {showHelp && (
-          <div className="overlay-safe-top fixed inset-0 z-40 bg-[rgba(20,17,14,0.45)] px-4 pb-6 text-[#171613] md:px-5">
-            <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-[34px] border border-[#1716131f] bg-[#f4efe4] shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
-              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4 sm:px-6">
+          <div className="fixed inset-0 z-40 bg-[rgba(10,10,10,0.45)] px-4 pt-[env(safe-area-inset-top)]">
+            <div className="mx-auto mt-6 flex h-[calc(100%-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-[#0a0a0a14] bg-[#f5f5f3] shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+              <div className="flex items-center justify-between border-b border-[#0a0a0a14] bg-white px-5 py-4">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">Help</p>
-                  <h2 className="mt-1 text-lg font-semibold">Room notes</h2>
+                  <p className="text-[11px] uppercase tracking-[0.32em] text-[#9a9a9a]">Channel</p>
+                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Settings</h2>
                 </div>
-                <button className="text-sm font-semibold text-[#4f473e]" onClick={() => setShowHelp(false)} type="button">
+                <button
+                  className="text-sm font-medium text-[#6b6b6b] hover:text-[#0a0a0a]"
+                  onClick={() => setShowHelp(false)}
+                  type="button"
+                >
                   Close
                 </button>
               </div>
-
-              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
-                <div className="rounded-[28px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_16px_34px_rgba(23,22,19,0.06)]">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Room name</p>
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                <div className="rounded-[18px] border border-[#0a0a0a14] bg-white p-5">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-[#9a9a9a]">Channel name</p>
                   <input
-                    className="mt-2 w-full rounded-2xl border border-[#1716131f] bg-white px-4 py-3 text-base font-semibold shadow-inner"
-                    placeholder="Give this room a name"
+                    className="mt-2 w-full rounded-[10px] border border-[#0a0a0a14] bg-white px-3 py-2 text-base focus:border-[#0a0a0a] focus:outline-none"
+                    placeholder="Give this channel a name"
                     value={roomNickname}
                     onChange={(e) => {
                       setRoomNickname(e.target.value);
+                      if (roomHash) updateRoomNickname(roomHash, e.target.value);
+                    }}
+                  />
+                  <p className="mt-2 text-xs leading-5 text-[#9a9a9a]">
+                    Stored locally. Helps you tell channels apart.
+                  </p>
+
+                  <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-[#9a9a9a]">
+                    Your sender label
+                  </p>
+                  <input
+                    className="mt-2 w-full rounded-[10px] border border-[#0a0a0a14] bg-white px-3 py-2 text-base focus:border-[#0a0a0a] focus:outline-none"
+                    placeholder="No sender set"
+                    value={handle}
+                    maxLength={24}
+                    onChange={(e) => {
+                      const next = e.target.value.slice(0, 24);
+                      setHandleState(next);
                       if (roomHash) {
-                        updateRoomNickname(roomHash, e.target.value);
+                        setHandle(roomHash, next);
+                        updateRoomHandle(roomHash, next);
                       }
                     }}
                   />
-                  <p className="mt-2 text-xs leading-5 text-[#6a6358]">
-                    Stored locally. Helps you tell rooms apart.
+                  <p className="mt-2 text-xs leading-5 text-[#9a9a9a]">
+                    Shown above each message you send. Stored locally.
                   </p>
 
-                  <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Sender</p>
-                  <p className="mt-2 text-lg font-semibold">{handle || 'No sender set yet'}</p>
-                  <p className="mt-3 text-sm leading-7 text-[#5d564d]">
-                    Use <span className="font-semibold">/iam name</span> in the composer to change the sender label shown on your cards.
+                  <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-[#9a9a9a]">Storage</p>
+                  <p className="mt-2 text-sm leading-6 text-[#6b6b6b]">
+                    Messages stay on this device. Clear your browser storage and they're gone here.
                   </p>
+                </div>
 
-                  <p className="mt-6 text-[11px] uppercase tracking-[0.22em] text-[#8d816c]">Storage</p>
-                  <p className="mt-3 text-sm leading-7 text-[#5d564d]">
-                    Messages stay on this device. If you clear local browser storage, this inbox disappears here.
-                  </p>
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#9a9a9a]">
+                  <a
+                    className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]"
+                    href="/launch2/"
+                  >
+                    What is hisohiso?
+                  </a>
+                  <a
+                    className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]"
+                    href="/launch2/security/"
+                  >
+                    Protocol
+                  </a>
+                  <a
+                    className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]"
+                    href="https://github.com/draganescu/hisohiso"
+                  >
+                    Source
+                  </a>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {activeMessage && (
-          <div className="fixed inset-0 z-40 bg-[#f4efe4] pt-[env(safe-area-inset-top)] text-[#171613] md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6">
-            <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:h-auto md:max-h-[calc(100vh-3rem)] md:max-w-3xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.18)]">
-              <div className="flex items-center justify-between border-b border-[#1716131f] bg-[#f8f4eb] px-4 py-4">
-                <button className="text-sm font-semibold text-[#4f473e]" onClick={() => setSelectedId(null)} type="button">
-                  Inbox
-                </button>
-                <p className="text-sm font-semibold">{activeMessage.direction === 'out' ? 'Sent message' : 'Message'}</p>
-                <button
-                  className="text-sm font-semibold text-[#c44f2d]"
-                  onClick={() => openComposer(activeMessage.id)}
-                  type="button"
-                >
-                  Reply
-                </button>
-              </div>
-
-              <div className="detail-scroll flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-                <article
-                  className={`rounded-[32px] border p-6 shadow-[0_20px_40px_rgba(23,22,19,0.1)] sm:p-7 lg:p-8 ${
-                    activeMessage.direction === 'out' && activeMessage.type !== 'system'
-                      ? 'border-[#16233c] bg-[#1b2a46] text-[#f8f4ec]'
-                      : activeMessage.type === 'system'
-                      ? 'border-[#e0d2bc] bg-[#fff7ea] text-[#3f3529]'
-                      : 'border-[#d5c8b2] bg-[#fdf9f2] text-[#171613]'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold">{getMessageLabel(activeMessage)}</p>
-                      <p
-                        className={`mt-1 text-[11px] uppercase tracking-[0.22em] ${
-                          activeMessage.direction === 'out' && activeMessage.type !== 'system' ? 'text-[#d2ddf5]' : 'text-[#8d816c]'
-                        }`}
-                      >
-                        {activeMessage.type === 'system'
-                          ? 'Room event'
-                          : activeMessage.direction === 'out'
-                          ? 'Sent from this device'
-                          : 'Incoming message'}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs">
-                      <p>{formatMailStamp(activeMessage.timestamp)}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 whitespace-pre-wrap text-[15px] leading-7 sm:text-[17px] sm:leading-8">
-                    {activeMessage.block_response
-                      ? formatBlockResponse(activeMessage) || activeMessage.content
-                      : activeMessage.content}
-                  </div>
-                  {activeMessage.blocks && activeMessage.blocks.length > 0 && (
-                    <div className="mt-4">
-                      <BlockRenderer blocks={activeMessage.blocks} onRespond={sendBlockResponse} />
-                    </div>
-                  )}
-                  {activeMessage.action?.type === 'join-room' && (
-                    <>
-                      <button
-                        type="button"
-                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9592f] px-6 py-3 text-sm font-semibold text-white"
-                        onClick={() => {
-                          if (activeMessage.action?.type === 'join-room') {
-                            void joinActionRoom(activeMessage.action);
-                          }
-                        }}
-                      >
-                        {activeMessage.action.label} &rarr;
-                      </button>
-                      {activeMessage.action.code && (
-                        <div className="mt-3 text-xs font-mono tracking-widest text-[#766f63]">
-                          Pairing code: <span className="font-semibold text-base tracking-[0.3em]">{activeMessage.action.code}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </article>
-
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                  <button
-                    className="flex-1 rounded-full border border-[#17161333] bg-white px-4 py-3 text-sm font-semibold"
-                    onClick={() => void handleCopyMessage(activeMessage.content)}
-                    type="button"
-                  >
-                    Copy
-                  </button>
-                  <button
-                    className="flex-1 rounded-full border border-[#171613] bg-[#171613] px-4 py-3 text-sm font-semibold text-[#f6f0e8]"
-                    onClick={() => void handleDeleteMessage(activeMessage.id)}
-                    type="button"
-                  >
-                    Delete local copy
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showComposer && (
-          <div
-            className="composer-overlay fixed inset-x-0 top-0 z-50 bg-[#f4efe4] text-[#171613] md:inset-0 md:bg-[rgba(20,17,14,0.35)] md:px-5 md:py-6"
-            style={{
-              WebkitUserSelect: 'none',
-              userSelect: 'none'
-            }}
-          >
-            <div className="mx-auto flex h-full w-full flex-col bg-[#f4efe4] md:max-w-4xl md:overflow-hidden md:rounded-[36px] md:border md:border-[#1716131f] md:shadow-[0_28px_70px_rgba(23,22,19,0.2)]">
-              <div
-                className={`flex items-center justify-between px-4 transition-all duration-200 ease-out ${
-                  keyboardVisible
-                    ? 'bg-transparent py-2'
-                    : 'border-b border-[#1716131f] bg-[#f8f4eb] py-4'
-                }`}
-              >
-                <button className="hidden text-sm font-semibold text-[#4f473e] md:block" onClick={closeComposer} type="button">
-                  Cancel
-                </button>
-                <p
-                  className={`text-sm font-semibold transition-opacity duration-200 ${
-                    keyboardVisible ? 'opacity-0' : 'opacity-100'
-                  }`}
-                >
-                  {replyTarget ? 'Reply' : 'New message'}
-                </p>
-                <button className="hidden text-sm font-semibold text-[#c44f2d] md:block" onClick={sendMessage} type="button">
-                  Send
-                </button>
-              </div>
-
-              <div
-                className={`composer-scroll flex-1 min-h-0 flex flex-col overscroll-contain transition-all duration-200 ease-out ${
-                  keyboardVisible
-                    ? 'px-3 py-1 sm:px-6 sm:py-6 lg:px-8'
-                    : 'px-4 py-5 sm:px-6 sm:py-6 lg:px-8'
-                }`}
-              >
-                <div
-                  className={`flex flex-1 min-h-0 flex-col transition-all duration-200 ease-out ${
-                    keyboardVisible
-                      ? 'rounded-2xl border-transparent bg-[#fdf9f2] p-3 shadow-none sm:rounded-[32px] sm:border-[#d5c8b2] sm:bg-[#fdf9f2] sm:p-6 sm:shadow-[0_18px_36px_rgba(23,22,19,0.08)] lg:p-8'
-                      : 'rounded-[32px] border border-[#d5c8b2] bg-[#fdf9f2] p-5 shadow-[0_18px_36px_rgba(23,22,19,0.08)] sm:p-6 lg:p-8'
-                  }`}
-                >
-                  <div
-                    className={`flex items-start justify-between gap-3 overflow-hidden transition-all duration-200 ease-out ${
-                      keyboardVisible ? 'max-h-0 opacity-0' : 'max-h-24 opacity-100'
-                    }`}
-                  >
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-[#8d816c]">From</p>
-                      <p className="mt-2 text-lg font-semibold text-[#171613]">{handle || 'You'}</p>
-                    </div>
-                  </div>
-
-                  {replyTarget && (
-                    <div
-                      className={`overflow-hidden transition-all duration-200 ease-out ${
-                        keyboardVisible
-                          ? 'mb-2 max-h-8 rounded-xl border border-[#eadcc6] bg-[#f7efe3] px-3 py-1'
-                          : 'mt-5 max-h-60 rounded-[24px] border border-[#eadcc6] bg-[#f7efe3] p-4'
-                      }`}
-                    >
-                      <p
-                        className={`transition-all duration-200 ${
-                          keyboardVisible ? 'hidden' : 'text-[11px] uppercase tracking-[0.2em] text-[#8d816c]'
-                        }`}
-                      >
-                        Replying to
-                      </p>
-                      <p
-                        className={`font-semibold text-[#171613] transition-all duration-200 ${
-                          keyboardVisible ? 'truncate text-xs' : 'mt-2 text-sm'
-                        }`}
-                      >
-                        {getMessageLabel(replyTarget)}
-                      </p>
-                      <p
-                        className={`whitespace-pre-line text-sm leading-6 text-[#4d463d] transition-all duration-200 ${
-                          keyboardVisible ? 'hidden' : 'mt-2'
-                        }`}
-                      >
-                        {getMessagePreview(replyTarget.content)}
-                      </p>
-                    </div>
-                  )}
-
-                  <div
-                    className={`flex-1 min-h-0 flex flex-col transition-all duration-200 ease-out ${
-                      keyboardVisible ? 'mt-0' : 'mt-5'
-                    }`}
-                  >
-                    <textarea
-                      ref={composerInputRef}
-                      className="block flex-1 min-h-[6rem] w-full resize-none overflow-y-auto border-0 bg-transparent pb-2 pr-3 text-[17px] leading-8 text-[#171613] outline-none"
-                      placeholder="Write like an email, send like a chat."
-                      style={{
-                        WebkitOverflowScrolling: 'touch',
-                        WebkitUserSelect: 'text',
-                        userSelect: 'text'
-                      }}
-                      value={chatInput}
-                      onChange={(event) => {
-                        setChatInput(event.target.value);
-                        requestAnimationFrame(() => {
-                          const ta = composerInputRef.current;
-                          if (ta) {
-                            ta.scrollTop = ta.scrollHeight - ta.clientHeight;
-                          }
-                        });
-                      }}
-                      onKeyDown={(event) => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                          event.preventDefault();
-                          void sendMessage();
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <p
-                    className={`text-xs leading-5 text-[#6a6358] overflow-hidden transition-all duration-200 ease-out ${
-                      keyboardVisible ? 'max-h-0 opacity-0 mt-0' : 'max-h-12 opacity-100 mt-4'
-                    }`}
-                  >
-                    Replies are just new messages for now. Use <span className="font-semibold">/iam name</span> to change the sender label.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className={`flex items-center gap-3 px-4 md:hidden ${
-                  keyboardVisible ? 'py-2' : 'border-t border-[#1716131f] bg-[#f8f4eb] py-4'
-                }`}
-                style={{ paddingBottom: keyboardVisible ? undefined : 'max(1rem, env(safe-area-inset-bottom))' }}
-              >
-                <button className="flex-1 rounded-full border border-[#17161333] bg-white px-4 py-3 text-sm font-semibold text-[#4f473e]" onClick={closeComposer} type="button">
-                  Cancel
-                </button>
-                <button className="flex-1 rounded-full border border-[#171613] bg-[#d9592f] px-4 py-3 text-sm font-semibold text-[#fff7ee]" onClick={sendMessage} type="button">
-                  Send
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showDisband && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
-            <div className="w-full max-w-sm rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 text-[#171613] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
-              <h2 className="text-xl font-semibold">Disband this room?</h2>
-              <p className="mt-2 text-sm text-[#3a362f]">
-                This removes the room from the server. Everyone will be disconnected. It cannot be undone.
-              </p>
-              <div className="mt-6 flex gap-3">
-                <button
-                  className="flex-1 rounded-full border-2 border-[#171613] px-4 py-2 text-sm font-semibold"
-                  onClick={() => setShowDisband(false)}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="flex-1 rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-sm font-semibold text-[#f6f0e8]"
-                  onClick={() => {
-                    setShowDisband(false);
-                    void disbandRoom();
-                  }}
-                  type="button"
-                >
-                  Disband
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showLeave && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
-            <div className="w-full max-w-sm rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 text-[#171613] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
-              <h2 className="text-xl font-semibold">Leave this room?</h2>
-              <p className="mt-2 text-sm text-[#3a362f]">
-                You'll be removed from this room and its messages are wiped from this device. The room stays open for everyone else. You can rejoin later with the link.
-              </p>
-              <div className="mt-6 flex gap-3">
-                <button
-                  className="flex-1 rounded-full border-2 border-[#171613] px-4 py-2 text-sm font-semibold"
-                  onClick={() => setShowLeave(false)}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="flex-1 rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-sm font-semibold text-[#f6f0e8]"
-                  onClick={() => {
-                    setShowLeave(false);
-                    void leaveRoom();
-                  }}
-                  type="button"
-                >
-                  Leave
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+        {/* ---- Channel menu ---- */}
         {showMenu && (
           <div className="fixed inset-0 z-40 bg-black/40">
             <div
@@ -2148,35 +1930,35 @@ const RoomController = () => {
               onKeyDown={() => setShowMenu(false)}
               role="button"
               tabIndex={0}
+              aria-label="Close menu"
             />
-            <aside className="drawer-right absolute right-0 top-0 h-full w-80 max-w-full border-l border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
+            <aside className="drawer-right absolute right-0 top-0 flex h-full w-80 max-w-full flex-col border-l border-[#0a0a0a14] bg-white shadow-[0_20px_40px_-10px_rgba(10,10,10,0.25)]">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Room menu</h2>
-                <button className="text-sm underline" onClick={() => setShowMenu(false)} type="button">
+                <h2 className="text-lg font-semibold tracking-[-0.015em]">Channel menu</h2>
+                <button
+                  className="text-sm font-medium text-[#6b6b6b] hover:text-[#0a0a0a]"
+                  onClick={() => setShowMenu(false)}
+                  type="button"
+                >
                   Close
                 </button>
               </div>
-              <p className="mt-2 text-xs text-[#3a362f]">Messages stay on this device only.</p>
 
-              <a className="mt-4 inline-block text-sm underline" href="/rooms">
-                Your rooms
-              </a>
-
-              <div className="mt-6 rounded-xl border border-dashed border-[#17161360] bg-[#fefaf2] p-4 text-sm">
-                <p className="font-semibold">Share link</p>
-                <p className="mt-2 break-all text-[#3a362f]">{shareUrl}</p>
+              <div className="mt-5 rounded-[14px] border border-[#0a0a0a14] bg-[#efefec] p-3 text-sm">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-[#9a9a9a]">Share link</p>
+                <p className="mt-1 break-all text-xs text-[#6b6b6b]">{shareUrl}</p>
               </div>
 
-              <div className="mt-4 flex flex-col gap-3">
+              <div className="mt-4 flex flex-col gap-2">
                 <button
-                  className="rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+                  className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
                   onClick={handleCopy}
                   type="button"
                 >
                   Copy link
                 </button>
                 <button
-                  className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+                  className="rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
                   onClick={() => {
                     setShowQr(true);
                     setShowMenu(false);
@@ -2185,11 +1967,13 @@ const RoomController = () => {
                 >
                   Show QR
                 </button>
+
                 {pairingCodePanel}
-                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
+
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-[14px] border border-[#0a0a0a14] bg-[#efefec] p-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">Offline catch-up</p>
-                    <p className="mt-1 text-xs text-[#3a362f]">
+                    <p className="text-sm font-medium">Offline catch-up</p>
+                    <p className="mt-1 text-xs leading-5 text-[#6b6b6b]">
                       Server keeps encrypted messages for 24h so devices that were closed can catch up. Turning off wipes them.
                     </p>
                   </div>
@@ -2199,38 +1983,67 @@ const RoomController = () => {
                     aria-checked={catchUpEnabled}
                     disabled={catchUpBusy || !token}
                     onClick={() => void handleToggleCatchUp()}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${catchUpEnabled ? 'bg-[#d9592f]' : 'bg-[#1716133d]'} ${catchUpBusy || !token ? 'opacity-50' : ''}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      catchUpEnabled ? 'bg-[#0a0a0a]' : 'bg-[#0a0a0a33]'
+                    } ${catchUpBusy || !token ? 'opacity-50' : ''}`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${catchUpEnabled ? 'translate-x-5' : 'translate-x-0.5'}`}
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                        catchUpEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
                     />
                   </button>
                 </div>
+
+                <a
+                  href="/rooms"
+                  className="mt-2 rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-center text-sm font-medium text-[#0a0a0a] no-underline transition hover:border-[#0a0a0a]"
+                >
+                  Your channels
+                </a>
+
                 <button
-                  className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+                  className="rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
                   onClick={() => {
                     setShowLeave(true);
                     setShowMenu(false);
                   }}
                   type="button"
                 >
-                  Leave room
+                  Leave channel
                 </button>
+
                 <button
-                  className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+                  className="rounded-full border border-[#b91c1c] bg-white px-4 py-2 text-sm font-medium text-[#b91c1c] transition hover:bg-[#fee2e2]"
                   onClick={() => {
                     setShowDisband(true);
                     setShowMenu(false);
                   }}
                   type="button"
                 >
-                  Disband room
+                  Disband channel
                 </button>
+              </div>
+
+              <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 pt-6 text-xs">
+                <a
+                  className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]"
+                  href="/launch2/"
+                >
+                  What is hisohiso?
+                </a>
+                <a
+                  className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]"
+                  href="/launch2/security/"
+                >
+                  Protocol
+                </a>
               </div>
             </aside>
           </div>
         )}
 
+        {/* ---- Channel switcher ---- */}
         {showSwitcher && (
           <div className="fixed inset-0 z-40 bg-black/40">
             <div
@@ -2239,18 +2052,23 @@ const RoomController = () => {
               onKeyDown={() => setShowSwitcher(false)}
               role="button"
               tabIndex={0}
+              aria-label="Close channel switcher"
             />
-            <aside className="drawer-left absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
-              <div className="flex items-center justify-between border-b border-[#1716131f] px-5 py-4">
-                <h2 className="text-lg font-semibold">Rooms</h2>
-                <button className="text-sm underline" onClick={() => setShowSwitcher(false)} type="button">
+            <aside className="drawer-left absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-[#0a0a0a14] bg-white shadow-[0_20px_40px_-10px_rgba(10,10,10,0.25)]">
+              <div className="flex items-center justify-between border-b border-[#0a0a0a14] px-5 py-4">
+                <h2 className="text-lg font-semibold tracking-[-0.015em]">Channels</h2>
+                <button
+                  className="text-sm font-medium text-[#6b6b6b] hover:text-[#0a0a0a]"
+                  onClick={() => setShowSwitcher(false)}
+                  type="button"
+                >
                   Close
                 </button>
               </div>
 
               <div className="flex-1 overflow-y-auto px-3 py-3">
                 {allRooms.length === 0 && (
-                  <p className="px-2 py-4 text-sm text-[#6a6358]">No rooms yet.</p>
+                  <p className="px-2 py-4 text-sm text-[#9a9a9a]">No channels yet.</p>
                 )}
                 <div className="flex flex-col gap-1">
                   {allRooms.map((r) => {
@@ -2266,75 +2084,147 @@ const RoomController = () => {
                           }
                           navigateToRoom(r.roomSecret);
                         }}
-                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                        className={`flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors ${
                           isCurrent
-                            ? 'bg-[#171613] text-[#f6f0e8]'
-                            : 'text-[#171613] hover:bg-[#ebe4d7]'
+                            ? 'bg-[#0a0a0a] text-white'
+                            : 'text-[#0a0a0a] hover:bg-[#efefec]'
                         }`}
                       >
                         <div
-                          className="h-4 w-4 shrink-0 rounded-full"
-                          style={{ backgroundColor: r.color || '#ccc' }}
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: r.color || '#c4c4c4' }}
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">
-                            {r.nickname || 'Unnamed room'}
+                          <p className="truncate text-sm font-medium">
+                            {r.nickname || 'Unnamed channel'}
                           </p>
                           {r.handle && (
-                            <p className={`truncate text-xs ${isCurrent ? 'text-[#d2ddf5]' : 'text-[#8d816c]'}`}>
+                            <p
+                              className={`truncate text-xs ${
+                                isCurrent ? 'text-[#c4c4c4]' : 'text-[#9a9a9a]'
+                              }`}
+                            >
                               {r.handle}
                             </p>
                           )}
                         </div>
-                        {isCurrent && (
-                          <div className="h-2 w-2 shrink-0 rounded-full bg-[#d9592f]" />
-                        )}
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="border-t border-[#1716131f] px-5 py-4">
+              <div className="border-t border-[#0a0a0a14] px-5 py-4">
                 <div className="flex flex-col gap-2">
                   <a
                     href="/new"
-                    className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-center text-xs font-semibold text-[#f6f0e8] no-underline"
+                    className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-center text-xs font-medium text-white no-underline"
                   >
-                    Start a room
+                    Open a channel
                   </a>
                   <a
                     href="/rooms"
-                    className="rounded-full border-2 border-[#171613] px-4 py-2 text-center text-xs font-semibold no-underline"
+                    className="rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-center text-xs font-medium text-[#0a0a0a] no-underline"
                   >
-                    All rooms
+                    All channels
                   </a>
                 </div>
               </div>
             </aside>
           </div>
         )}
+
+        {/* ---- Disband (destructive) ---- */}
+        {showDisband && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
+            <div className="w-full max-w-sm rounded-[22px] border border-[#b91c1c] bg-white p-6 text-[#0a0a0a] shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[#b91c1c]">Destructive</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em]">
+                Disband this channel?
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-[#6b6b6b]">
+                Removes the channel from the server. Everyone is disconnected. Cannot be undone.
+              </p>
+              <div className="mt-6 flex gap-3">
+                <button
+                  className="flex-1 rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+                  onClick={() => setShowDisband(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="flex-1 rounded-full border border-[#b91c1c] bg-[#b91c1c] px-4 py-2 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#b91c1c]"
+                  onClick={() => {
+                    setShowDisband(false);
+                    void disbandRoom();
+                  }}
+                  type="button"
+                >
+                  Disband
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---- Leave (recoverable) ---- */}
+        {showLeave && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
+            <div className="w-full max-w-sm rounded-[22px] border border-[#0a0a0a14] bg-white p-6 text-[#0a0a0a] shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
+              <h2 className="text-xl font-semibold tracking-[-0.015em]">Leave this channel?</h2>
+              <p className="mt-3 text-sm leading-6 text-[#6b6b6b]">
+                You're removed and the messages on this device are wiped. The channel stays open for
+                everyone else — open the link again to rejoin.
+              </p>
+              <div className="mt-6 flex gap-3">
+                <button
+                  className="flex-1 rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+                  onClick={() => setShowLeave(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="flex-1 rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
+                  onClick={() => {
+                    setShowLeave(false);
+                    void leaveRoom();
+                  }}
+                  type="button"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     );
   }
 
+  // Pre / post participant states
   return (
-    <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
-      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
+    <main className="min-h-screen bg-[#f5f5f3] text-[#0a0a0a]">
+      <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
+        <header>
+          <p className="text-[11px] uppercase tracking-[0.35em] text-[#9a9a9a]">hisohiso</p>
+        </header>
+
         {roomState === 'INIT' && (
-          <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8">
-            <p className="text-sm uppercase tracking-[0.3em] text-[#3a362f]">Loading room…</p>
+          <div className="rounded-[22px] border border-[#0a0a0a14] bg-white p-8">
+            <p className="text-sm uppercase tracking-[0.32em] text-[#9a9a9a]">Opening channel…</p>
           </div>
         )}
 
         {roomState === 'LOBBY_WAITING' && (
-          <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
-            <h1 className="text-3xl font-semibold">Join room</h1>
-            <p className="mt-3 text-[#3a362f]">Ask to be let in. Someone inside has to approve you.</p>
+          <div className="rounded-[22px] border border-[#0a0a0a14] bg-white p-8">
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">Join this channel.</h1>
+            <p className="mt-3 text-[#6b6b6b]">Ask to be let in. Someone inside has to approve you.</p>
 
             <input
-              className="mt-6 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-base"
-              placeholder="Room key or pairing code"
+              className="mt-6 w-full rounded-[10px] border border-[#0a0a0a14] bg-white px-3 py-2.5 text-base focus:border-[#0a0a0a] focus:outline-none"
+              placeholder="Channel key or pairing code"
               type="text"
               name="room-key"
               autoComplete="one-time-code"
@@ -2346,13 +2236,13 @@ const RoomController = () => {
               value={roomPassword}
               onChange={(event) => updateRoomPassword(event.target.value)}
             />
-            <p className="mt-2 text-xs text-[#3a362f]">
+            <p className="mt-2 text-xs text-[#9a9a9a]">
               Saved on this device. Used to encrypt your knock and chat messages.
             </p>
 
             <textarea
-              className="mt-4 w-full rounded-xl border border-[#17161333] bg-white/80 p-3 text-base"
-              placeholder="Optional message"
+              className="mt-4 w-full rounded-[10px] border border-[#0a0a0a14] bg-white px-3 py-2.5 text-base focus:border-[#0a0a0a] focus:outline-none"
+              placeholder="Optional note (e.g. who you are)"
               rows={3}
               autoCorrect="off"
               autoCapitalize="sentences"
@@ -2360,48 +2250,60 @@ const RoomController = () => {
               onChange={(event) => setMessage(event.target.value)}
             />
 
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <button
-                className="rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+                className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
                 onClick={sendKnock}
                 type="button"
               >
                 Request to join
               </button>
               <a
-                className="rounded-full border-2 border-[#171613] px-5 py-2 text-center text-sm font-semibold"
-                href="/"
+                className="rounded-full border border-[#0a0a0a14] bg-white px-5 py-2.5 text-center text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+                href="/rooms"
               >
-                Back home
+                Your channels
               </a>
             </div>
 
             {(knockSent || knockNotice) && (
-              <p className="mt-4 text-sm uppercase tracking-[0.3em] text-[#3a362f]">{knockNotice || 'Waiting for approval…'}</p>
+              <p className="mt-5 text-xs uppercase tracking-[0.28em] text-[#9a9a9a]">
+                {knockNotice || 'Waiting for approval…'}
+              </p>
             )}
+
+            <p className="mt-6 text-xs text-[#9a9a9a]">
+              <a
+                className="underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]"
+                href="/launch2/"
+              >
+                What is hisohiso?
+              </a>
+            </p>
           </div>
         )}
 
         {roomState === 'LOBBY_EMPTY' && (
-          <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
-            <h1 className="text-3xl font-semibold">Room inactive</h1>
-            <p className="mt-3 text-[#3a362f]">
-              No one is currently in this room. Ask someone inside to open it so they can approve you.
+          <div className="rounded-[22px] border border-[#0a0a0a14] bg-white p-8">
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel quiet.</h1>
+            <p className="mt-3 text-[#6b6b6b]">
+              No one is currently in this channel. Ask someone inside to open it so they can approve
+              you.
             </p>
-            <div className="mt-6 rounded-xl border border-dashed border-[#17161360] bg-[#fefaf2] p-4 text-sm">
-              <p className="font-semibold">Copy link</p>
-              <p className="mt-2 break-all text-[#3a362f]">{shareUrl}</p>
+            <div className="mt-6 rounded-[14px] border border-[#0a0a0a14] bg-[#efefec] p-4 text-sm">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-[#9a9a9a]">Share link</p>
+              <p className="mt-2 break-all text-[#6b6b6b]">{shareUrl}</p>
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
-                className="rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+                className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
                 onClick={handleCopy}
                 type="button"
               >
                 Copy link
               </button>
               <button
-                className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+                className="rounded-full border border-[#0a0a0a14] bg-white px-5 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
                 onClick={() => setShowQr(true)}
                 type="button"
               >
@@ -2412,150 +2314,45 @@ const RoomController = () => {
         )}
 
         {roomState === 'DESTROYED' && (
-          <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
-            <h1 className="text-3xl font-semibold">Room unavailable</h1>
-            <p className="mt-3 text-[#3a362f]">This room was disbanded or no longer exists.</p>
+          <div className="rounded-[22px] border border-[#0a0a0a14] bg-white p-8">
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel closed.</h1>
+            <p className="mt-3 text-[#6b6b6b]">This channel was disbanded or no longer exists.</p>
             <a
-              className="mt-6 inline-block rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+              className="mt-6 inline-flex items-center justify-center rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white"
               href="/rooms"
             >
-              Your rooms
+              Your channels
             </a>
           </div>
         )}
 
         {roomState === 'LEFT' && (
-          <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8 shadow-[0_12px_30px_rgba(23,22,19,0.12)]">
-            <h1 className="text-3xl font-semibold">You left this room</h1>
-            <p className="mt-3 text-[#3a362f]">
-              Its messages were wiped from this device. The room is still open for everyone else — open the link again to rejoin.
+          <div className="rounded-[22px] border border-[#0a0a0a14] bg-white p-8">
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">You left this channel.</h1>
+            <p className="mt-3 text-[#6b6b6b]">
+              Its messages were wiped from this device. The channel stays open for everyone else —
+              open the link again to rejoin.
             </p>
             <a
-              className="mt-6 inline-block rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+              className="mt-6 inline-flex items-center justify-center rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white"
               href="/rooms"
             >
-              Your rooms
+              Your channels
             </a>
           </div>
         )}
+
+        <p className="text-xs text-[#9a9a9a]">
+          <a
+            className="underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]"
+            href="/launch2/"
+          >
+            What is hisohiso?
+          </a>
+        </p>
       </div>
 
       <QrModal open={showQr} onClose={() => setShowQr(false)} value={shareUrl} />
-
-      {showDisband && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
-          <div className="w-full max-w-sm rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 text-[#171613] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
-            <h2 className="text-xl font-semibold">Disband this room?</h2>
-            <p className="mt-2 text-sm text-[#3a362f]">
-              This removes the room from the server. Everyone will be disconnected. It cannot be undone.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button
-                className="flex-1 rounded-full border-2 border-[#171613] px-4 py-2 text-sm font-semibold"
-                onClick={() => setShowDisband(false)}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-sm font-semibold text-[#f6f0e8]"
-                onClick={() => {
-                  setShowDisband(false);
-                  void disbandRoom();
-                }}
-                type="button"
-              >
-                Disband
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showMenu && (
-        <div className="fixed inset-0 z-40 bg-black/40">
-          <div
-            className="absolute inset-0"
-            onClick={() => setShowMenu(false)}
-            onKeyDown={() => setShowMenu(false)}
-            role="button"
-            tabIndex={0}
-          />
-          <aside className="drawer-right absolute right-0 top-0 h-full w-80 max-w-full border-l border-[#1716132e] bg-[#f7f2e6] shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Room menu</h2>
-              <button
-                className="text-sm underline"
-                onClick={() => setShowMenu(false)}
-                type="button"
-              >
-                Close
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-[#3a362f]">Messages stay on this device only.</p>
-
-            <a className="mt-4 inline-block text-sm underline" href="/rooms">
-              Your rooms
-            </a>
-
-            <div className="mt-6 rounded-xl border border-dashed border-[#17161360] bg-[#fefaf2] p-4 text-sm">
-              <p className="font-semibold">Share link</p>
-              <p className="mt-2 break-all text-[#3a362f]">{shareUrl}</p>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3">
-              <button
-                className="rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
-                onClick={handleCopy}
-                type="button"
-              >
-                Copy link
-              </button>
-              <button
-                className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
-                onClick={() => {
-                  setShowQr(true);
-                  setShowMenu(false);
-                }}
-                type="button"
-              >
-                Show QR
-              </button>
-              {pairingCodePanel}
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">Offline catch-up</p>
-                  <p className="mt-1 text-xs text-[#3a362f]">
-                    Server keeps encrypted messages for 24h so devices that were closed can catch up. Turning off wipes them.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={catchUpEnabled}
-                  disabled={catchUpBusy || !token}
-                  onClick={() => void handleToggleCatchUp()}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${catchUpEnabled ? 'bg-[#d9592f]' : 'bg-[#1716133d]'} ${catchUpBusy || !token ? 'opacity-50' : ''}`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${catchUpEnabled ? 'translate-x-5' : 'translate-x-0.5'}`}
-                  />
-                </button>
-              </div>
-              <button
-                className="rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
-                onClick={() => {
-                  setShowDisband(true);
-                  setShowMenu(false);
-                }}
-                type="button"
-              >
-                Disband room
-              </button>
-            </div>
-          </aside>
-        </div>
-      )}
     </main>
   );
 };

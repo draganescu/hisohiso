@@ -135,7 +135,7 @@ export const BlockRenderer = ({ blocks, onRespond }: Props) => {
           content = renderBlock(block);
         } catch {
           content = (
-            <div className="rounded-xl border border-dashed border-[#d5c8b2] bg-[#faf5eb] px-4 py-2 text-xs text-[#8d816c]">
+            <div className="rounded-xl border border-dashed border-[#c4c4c4] bg-[#ffffff] px-4 py-2 text-xs text-[#9a9a9a]">
               Could not render {block.type} block
             </div>
           );
@@ -146,7 +146,7 @@ export const BlockRenderer = ({ blocks, onRespond }: Props) => {
             {block.confidence && (
               <div className="mb-1 flex items-center gap-1.5">
                 <ConfidenceDot level={block.confidence} />
-                <span className="text-[11px] text-[#8d816c]">{block.confidence} confidence</span>
+                <span className="text-[11px] text-[#9a9a9a]">{block.confidence} confidence</span>
               </div>
             )}
             {content}
@@ -157,7 +157,7 @@ export const BlockRenderer = ({ blocks, onRespond }: Props) => {
         <button
           type="button"
           onClick={submitAll}
-          className="mt-4 w-full rounded-full bg-[#d9592f] py-3 text-sm font-semibold text-white active:bg-[#c04d27]"
+          className="mt-4 w-full rounded-full bg-[#0a0a0a] py-3 text-sm font-semibold text-white active:bg-[#c04d27]"
         >
           Send{pending.size > 1 ? ` (${pending.size})` : ''}
         </button>

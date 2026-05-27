@@ -18,7 +18,7 @@ export const DiffBlockView = ({ block }: Props) => {
   };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-[#d5c8b2] bg-[#1b1b1b]">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-[#c4c4c4] bg-[#1b1b1b]">
       <div className="flex items-center justify-between border-b border-[#333] px-4 py-2.5">
         <span className="font-mono text-sm text-[#e0d8c8]">{block.file}</span>
         {block.stats && (

@@ -41,10 +41,10 @@ export const ButtonsBlockView = ({ block, onSelect, submitted }: Props) => {
               onClick={() => toggle(opt.value)}
               className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
                 isSelected
-                  ? 'border-[#d9592f] bg-[#d9592f] text-white'
+                  ? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
                   : submitted
-                  ? 'border-[#d5c8b2] bg-[#f4ede1] text-[#a89e90] opacity-50'
-                  : 'border-[#d5c8b2] bg-[#fdf9f2] text-[#171613] active:bg-[#f4ede1]'
+                  ? 'border-[#c4c4c4] bg-[#efefec] text-[#9a9a9a] opacity-50'
+                  : 'border-[#c4c4c4] bg-[#ffffff] text-[#0a0a0a] active:bg-[#efefec]'
               }`}
             >
               {opt.label}

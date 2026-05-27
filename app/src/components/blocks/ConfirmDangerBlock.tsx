@@ -47,7 +47,7 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
         <p className="flex items-center gap-2 font-semibold text-red-800">
           <span className="text-lg">&#9888;</span> {block.title}
         </p>
-        <p className="mt-2 text-sm leading-6 text-[#3f3529]">{block.description}</p>
+        <p className="mt-2 text-sm leading-6 text-[#1a1a1a]">{block.description}</p>
         {block.command && (
           <pre className="mt-2 rounded-xl bg-[#1b1b1b] px-4 py-2 font-mono text-[13px] text-[#ccc]">
             $ {block.command}
@@ -59,7 +59,7 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
           <button
             type="button"
             onClick={cancel}
-            className="rounded-full border border-[#d5c8b2] bg-[#fdf9f2] px-5 py-2 text-sm font-medium text-[#171613]"
+            className="rounded-full border border-[#c4c4c4] bg-[#ffffff] px-5 py-2 text-sm font-medium text-[#0a0a0a]"
           >
             {block.cancel_label || 'Cancel'}
           </button>
@@ -84,7 +84,7 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
         <div className="border-t border-red-200 px-4 py-2 text-sm font-medium text-red-700">Confirmed</div>
       )}
       {isLocked && selected === false && (
-        <div className="border-t border-red-200 px-4 py-2 text-sm font-medium text-[#8d816c]">Cancelled</div>
+        <div className="border-t border-red-200 px-4 py-2 text-sm font-medium text-[#9a9a9a]">Cancelled</div>
       )}
     </div>
   );

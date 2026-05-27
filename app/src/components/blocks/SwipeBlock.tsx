@@ -61,29 +61,29 @@ export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
     ? 'border-green-400'
     : swipeX < -40
     ? 'border-red-400'
-    : 'border-[#d5c8b2]';
+    : 'border-[#c4c4c4]';
 
   return (
     <div className="mt-3">
       <p className="text-sm font-semibold">{block.prompt}</p>
-      <div className="mt-2 text-xs text-[#8d816c]">
+      <div className="mt-2 text-xs text-[#9a9a9a]">
         {index + 1} / {block.cards.length}
       </div>
       <div
-        className={`mt-1 rounded-2xl border-2 bg-[#fdf9f2] p-4 transition-colors ${submitted ? 'border-green-400 opacity-70' : bgTint}`}
+        className={`mt-1 rounded-2xl border-2 bg-[#ffffff] p-4 transition-colors ${submitted ? 'border-green-400 opacity-70' : bgTint}`}
         style={{ transform: `translateX(${swipeX}px)`, transition: dragging.current ? 'none' : 'transform 0.2s' }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <p className="text-base font-semibold text-[#171613]">{card.title}</p>
-        <p className="mt-2 text-sm leading-6 text-[#3f3529]">{card.body}</p>
+        <p className="text-base font-semibold text-[#0a0a0a]">{card.title}</p>
+        <p className="mt-2 text-sm leading-6 text-[#1a1a1a]">{card.body}</p>
         {card.pros && card.pros.length > 0 && (
           <div className="mt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Pros</p>
             <ul className="mt-1 space-y-1">
               {card.pros.map((p, i) => (
-                <li key={i} className="text-sm text-[#3f3529]">+ {p}</li>
+                <li key={i} className="text-sm text-[#1a1a1a]">+ {p}</li>
               ))}
             </ul>
           </div>
@@ -93,7 +93,7 @@ export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
             <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Cons</p>
             <ul className="mt-1 space-y-1">
               {card.cons.map((c, i) => (
-                <li key={i} className="text-sm text-[#3f3529]">- {c}</li>
+                <li key={i} className="text-sm text-[#1a1a1a]">- {c}</li>
               ))}
             </ul>
           </div>
@@ -123,7 +123,7 @@ export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
         </div>
       )}
       {selectedValue && (
-        <p className={`mt-2 text-center text-sm font-medium ${submitted ? 'text-green-700' : 'text-[#8d816c]'}`}>
+        <p className={`mt-2 text-center text-sm font-medium ${submitted ? 'text-green-700' : 'text-[#9a9a9a]'}`}>
           Selected: {block.cards.find((c) => c.value === selectedValue)?.title}
         </p>
       )}

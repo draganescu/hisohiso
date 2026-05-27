@@ -5,9 +5,9 @@ interface Props {
 }
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
-  done: { dot: 'bg-green-500', text: 'text-[#171613]' },
-  active: { dot: 'bg-[#d9592f] animate-pulse', text: 'font-semibold text-[#171613]' },
-  pending: { dot: 'bg-[#d5c8b2]', text: 'text-[#8d816c]' },
+  done: { dot: 'bg-green-500', text: 'text-[#0a0a0a]' },
+  active: { dot: 'bg-[#0a0a0a] animate-pulse', text: 'font-semibold text-[#0a0a0a]' },
+  pending: { dot: 'bg-[#c4c4c4]', text: 'text-[#9a9a9a]' },
   failed: { dot: 'bg-red-500', text: 'text-red-700' },
 };
 
@@ -22,7 +22,7 @@ export const ProgressBlockView = ({ block }: Props) => (
           <div key={i} className="flex gap-3">
             <div className="flex flex-col items-center">
               <div className={`mt-1 h-3 w-3 shrink-0 rounded-full ${style.dot}`} />
-              {!isLast && <div className="w-px flex-1 bg-[#d5c8b2]" />}
+              {!isLast && <div className="w-px flex-1 bg-[#c4c4c4]" />}
             </div>
             <div className={`pb-4 text-sm ${style.text}`}>
               {step.status === 'done' && <span className="mr-1">&#10003;</span>}
