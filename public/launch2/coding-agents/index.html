@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f5f3" />
+    <title>agents — tell your agent what to do, from the couch</title>
+    <meta name="description" content="A private encrypted phone channel for Claude Code, Codex, and Hermes. Tap to approve. Glance at the diff. Steer the loop without opening a laptop." />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://hisohiso.org/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/launch2/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="room-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/launch2/" aria-label="hisohiso home">
+          <span class="wave wave--brand" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="brand-name">hisohiso</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="topnav" aria-expanded="false">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
+        <nav class="topnav" id="topnav" aria-label="Primary">
+          <a class="topnav-link" href="/launch2/">index</a>
+          <a class="topnav-link" href="/launch2/security/">protocol</a>
+          <a class="topnav-link" href="/launch2/coding-agents/" aria-current="page">agents</a>
+          <a class="topnav-link" href="/launch2/hermes/">hermes</a>
+          <a class="topnav-link" href="/launch2/alternatives/">alternatives</a>
+          <a class="topnav-link" href="https://github.com/draganescu/hisohiso">source</a>
+          <a class="topnav-cta" href="/new">open channel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">coding agents</p>
+        <h1 id="hero-title">
+          Tell Claude what to do.<br /><span class="accent">From the couch.</span>
+        </h1>
+        <p class="lead">
+          Your agent already runs on your machine, near your tests and your git history. Add a private phone channel, and now you can steer it from your pocket — tap a button, approve a diff, read a stack trace — without opening a laptop or piping work through a chat company.
+        </p>
+        <div class="hero-actions">
+          <a class="cta" href="#install">install the CLI</a>
+          <a class="link" href="/launch2/hermes/">hermes</a>
+          <a class="link" href="/launch2/alternatives/">alternatives</a>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="fit-title">
+        <h2 id="fit-title">Private machines <span class="accent">stay private.</span></h2>
+        <p>
+          Hisohiso starts as a quiet line between two people. The agent bridge uses exactly the same line. No account. No phone number. No contact graph. No workspace history. No chat company sitting between your repo and your phone.
+        </p>
+        <ul class="bullets">
+          <li><strong>Self-host the router.</strong> Run the message router yourself when the work is sensitive.</li>
+          <li><strong>Or use ours.</strong> hisohiso.org sees ciphertext, the same as your own router would.</li>
+          <li><strong>No accidental audience.</strong> No team graph. No workspace inbox. No forwarded thread. Just the one room.</li>
+          <li><strong>The repo stays where it lives.</strong> The agent reaches your working tree, tests, git config, and credentials — none of that crosses the wire.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="purpose-title">
+        <h2 id="purpose-title">Type less. <span class="accent">Tap more.</span></h2>
+        <p>
+          Slack and Telegram weren't built for an agent. The agent's best answer is often a diff, a passing test, a row of three buttons, or a careful yes/no. In a chat app, that becomes a wall of code blocks and you typing "yes" for the fourth time. We render those answers as touch.
+        </p>
+        <ul class="bullets">
+          <li><strong>The reply fits the question.</strong> Diffs as diffs. Logs as logs. Buttons as buttons. Danger confirmations as danger confirmations.</li>
+          <li><strong>Multiple agents, one phone.</strong> One room each for Claude, Codex, Hermes, a local model, or a one-off task. They don't bleed into each other.</li>
+          <li><strong>The code stays local.</strong> The agent runs where your working tree, tests, git config, and credentials already live.</li>
+          <li><strong>Decisions are taps.</strong> Approve. Reject. Retry. Show diff. No keyboard required.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="fit-title-2">
+        <h2 id="fit-title-2">We don't replace your agent. <span class="accent">We give it a phone.</span></h2>
+        <p>
+          If you want a native mobile app that manages providers, schedules, worktrees, voice, and PR loops, Paseo or Happy are the answer. We wrap the agent you already trust with a private line. That's the entire pitch.
+        </p>
+        <ul class="bullets">
+          <li><strong>Claude Code keeps Claude.</strong> We don't manage the login, the model, or the prompt.</li>
+          <li><strong>The phone is not a dev machine.</strong> It is a steering wheel. Tap, approve, glance, nudge.</li>
+          <li><strong>No workspace to administer.</strong> No team graph. No account directory. No shared inbox.</li>
+          <li><strong>Native blocks, not Markdown.</strong> A button is a button. A diff is a diff. Not a code fence.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="choose-title">
+        <h2 id="choose-title">Use the agent <span class="accent">you already trust.</span></h2>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">claude code</p>
+            <h3>Good at the bigger change.</h3>
+            <p>Claude Code does the coding. We give that session a cleaner phone surface than a general chat app.</p>
+            <a class="link" href="/launch2/claude/">claude →</a>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">codex</p>
+            <h3>Good at the tight loop.</h3>
+            <p>Codex runs in the repo. We keep the back-and-forth focused on the task instead of turning it into another messaging thread.</p>
+            <a class="link" href="/launch2/codex/">codex →</a>
+          </article>
+        </div>
+      </section>
+
+      <section id="install" class="section numbered" aria-labelledby="install-title">
+        <h2 id="install-title">Two commands. <span class="accent">Done.</span></h2>
+        <p>
+          Install hisohiso once. Then wrap the agent you already use. We do not install Claude or Codex for you, and we do not manage their login. We carry the line.
+        </p>
+        <div class="codebox" data-copy>
+          <code id="install-coding-cmd">curl -fsSL https://raw.githubusercontent.com/draganescu/hisohiso/main/cli/install.sh | sh</code>
+          <button class="copy-btn" type="button" data-copy-target="install-coding-cmd" aria-label="Copy install command">Copy</button>
+        </div>
+        <div class="split" style="margin-top: 24px;">
+          <article class="split-card">
+            <p class="split-tag">claude</p>
+            <h3>Wrap Claude Code.</h3>
+            <pre class="codebox codebox--block"><code>hisohiso wrap claude</code></pre>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">codex</p>
+            <h3>Wrap Codex.</h3>
+            <pre class="codebox codebox--block"><code>hisohiso wrap codex</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="care-title">
+        <h2 id="care-title">We keep the line private. <span class="accent">You keep the judgment.</span></h2>
+        <p>
+          We protect the conversation from our server. We do not make a <code>git push</code> correct, or a <code>rm -rf</code> safe. Keep the boring habits that already work — small diffs, tests, a glance at <code>git status</code>, real review before anything ships.
+        </p>
+      </section>
+
+      <section class="cta-band" aria-labelledby="end-title">
+        <h2 id="end-title">Steer from the phone. <span class="accent">Let the machine do the work.</span></h2>
+        <p>The repo stays on your machine. We carry the small decisions through a line built for privacy and touch.</p>
+        <div class="hero-actions">
+          <a class="cta" href="/launch2/claude/">claude</a>
+          <a class="link" href="/launch2/codex/">codex</a>
+          <a class="link" href="/launch2/hermes/">hermes</a>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p>hisohiso — the quiet line between you and your agent.</p>
+      <p class="footer-links">
+        <a class="link" href="/launch2/">index</a>
+        <a class="link" href="/launch2/security/">protocol</a>
+        <a class="link" href="/launch2/coding-agents/">agents</a>
+        <a class="link" href="/launch2/hermes/">hermes</a>
+        <a class="link" href="/launch2/alternatives/">alternatives</a>
+        <a class="link" href="https://github.com/draganescu/hisohiso">source</a>
+      </p>
+      <p class="footer-license">GPLv3 · self-host it · fork it · read the code</p>
+    </footer>
+
+    <script src="/launch2/app.js" defer></script>
+  </body>
+</html>

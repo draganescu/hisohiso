@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f5f3" />
+    <title>hermes — one private line to the agent on your machine</title>
+    <meta name="description" content="A private encrypted phone channel for Hermes, a local autonomous agent. Tap to approve. Glance at the diff. No chat company in the middle of your home automation." />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://hisohiso.org/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/launch2/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="room-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/launch2/" aria-label="hisohiso home">
+          <span class="wave wave--brand" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="brand-name">hisohiso</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="topnav" aria-expanded="false">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
+        <nav class="topnav" id="topnav" aria-label="Primary">
+          <a class="topnav-link" href="/launch2/">index</a>
+          <a class="topnav-link" href="/launch2/security/">protocol</a>
+          <a class="topnav-link" href="/launch2/coding-agents/">agents</a>
+          <a class="topnav-link" href="/launch2/hermes/" aria-current="page">hermes</a>
+          <a class="topnav-link" href="/launch2/alternatives/">alternatives</a>
+          <a class="topnav-link" href="https://github.com/draganescu/hisohiso">source</a>
+          <a class="topnav-cta" href="/new">open channel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">hisohiso + hermes</p>
+        <h1 id="hero-title">
+          Hermes on your machine.<br /><span class="accent">One private line to your phone.</span>
+        </h1>
+        <p class="lead">
+          Hermes already runs locally — touching your shell, your browser, your notes, your local models. We give it one encrypted channel to your phone, with buttons instead of paragraphs and no chat company in the middle of your home automation.
+        </p>
+        <div class="hero-actions">
+          <a class="cta" href="/skills/hermes.md">get the setup skill</a>
+          <a class="link" href="/launch2/coding-agents/">coding agents</a>
+          <a class="link" href="/launch2/alternatives/">alternatives</a>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="why-title">
+        <h2 id="why-title">Slack and Telegram <span class="accent">are for people.</span></h2>
+        <p>
+          They are built for groups, history, search, and the warm everyday mess. Hermes needs the opposite — one local session, one encrypted room, output that renders as a diff, a button, a confirmation. Not another noisy thread.
+        </p>
+        <p>
+          This matters most when Hermes is connected to private tools, local files, or local models. You and your agent. Not you, your agent, and a chat company in the middle.
+        </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">for code work</p>
+            <h3>Stay in the repo.</h3>
+            <p>Best when the task is edit, test, diff, review. Use hisohiso when that loop should stay local but still be reachable from a phone.</p>
+            <a class="link" href="/launch2/coding-agents/">claude and codex →</a>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">for everything else</p>
+            <h3>Cross the tools you already wired.</h3>
+            <p>Code, shell, browser, files, notes, reminders, smart home, local models — wherever you have already taught Hermes to reach.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="lane-title">
+        <h2 id="lane-title">Hermes goes <span class="accent">where the work goes.</span></h2>
+        <p>
+          Paseo-style products are strongest when the work is a coding-agent workflow. Hermes through hisohiso is strongest when private local automation crosses code, files, shell, browser, notes, schedules, local models, or personal data — and the phone only has to steer through a clean encrypted line.
+        </p>
+      </section>
+
+      <section class="section numbered" aria-labelledby="install-title">
+        <h2 id="install-title">Let Hermes <span class="accent">set itself up.</span></h2>
+        <p>
+          The skill teaches Hermes how to wrap its own session and register it with the hisohiso daemon. The easier path: ask Hermes to do the setup. Then read what it changed.
+        </p>
+        <div class="codebox" data-copy>
+          <code id="hermes-skill-cmd">hermes skills install https://hisohiso.org/skills/hermes.md</code>
+          <button class="copy-btn" type="button" data-copy-target="hermes-skill-cmd" aria-label="Copy Hermes skill install command">Copy</button>
+        </div>
+        <p class="install-note">Then run Hermes and ask it to use the hisohiso Hermes bridge skill to finish setup.</p>
+      </section>
+
+      <section class="section numbered" aria-labelledby="does-title">
+        <h2 id="does-title">What the setup <span class="accent">creates.</span></h2>
+        <ul class="bullets">
+          <li><strong>A working hisohiso CLI.</strong> The setup checks the local <code>hisohiso</code> command before doing anything else.</li>
+          <li><strong>A Hermes wrapper.</strong> One Hermes session id per encrypted channel. Sessions don't blur into each other.</li>
+          <li><strong>A daemon agent named <code>hermes</code>.</strong> Send <code>hermes</code> in your control channel to spawn a new room around a fresh session.</li>
+          <li><strong>Real phone-friendly replies.</strong> Diffs, terminal output, file trees, buttons, and confirm dialogs as actual UI blocks.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="flow-title">
+        <h2 id="flow-title">What it feels like <span class="accent">in your hand.</span></h2>
+        <div class="bridge-grid">
+          <div class="install">
+            <p>Start the daemon once. Pair your phone. Keep the control channel open. Later, when you want help, send <code>hermes</code>. A new room appears for that session — separate from your personal chats, separate from your workspaces.</p>
+            <pre class="codebox codebox--block"><code>hisohiso daemon start
+# from the control channel on your phone:
+hermes</code></pre>
+            <p class="install-note">When Hermes proposes a command or shows a diff, the phone renders it as a card. Not a wall of chat.</p>
+          </div>
+          <div class="phone" aria-hidden="true">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="phone-head"><span class="phone-dot"></span> hermes · channel</div>
+              <div class="msg msg--you">check the launch page and summarize</div>
+              <div class="block block--diff">
+                <div class="block-head">terminal</div>
+                <div class="diff-line diff-add">3 pages return 200</div>
+                <div class="diff-line">no broken local links</div>
+              </div>
+              <div class="block block--buttons">
+                <button class="fake-btn fake-btn--go" tabindex="-1">open diff</button>
+                <button class="fake-btn" tabindex="-1">run tests</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="limits-title">
+        <h2 id="limits-title">A few <span class="accent">honest limits.</span></h2>
+        <p>
+          This is for people who are comfortable running local tools. We do not install Hermes for you, manage your API keys, or make an unsafe command safe. We give you a private, self-hostable line instead of a general messaging app. You decide what the agent is allowed to do.
+        </p>
+      </section>
+
+      <section class="cta-band" aria-labelledby="end-title">
+        <h2 id="end-title">Hermes does the work. <span class="accent">We carry the line.</span></h2>
+        <p>Use it when you want a local autonomous agent without turning every task into another chat thread.</p>
+        <div class="hero-actions">
+          <a class="cta" href="/skills/hermes.md">get the setup skill</a>
+          <a class="link" href="https://github.com/draganescu/hisohiso/tree/main/cli">CLI docs</a>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p>hisohiso — the quiet line between you and your agent.</p>
+      <p class="footer-links">
+        <a class="link" href="/launch2/">index</a>
+        <a class="link" href="/launch2/security/">protocol</a>
+        <a class="link" href="/launch2/coding-agents/">agents</a>
+        <a class="link" href="/launch2/hermes/">hermes</a>
+        <a class="link" href="/launch2/alternatives/">alternatives</a>
+        <a class="link" href="https://github.com/draganescu/hisohiso">source</a>
+      </p>
+      <p class="footer-license">GPLv3 · self-host it · fork it · read the code</p>
+    </footer>
+
+    <script src="/launch2/app.js" defer></script>
+  </body>
+</html>

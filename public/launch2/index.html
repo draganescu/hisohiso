@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f5f3" />
+    <title>hisohiso — a private encrypted line for people and local agents</title>
+    <meta name="description" content="A private encrypted line. Open it from a link, talk to a friend or to an agent on your machine — Claude Code, Codex, Hermes. No account. No history on our server. Close the room and it's gone." />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://hisohiso.org/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/launch2/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="room-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/launch2/" aria-label="hisohiso home">
+          <span class="wave wave--brand" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="brand-name">hisohiso</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="topnav" aria-expanded="false">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
+        <nav class="topnav" id="topnav" aria-label="Primary">
+          <a class="topnav-link" href="/launch2/" aria-current="page">index</a>
+          <a class="topnav-link" href="/launch2/security/">protocol</a>
+          <a class="topnav-link" href="/launch2/coding-agents/">agents</a>
+          <a class="topnav-link" href="/launch2/hermes/">hermes</a>
+          <a class="topnav-link" href="/launch2/alternatives/">alternatives</a>
+          <a class="topnav-link" href="https://github.com/draganescu/hisohiso">source</a>
+          <a class="topnav-cta" href="/new">open channel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">hisohiso · ひそひそ · whispering</p>
+        <h1 id="hero-title">
+          A private encrypted line for people and agents.
+        </h1>
+        <p class="lead">
+          Open it from a link. Talk to a friend, your other phone, or a local agent — Claude Code, Codex, Hermes. No account. No history on our server. Close the room and it's gone.
+        </p>
+
+        <figure class="channel" aria-labelledby="channel-cap">
+          <div class="channel-row">
+            <span class="channel-side">you write</span>
+            <span class="channel-plain">can you look at this with me?</span>
+          </div>
+          <div class="channel-row channel-row--wire">
+            <span class="channel-side">the server moves</span>
+            <span class="channel-cipher" data-cipher aria-hidden="true">7f3a91c4e0b28d5f6a1c9047eb3</span>
+            <span class="channel-tag">ciphertext</span>
+          </div>
+          <div class="channel-row">
+            <span class="channel-side">they read</span>
+            <span class="channel-plain">can you look at this with me?</span>
+          </div>
+          <figcaption id="channel-cap" class="channel-cap">
+            One link. Two ends. The server in the middle moves bytes it cannot read. The other end can be a friend, your other phone, or an agent running on your own machine — Claude Code, Codex, Hermes.
+          </figcaption>
+        </figure>
+
+        <div class="hero-actions">
+          <a class="cta" href="/new">open a channel</a>
+          <a class="link" href="/launch2/coding-agents/">agents</a>
+          <a class="link" href="/launch2/alternatives/">alternatives</a>
+        </div>
+        <p class="hero-meta">open source · self-hostable · runs in any browser</p>
+      </section>
+
+      <section class="section numbered" aria-labelledby="chat-title">
+        <h2 id="chat-title">Most apps are secure. <span class="accent">None are quiet.</span></h2>
+        <p>
+          An account ties you to a number. A contact graph shows who you know. A read receipt shows when. None of that is hisohiso. You share a link with one person, and what you say lives between the two of you.
+        </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">what people use it for</p>
+            <h3>A conversation that leaves no trace.</h3>
+            <p>Open a channel. Send the link to one person. Talk. Close the room. Nothing left on our server. Nothing left in a chat app that wants you to come back tomorrow.</p>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">the tradeoff</p>
+            <h3>Less convenient. On purpose.</h3>
+            <p>No contact list to search. No history that follows you between phones. The boring parts of a chat app are the parts that quietly index you. We left them out.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="agents-title">
+        <h2 id="agents-title">Drive your agent. <span class="accent">Don't type at it.</span></h2>
+        <p>
+          Slack and Telegram weren't built for an agent. So you end up typing twice and pasting diffs into code blocks. We give the agent its own room — and the room knows about diffs, buttons, terminal output, and a clear yes/no.
+        </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">for coding</p>
+            <h3>Claude Code. Codex.</h3>
+            <p>The agent stays in your repo. Your phone stays in your hand. A diff comes back as a card. An approval is a tap. A risky command stops and waits.</p>
+            <a class="link" href="/launch2/coding-agents/">read more →</a>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">for everything else</p>
+            <h3>Hermes.</h3>
+            <p>Hermes already touches your shell, your browser, your notes, your local models. We give it one private line to your phone — no chat company in the middle of your home automation.</p>
+            <a class="link" href="/launch2/hermes/">read more →</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="position-title">
+        <h2 id="position-title">One room. One person. <span class="accent">One agent. Done.</span></h2>
+        <p>
+          If you want a workshop full of cockpits, dashboards, schedules, and provider switches, the polished apps will beat us. We are smaller on purpose. Open one room. Use it. Close it. Open a new one tomorrow if you need to.
+        </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">go bigger when</p>
+            <h3>You're running ten agents at once.</h3>
+            <p>Many sessions. Many providers. Many branches. PR dashboards. Schedules. That is a different product. Use Paseo. Use Happy. We will not be jealous.</p>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">stay small when</p>
+            <h3>You want the line, and nothing else.</h3>
+            <p>A private room between a phone, a person, and the machine where the real work is. Open it. Use it. Close it.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="benefits-title">
+        <h2 id="benefits-title">What we left out <span class="accent">is the point.</span></h2>
+        <ul class="bullets">
+          <li><strong>No signup.</strong> A link is all you need to talk.</li>
+          <li><strong>No history on the server.</strong> Your messages live in your browser, not in our database.</li>
+          <li><strong>No social layer.</strong> No profile. No contact graph. No read receipts. No nudges to come back.</li>
+          <li><strong>Your own router, if you want.</strong> The whole thing fits on a small server you control. Our default router never sees plaintext either.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered manifesto" aria-labelledby="plain-title">
+        <h2 id="plain-title">Read the code <span class="accent">before you trust it.</span></h2>
+        <p>
+          Encrypted apps are easier to ship than to verify. Ours is small on purpose — small enough that a curious developer can read the server, the client crypto, and the deployment files in an afternoon. The promise is exact. The server never sees what you said.
+        </p>
+        <p class="footnote">If you want to see the wiring before you talk, start with the protocol page.</p>
+      </section>
+
+      <section class="cta-band" aria-labelledby="end-title">
+        <span class="wave wave--big" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <h2 id="end-title">Open it. Use it. <span class="accent">Close it.</span></h2>
+        <p>Nothing to install for chat. A browser is enough.</p>
+        <div class="hero-actions">
+          <a class="cta" href="/new">open a channel</a>
+          <a class="link" href="/launch2/security/">protocol</a>
+          <a class="link" href="/launch2/coding-agents/">agents</a>
+          <a class="link" href="/launch2/hermes/">hermes</a>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p>hisohiso — the quiet line between you and your agent.</p>
+      <p class="footer-links">
+        <a class="link" href="/launch2/">index</a>
+        <a class="link" href="/launch2/security/">protocol</a>
+        <a class="link" href="/launch2/coding-agents/">agents</a>
+        <a class="link" href="/launch2/hermes/">hermes</a>
+        <a class="link" href="/launch2/alternatives/">alternatives</a>
+        <a class="link" href="https://github.com/draganescu/hisohiso">source</a>
+      </p>
+      <p class="footer-license">GPLv3 · self-host it · fork it · read the code</p>
+    </footer>
+
+    <script src="/launch2/app.js" defer></script>
+  </body>
+</html>
