@@ -848,6 +848,48 @@ code {
 .danger-body { padding: 7px 8px; color: var(--ink-soft); }
 .danger-body code { background: rgba(247, 243, 255, 0.11); color: var(--ember-soft); }
 
+/* ---- Homepage video feature ---- */
+.video-feature {
+  max-width: var(--measure);
+  margin: 6px auto 0;
+  padding: 0 24px;
+  text-align: center;
+}
+.video-title {
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  line-height: 1.15;
+  margin: 0 0 22px;
+}
+.hero-video {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--void-2);
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.85), 0 0 60px -24px rgba(72, 240, 255, 0.22);
+}
+.hero-video-el,
+.hero-video-fallback {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+.hero-video-fallback { display: none; }
+.video-cap {
+  margin: 16px auto 0;
+  max-width: 640px;
+  font-size: 0.98rem;
+  color: var(--ink-soft);
+}
+
+/* Respect reduced-motion: hold on the poster instead of looping the clip. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-video-el { display: none; }
+  .hero-video-fallback { display: block; }
+}
+
 /* ---- Manifesto (Not a platform) ---- */
 .manifesto .strike-list {
   display: flex;
