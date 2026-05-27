@@ -2360,13 +2360,21 @@ const RoomController = () => {
               onChange={(event) => setMessage(event.target.value)}
             />
 
-            <button
-              className="mt-4 rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
-              onClick={sendKnock}
-              type="button"
-            >
-              Request to join
-            </button>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <button
+                className="rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+                onClick={sendKnock}
+                type="button"
+              >
+                Request to join
+              </button>
+              <a
+                className="rounded-full border-2 border-[#171613] px-5 py-2 text-center text-sm font-semibold"
+                href="/"
+              >
+                Back home
+              </a>
+            </div>
 
             {(knockSent || knockNotice) && (
               <p className="mt-4 text-sm uppercase tracking-[0.3em] text-[#3a362f]">{knockNotice || 'Waiting for approval…'}</p>
