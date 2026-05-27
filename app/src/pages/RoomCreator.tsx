@@ -54,12 +54,20 @@ const RoomCreator = () => {
   return (
     <main className="min-h-screen bg-[#f5f5f3] text-[#0a0a0a]">
       <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
-        <header>
-          <p className="text-[11px] uppercase tracking-[0.35em] text-[#9a9a9a]">hisohiso</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Open a channel.</h1>
-          <p className="mt-2 text-sm text-[#6b6b6b]">
-            Messages stay on this device only. Anyone with the link can join.
-          </p>
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.35em] text-[#9a9a9a]">hisohiso</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Open a channel.</h1>
+            <p className="mt-2 text-sm text-[#6b6b6b]">
+              Messages stay on this device only. Anyone with the link can join.
+            </p>
+          </div>
+          <a
+            className="mt-1 shrink-0 rounded-full border border-[#0a0a0a14] bg-white px-4 py-2 text-xs font-medium text-[#0a0a0a] no-underline transition hover:border-[#0a0a0a]"
+            href="/rooms"
+          >
+            ← Your channels
+          </a>
         </header>
 
         {status === 'form' && (

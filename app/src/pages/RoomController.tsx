@@ -1515,67 +1515,15 @@ const RoomController = () => {
           </div>
         </header>
 
-        {/* ---- Inline composer (always visible, sits under header) ---- */}
-        <div className="border-b border-[#0a0a0a14] bg-white">
-          <div className="mx-auto w-full max-w-[820px] px-4 py-3 sm:px-6">
-            {replyTarget && (
-              <div className="mb-2 flex items-center justify-between gap-3 rounded-[10px] border border-[#0a0a0a14] bg-[#efefec] px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-[#9a9a9a]">Replying to</p>
-                  <p className="truncate text-xs text-[#0a0a0a]">
-                    <span className="font-medium">{getMessageLabel(replyTarget)}</span>
-                    <span className="text-[#9a9a9a]"> · {getMessagePreview(replyTarget.content)}</span>
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setReplyToId(null)}
-                  className="shrink-0 text-xs text-[#9a9a9a] hover:text-[#0a0a0a]"
-                  aria-label="Cancel reply"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={composerInputRef}
-                value={chatInput}
-                placeholder="Write a message…"
-                rows={1}
-                onChange={(e) => {
-                  setChatInput(e.target.value);
-                  const ta = e.currentTarget;
-                  ta.style.height = 'auto';
-                  ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
-                }}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    void sendMessage();
-                  }
-                }}
-                className="min-h-[44px] flex-1 resize-none rounded-[14px] border border-[#0a0a0a14] bg-[#f5f5f3] px-4 py-2.5 text-base leading-6 text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a]"
-              />
-              <button
-                type="button"
-                onClick={() => void sendMessage()}
-                disabled={!chatInput.trim()}
-                className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#0a0a0a] disabled:hover:text-white"
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* ---- Message list (newest at top — preserves windowing logic) ---- */}
         <div
           ref={listRef}
           onScroll={handleScroll}
           className="chat-scroll relative flex-1 overflow-x-hidden overflow-y-auto"
         >
-          <div className="mx-auto w-full max-w-[820px] px-4 py-5 sm:px-6">
+          {/* pb-28 reserves space below the last message so the floating
+              Compose button doesn't cover it. */}
+          <div className="mx-auto w-full max-w-[820px] px-4 pt-5 pb-28 sm:px-6 sm:pb-32">
             {showEmptyState && (
               <div className="rounded-[22px] border border-dashed border-[#0a0a0a14] bg-white p-6 text-center sm:p-8">
                 <p className="text-lg font-semibold tracking-[-0.02em] text-[#0a0a0a] sm:text-xl">
@@ -1766,6 +1714,126 @@ const RoomController = () => {
             </button>
           )}
         </div>
+
+        {/* ---- Floating Compose trigger ----
+            Opens the full-screen composer below. We can't pin a normal
+            inline composer to the top of the soft keyboard on iOS/Android
+            PWAs (no API anchors anything to the keyboard); the modal
+            sidesteps that by being the viewport while the keyboard is up. */}
+        <button
+          className="fixed bottom-4 left-4 right-4 z-30 rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-3.5 text-sm font-medium text-white shadow-[0_12px_28px_-8px_rgba(10,10,10,0.4)] transition hover:bg-transparent hover:text-[#0a0a0a] sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto"
+          onClick={() => openComposer()}
+          type="button"
+        >
+          {replyTarget ? 'Continue reply' : 'Compose'}
+        </button>
+
+        {/* ---- Full-screen modal composer ---- */}
+        {showComposer && (
+          <div className="composer-overlay fixed inset-x-0 top-0 z-50 bg-[#f5f5f3] text-[#0a0a0a] md:inset-0 md:bg-[rgba(10,10,10,0.45)] md:px-5 md:py-6">
+            <div className="mx-auto flex h-full w-full flex-col bg-[#f5f5f3] md:max-w-3xl md:overflow-hidden md:rounded-[22px] md:border md:border-[#0a0a0a14] md:bg-white md:shadow-[0_28px_70px_-20px_rgba(10,10,10,0.35)]">
+              {/* Header collapses while the keyboard is up so the textarea
+                  gets as much vertical room as possible. */}
+              <div
+                className={`flex items-center justify-between px-4 transition-all duration-200 ease-out ${
+                  keyboardVisible ? 'bg-transparent py-2' : 'border-b border-[#0a0a0a14] bg-white py-3 sm:py-4'
+                }`}
+              >
+                <button
+                  className="text-sm font-medium text-[#6b6b6b] hover:text-[#0a0a0a]"
+                  onClick={closeComposer}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <p
+                  className={`text-sm font-semibold tracking-[-0.015em] transition-opacity duration-200 ${
+                    keyboardVisible ? 'opacity-0' : 'opacity-100'
+                  }`}
+                >
+                  {replyTarget ? 'Reply' : 'New message'}
+                </p>
+                <button
+                  className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-1.5 text-xs font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#0a0a0a] disabled:hover:text-white"
+                  onClick={() => void sendMessage()}
+                  type="button"
+                  disabled={!chatInput.trim()}
+                >
+                  Send
+                </button>
+              </div>
+
+              <div
+                className={`composer-scroll flex min-h-0 flex-1 flex-col px-4 transition-all duration-200 ease-out sm:px-6 ${
+                  keyboardVisible ? 'py-1' : 'py-4 sm:py-5'
+                }`}
+              >
+                <div
+                  className={`flex items-start justify-between gap-3 overflow-hidden transition-all duration-200 ease-out ${
+                    keyboardVisible ? 'max-h-0 opacity-0' : 'max-h-16 opacity-100'
+                  }`}
+                >
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#9a9a9a]">From</p>
+                    <p className="mt-1 text-base font-medium text-[#0a0a0a]">{handle || 'You'}</p>
+                  </div>
+                </div>
+
+                {replyTarget && (
+                  <div
+                    className={`overflow-hidden rounded-[12px] border border-[#0a0a0a14] bg-[#efefec] px-3 transition-all duration-200 ease-out ${
+                      keyboardVisible ? 'mb-2 max-h-10 py-1.5' : 'mt-4 max-h-40 py-3'
+                    }`}
+                  >
+                    <p
+                      className={`transition-all duration-200 ${
+                        keyboardVisible ? 'hidden' : 'text-[10px] uppercase tracking-[0.2em] text-[#9a9a9a]'
+                      }`}
+                    >
+                      Replying to
+                    </p>
+                    <p
+                      className={`font-medium text-[#0a0a0a] transition-all duration-200 ${
+                        keyboardVisible ? 'truncate text-xs' : 'mt-1 text-sm'
+                      }`}
+                    >
+                      {getMessageLabel(replyTarget)}
+                    </p>
+                    <p
+                      className={`whitespace-pre-line text-sm leading-6 text-[#6b6b6b] transition-all duration-200 ${
+                        keyboardVisible ? 'hidden' : 'mt-1'
+                      }`}
+                    >
+                      {getMessagePreview(replyTarget.content)}
+                    </p>
+                  </div>
+                )}
+
+                <div className={`flex min-h-0 flex-1 flex-col transition-all duration-200 ease-out ${keyboardVisible ? 'mt-0' : 'mt-4'}`}>
+                  <textarea
+                    ref={composerInputRef}
+                    className="block min-h-[6rem] w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent pr-2 text-[17px] leading-7 text-[#0a0a0a] outline-none"
+                    placeholder="Write a message…"
+                    value={chatInput}
+                    onChange={(event) => {
+                      setChatInput(event.target.value);
+                      requestAnimationFrame(() => {
+                        const ta = composerInputRef.current;
+                        if (ta) ta.scrollTop = ta.scrollHeight - ta.clientHeight;
+                      });
+                    }}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                        event.preventDefault();
+                        void sendMessage();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <QrModal open={showQr} onClose={() => setShowQr(false)} value={shareUrl} />
 

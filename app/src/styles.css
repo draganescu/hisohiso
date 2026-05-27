@@ -75,6 +75,34 @@ body {
   touch-action: pan-y;
 }
 
+.composer-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+/* The full-screen modal composer pins its own height to the dynamic viewport
+   (via --app-height) so it occupies the space ABOVE the on-screen keyboard
+   rather than sitting under it. iOS/Android Safari refuse to anchor any
+   element to the top of the soft keyboard; the modal sidesteps that by
+   becoming the viewport while the keyboard is up. */
+.composer-overlay {
+  height: var(--app-height);
+  top: var(--app-offset);
+  padding-top: env(safe-area-inset-top);
+  will-change: height, top;
+  contain: layout style;
+}
+
+@media (min-width: 768px) {
+  .composer-overlay {
+    height: auto;
+    top: 0;
+    will-change: auto;
+    contain: none;
+  }
+}
+
 .drawer-right {
   padding-top: max(1.5rem, env(safe-area-inset-top));
   padding-right: max(1.5rem, env(safe-area-inset-right));
