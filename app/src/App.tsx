@@ -7,13 +7,13 @@ import RoomController from './pages/RoomController';
 import NotFound from './pages/NotFound';
 import { useTheme } from './lib/theme';
 
-// The `/` route is owned by the static launch2 marketing site (served by Caddy
-// from /app/landing), not the React app. If anyone lands here through a stale
-// path or in dev, send them to the marketing page so they see the canonical
-// pitch instead of an orphaned PWA-flavored copy.
+// The `/` route is owned by the static marketing site (served by Caddy from
+// /app/landing), not the React app. If anyone lands here through a stale path
+// or in dev, send them to the marketing page so they see the canonical pitch
+// instead of an orphaned PWA-flavored copy.
 const LandingRedirect = () => {
   useEffect(() => {
-    window.location.replace('/launch2/');
+    window.location.replace('/');
   }, []);
   return null;
 };

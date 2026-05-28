@@ -1984,13 +1984,13 @@ const RoomController = () => {
                 <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-ink-dim">
                   <a
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
-                    href="/launch2/"
+                    href="/"
                   >
                     What is hisohiso?
                   </a>
                   <a
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
-                    href="/launch2/security/"
+                    href="/security/"
                   >
                     Protocol
                   </a>
@@ -2119,13 +2119,13 @@ const RoomController = () => {
                 <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-ink-dim">
                   <a
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
-                    href="/launch2/"
+                    href="/"
                   >
                     What is hisohiso?
                   </a>
                   <a
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
-                    href="/launch2/security/"
+                    href="/security/"
                   >
                     Protocol
                   </a>
@@ -2370,7 +2370,7 @@ const RoomController = () => {
             <p className="mt-6 text-xs text-ink-dim">
               <a
                 className="underline decoration-rule underline-offset-4 hover:text-ink"
-                href="/launch2/"
+                href="/"
               >
                 What is hisohiso?
               </a>
@@ -2440,7 +2440,7 @@ const RoomController = () => {
         <p className="text-xs text-ink-dim">
           <a
             className="underline decoration-rule underline-offset-4 hover:text-ink"
-            href="/launch2/"
+            href="/"
           >
             What is hisohiso?
           </a>
