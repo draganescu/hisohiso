@@ -1,0 +1,7 @@
+{
+  "name": "hisohiso",
+  "private": true,
+  "scripts": {
+    "dev": "bun scripts/dev.mjs"
+  }
+}
