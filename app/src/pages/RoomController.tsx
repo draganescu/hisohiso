@@ -1872,7 +1872,7 @@ const RoomController = () => {
 
         {/* ---- Message detail ---- */}
         {activeMessage && (
-          <div className="fixed inset-0 z-50 flex flex-col bg-bg text-ink">
+          <div className="fixed inset-x-0 top-0 z-50 flex h-screen flex-col bg-bg text-ink">
             <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
               <button
                 className="text-sm font-medium text-ink-soft hover:text-ink"
@@ -1971,7 +1971,7 @@ const RoomController = () => {
 
         {/* ---- Knock queue ---- */}
         {showQueue && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
+          <div className="fixed inset-x-0 top-0 z-40 h-screen bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
             <div className="mx-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
@@ -2038,7 +2038,7 @@ const RoomController = () => {
 
         {/* ---- Help / channel settings (includes Sender field, replaces /iam) ---- */}
         {showHelp && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
+          <div className="fixed inset-x-0 top-0 z-40 h-screen bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
             <div className="mx-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
@@ -2123,7 +2123,7 @@ const RoomController = () => {
 
         {/* ---- Channel menu ---- */}
         {showMenu && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
+          <div className="fixed inset-x-0 top-0 z-40 h-screen bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
             <div className="mx-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
@@ -2242,7 +2242,7 @@ const RoomController = () => {
 
         {/* ---- Channel switcher ---- */}
         {showSwitcher && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
+          <div className="fixed inset-x-0 top-0 z-40 h-screen bg-overlay px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
             <div className="mx-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
@@ -2336,7 +2336,7 @@ const RoomController = () => {
 
         {/* ---- Disband (destructive) ---- */}
         {showDisband && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
+          <div className="fixed inset-x-0 top-0 z-40 flex h-screen items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-danger bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
               <p className="text-[11px] uppercase tracking-[0.28em] text-danger">Destructive</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em]">
@@ -2370,7 +2370,7 @@ const RoomController = () => {
 
         {/* ---- Leave (recoverable) ---- */}
         {showLeave && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
+          <div className="fixed inset-x-0 top-0 z-40 flex h-screen items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
               <h2 className="text-xl font-semibold tracking-[-0.015em]">Leave this channel?</h2>
               <p className="mt-3 text-sm leading-6 text-ink-soft">
