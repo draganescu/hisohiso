@@ -1447,7 +1447,7 @@ const RoomController = () => {
       connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
 
     return (
-      <main className="app-shell relative text-ink">
+      <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-bg pt-[env(safe-area-inset-top)] text-ink">
         {/* Off-screen focus proxy. Keeps Safari's user-gesture trust when a
             click handler programmatically focuses the inline composer textarea. */}
         <textarea
