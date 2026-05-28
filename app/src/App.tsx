@@ -5,6 +5,7 @@ import RoomsPage from './pages/RoomsPage';
 import RoomCreator from './pages/RoomCreator';
 import RoomController from './pages/RoomController';
 import NotFound from './pages/NotFound';
+import { useTheme } from './lib/theme';
 
 // The `/` route is owned by the static launch2 marketing site (served by Caddy
 // from /app/landing), not the React app. If anyone lands here through a stale
@@ -18,6 +19,9 @@ const LandingRedirect = () => {
 };
 
 const App = () => {
+  // Subscribed at the root so the persisted choice and the system-preference
+  // listener stay live on every route, even where no toggle is mounted.
+  useTheme();
   return (
     <AppLock>
       <Routes>

@@ -61,29 +61,29 @@ export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
     ? 'border-green-400'
     : swipeX < -40
     ? 'border-red-400'
-    : 'border-[#c4c4c4]';
+    : 'border-ink-fade';
 
   return (
     <div className="mt-3">
       <p className="text-sm font-semibold">{block.prompt}</p>
-      <div className="mt-2 text-xs text-[#9a9a9a]">
+      <div className="mt-2 text-xs text-ink-dim">
         {index + 1} / {block.cards.length}
       </div>
       <div
-        className={`mt-1 rounded-2xl border-2 bg-[#ffffff] p-4 transition-colors ${submitted ? 'border-green-400 opacity-70' : bgTint}`}
+        className={`mt-1 rounded-2xl border-2 bg-surface p-4 transition-colors ${submitted ? 'border-green-400 opacity-70' : bgTint}`}
         style={{ transform: `translateX(${swipeX}px)`, transition: dragging.current ? 'none' : 'transform 0.2s' }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <p className="text-base font-semibold text-[#0a0a0a]">{card.title}</p>
-        <p className="mt-2 text-sm leading-6 text-[#1a1a1a]">{card.body}</p>
+        <p className="text-base font-semibold text-ink">{card.title}</p>
+        <p className="mt-2 text-sm leading-6 text-ink">{card.body}</p>
         {card.pros && card.pros.length > 0 && (
           <div className="mt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Pros</p>
             <ul className="mt-1 space-y-1">
               {card.pros.map((p, i) => (
-                <li key={i} className="text-sm text-[#1a1a1a]">+ {p}</li>
+                <li key={i} className="text-sm text-ink">+ {p}</li>
               ))}
             </ul>
           </div>
@@ -93,7 +93,7 @@ export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
             <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Cons</p>
             <ul className="mt-1 space-y-1">
               {card.cons.map((c, i) => (
-                <li key={i} className="text-sm text-[#1a1a1a]">- {c}</li>
+                <li key={i} className="text-sm text-ink">- {c}</li>
               ))}
             </ul>
           </div>
@@ -114,7 +114,7 @@ export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
             onClick={select}
             className={`flex h-12 w-12 items-center justify-center rounded-full border text-xl transition ${
               isCardSelected
-                ? 'border-green-500 bg-green-500 text-white'
+                ? 'border-green-500 bg-green-500 text-on-ink'
                 : 'border-green-300 bg-green-50 text-green-600 active:bg-green-100'
             }`}
           >
@@ -123,7 +123,7 @@ export const SwipeBlockView = ({ block, onSelect, submitted }: Props) => {
         </div>
       )}
       {selectedValue && (
-        <p className={`mt-2 text-center text-sm font-medium ${submitted ? 'text-green-700' : 'text-[#9a9a9a]'}`}>
+        <p className={`mt-2 text-center text-sm font-medium ${submitted ? 'text-green-700' : 'text-ink-dim'}`}>
           Selected: {block.cards.find((c) => c.value === selectedValue)?.title}
         </p>
       )}

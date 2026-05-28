@@ -9,7 +9,7 @@ export const ErrorBlockView = ({ block }: Props) => {
   const [stackOpen, setStackOpen] = useState(false);
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border-2 border-red-300 bg-[#fef5f3]">
+    <div className="mt-3 overflow-hidden rounded-2xl border-2 border-red-300 bg-danger-soft">
       <div className="border-b border-red-200 px-4 py-3">
         <p className="font-mono text-sm font-bold text-red-800">{block.title}</p>
         {block.file && (
@@ -37,7 +37,7 @@ export const ErrorBlockView = ({ block }: Props) => {
       {block.suggestion && (
         <div className="flex gap-2 px-4 py-3">
           <span className="shrink-0 text-base">&#128161;</span>
-          <p className="text-sm leading-6 text-[#1a1a1a]">{block.suggestion}</p>
+          <p className="text-sm leading-6 text-ink">{block.suggestion}</p>
         </div>
       )}
     </div>

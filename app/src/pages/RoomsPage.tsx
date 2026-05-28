@@ -4,6 +4,7 @@ import jsQR from 'jsqr';
 import { getToken, listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
 import { navigateTo } from '../lib/navigation';
 import AppLockSettings from '../components/AppLockSettings';
+import ThemeToggle from '../components/ThemeToggle';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -133,28 +134,28 @@ const RoomsPage = () => {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#f5f5f3] text-[#0a0a0a]">
+    <main className="min-h-screen bg-bg text-ink">
       <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.35em] text-[#9a9a9a]">hisohiso</p>
+            <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Your channels.</h1>
-            <p className="mt-2 text-sm text-[#6b6b6b]">Stored on this device only.</p>
+            <p className="mt-2 text-sm text-ink-soft">Stored on this device only.</p>
           </div>
           <a
-            className="mt-1 shrink-0 rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
+            className="mt-1 shrink-0 rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
             href="/new"
           >
             Open a channel
           </a>
         </header>
 
-        <section className="rounded-[22px] border border-[#0a0a0a14] bg-white p-6">
+        <section className="rounded-[22px] border border-rule bg-surface p-6">
           <h2 className="text-lg font-semibold tracking-[-0.015em]">Join with a link.</h2>
-          <p className="mt-2 text-sm text-[#6b6b6b]">Paste a channel URL or secret.</p>
+          <p className="mt-2 text-sm text-ink-soft">Paste a channel URL or secret.</p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
-              className="flex-1 rounded-full border border-[#0a0a0a14] bg-white px-4 py-2.5 text-sm focus:border-[#0a0a0a] focus:outline-none"
+              className="flex-1 rounded-full border border-rule bg-surface px-4 py-2.5 text-sm focus:border-ink focus:outline-none"
               placeholder="https://hisohiso.org/room#…"
               value={joinValue}
               onChange={(event) => setJoinValue(event.target.value)}
@@ -163,19 +164,19 @@ const RoomsPage = () => {
               }}
             />
             <button
-              className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
+              className="rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
               onClick={handleJoin}
               type="button"
             >
               Join
             </button>
           </div>
-          {joinError && <p className="mt-2 text-xs text-[#b91c1c]">{joinError}</p>}
+          {joinError && <p className="mt-2 text-xs text-danger">{joinError}</p>}
 
           <canvas ref={canvasRef} className="hidden" />
           {hasCamera && !scanning && (
             <button
-              className="mt-4 rounded-full border border-[#0a0a0a14] bg-white px-5 py-2 text-sm font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+              className="mt-4 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink transition hover:border-ink"
               onClick={() => void startScan()}
               type="button"
             >
@@ -194,11 +195,11 @@ const RoomsPage = () => {
                   style={{ maxHeight: '320px', objectFit: 'cover' }}
                 />
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className="h-48 w-48 rounded-2xl border border-white/50" />
+                  <div className="h-48 w-48 rounded-2xl border border-surface/50" />
                 </div>
               </div>
               <button
-                className="mt-3 rounded-full border border-[#0a0a0a14] bg-white px-5 py-2 text-sm font-medium text-[#0a0a0a]"
+                className="mt-3 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink"
                 onClick={stopCamera}
                 type="button"
               >
@@ -207,13 +208,13 @@ const RoomsPage = () => {
             </div>
           )}
 
-          {scanError && <p className="mt-2 text-xs text-[#b91c1c]">{scanError}</p>}
+          {scanError && <p className="mt-2 text-xs text-danger">{scanError}</p>}
         </section>
 
         {rooms.length === 0 && (
-          <div className="rounded-[22px] border border-dashed border-[#0a0a0a14] bg-white p-8">
-            <p className="text-[#6b6b6b]">No channels yet. Open one or paste a link above.</p>
-            <a className="mt-4 inline-block text-sm font-medium text-[#0a0a0a] underline decoration-[#0a0a0a14] underline-offset-4" href="/new">
+          <div className="rounded-[22px] border border-dashed border-rule bg-surface p-8">
+            <p className="text-ink-soft">No channels yet. Open one or paste a link above.</p>
+            <a className="mt-4 inline-block text-sm font-medium text-ink underline decoration-rule underline-offset-4" href="/new">
               Open a channel →
             </a>
           </div>
@@ -236,17 +237,17 @@ const RoomsPage = () => {
               return (
                 <div
                   key={room.roomHash}
-                  className="flex overflow-hidden rounded-[22px] border border-[#0a0a0a14] bg-white transition hover:border-[#0a0a0a55]"
+                  className="flex overflow-hidden rounded-[22px] border border-rule bg-surface transition hover:border-ink"
                 >
-                  <div className="w-1 shrink-0" style={{ backgroundColor: room.color || '#c4c4c4' }} />
+                  <div className="w-1 shrink-0" style={{ backgroundColor: room.color || 'var(--ink-fade)' }} />
                   <div className="flex-1 p-5 sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: room.color || '#c4c4c4' }} />
+                          <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: room.color || 'var(--ink-fade)' }} />
                           {isEditing ? (
                             <input
-                              className="min-w-0 flex-1 rounded-lg border border-[#0a0a0a14] bg-white px-2 py-1 text-lg font-semibold focus:border-[#0a0a0a] focus:outline-none"
+                              className="min-w-0 flex-1 rounded-lg border border-rule bg-surface px-2 py-1 text-lg font-semibold focus:border-ink focus:outline-none"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => {
@@ -280,27 +281,27 @@ const RoomsPage = () => {
                             </button>
                           )}
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#9a9a9a]">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-dim">
                           <span>{hasToken ? 'Joined' : 'Link saved'}</span>
                           {room.handle && (
                             <>
-                              <span className="text-[#c4c4c4]">·</span>
+                              <span className="text-ink-fade">·</span>
                               <span>{room.handle}</span>
                             </>
                           )}
-                          <span className="text-[#c4c4c4]">·</span>
+                          <span className="text-ink-fade">·</span>
                           <span>{relativeTime}</span>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <a
-                          className="rounded-full border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-1.5 text-xs font-medium text-white transition hover:bg-transparent hover:text-[#0a0a0a]"
+                          className="rounded-full border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                           href={`/room#${room.roomSecret}`}
                         >
                           Open
                         </a>
                         <button
-                          className="rounded-full border border-[#0a0a0a14] bg-white px-4 py-1.5 text-xs font-medium text-[#0a0a0a] transition hover:border-[#0a0a0a]"
+                          className="rounded-full border border-rule bg-surface px-4 py-1.5 text-xs font-medium text-ink transition hover:border-ink"
                           onClick={() => handleForget(room.roomHash)}
                           type="button"
                         >
@@ -317,16 +318,19 @@ const RoomsPage = () => {
 
         <AppLockSettings />
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#9a9a9a]">
-          <a className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]" href="/launch2/">
-            What is hisohiso?
-          </a>
-          <a className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]" href="/launch2/security/">
-            Protocol
-          </a>
-          <a className="font-medium text-[#6b6b6b] underline decoration-[#0a0a0a14] underline-offset-4 hover:text-[#0a0a0a]" href="https://github.com/draganescu/hisohiso">
-            Source
-          </a>
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 text-xs text-ink-dim">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/launch2/">
+              What is hisohiso?
+            </a>
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/launch2/security/">
+              Protocol
+            </a>
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://github.com/draganescu/hisohiso">
+              Source
+            </a>
+          </div>
+          <ThemeToggle variant="pill" />
         </div>
       </div>
     </main>

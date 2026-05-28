@@ -24,11 +24,11 @@ const TreeNode = ({ node, depth }: { node: FileTreeNode; depth: number }) => {
       <button
         type="button"
         onClick={() => isDir && setOpen(!open)}
-        className="flex w-full items-center gap-2 py-1 text-left text-sm hover:bg-[#efefec]"
+        className="flex w-full items-center gap-2 py-1 text-left text-sm hover:bg-bg"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
-        {isDir && <span className="text-xs text-[#9a9a9a]">{open ? '▾' : '▸'}</span>}
-        <span className={isDir ? 'font-semibold text-[#0a0a0a]' : 'text-[#1a1a1a]'}>
+        {isDir && <span className="text-xs text-ink-dim">{open ? '▾' : '▸'}</span>}
+        <span className={isDir ? 'font-semibold text-ink' : 'text-ink'}>
           {node.path}
         </span>
         {node.status && (
@@ -49,9 +49,9 @@ interface Props {
 }
 
 export const FileTreeBlockView = ({ block }: Props) => (
-  <div className="mt-3 overflow-hidden rounded-2xl border border-[#c4c4c4] bg-[#ffffff]">
+  <div className="mt-3 overflow-hidden rounded-2xl border border-ink-fade bg-surface">
     {block.summary && (
-      <div className="border-b border-[#e8e0d0] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[#9a9a9a]">
+      <div className="border-b border-rule px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-dim">
         {block.summary}
       </div>
     )}

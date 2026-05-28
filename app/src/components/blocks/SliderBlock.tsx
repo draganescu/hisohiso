@@ -32,11 +32,11 @@ export const SliderBlockView = ({ block, onSelect, submitted }: Props) => {
           value={value}
           disabled={submitted}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full accent-[#0a0a0a]"
+          className="w-full accent-ink"
         />
-        <div className="mt-1 flex justify-between text-xs text-[#9a9a9a]">
+        <div className="mt-1 flex justify-between text-xs text-ink-dim">
           <span>{block.min.label}</span>
-          <span className="font-semibold text-[#0a0a0a]">{value}</span>
+          <span className="font-semibold text-ink">{value}</span>
           <span>{block.max.label}</span>
         </div>
       </div>
