@@ -59,7 +59,6 @@
 
 body {
   margin: 0;
-  background: var(--bg);
   -webkit-text-size-adjust: 100%;
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
@@ -88,8 +87,18 @@ body,
   height: 100%;
 }
 
+/* Paint the page background on <html> as well as <body>. With
+   viewport-fit=cover and apple-mobile-web-app-status-bar-style=black-translucent,
+   iOS PWA standalone and some mobile Safari configurations let the body's
+   height: 100% stop short of the physical screen edges (around the home
+   indicator, the dancing URL bar, etc.). The area that the body doesn't
+   cover reveals <html>, which without an explicit background falls back to
+   the UA default white — that's the white bar that shows below the Compose
+   button on a real device even after .app-shell is set to 100dvh. Painting
+   <html> with --bg makes those gaps blend instead of flash white. */
 html,
 body {
+  background: var(--bg);
   overscroll-behavior: none;
 }
 
