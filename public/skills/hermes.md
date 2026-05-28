@@ -251,14 +251,14 @@ Every block also accepts `confidence` (`high|medium|low`), `collapsed`
 **Interactive**
 
 - `buttons` — `id`, `prompt`, `options:[{label,value}]`, `multi?`. 2–4 short choices.
-- `swipe` — `id`, `prompt`, `cards:[{value,title,body,pros,cons}]`. Detailed A/B/C.
-- `checklist` — `id`, `prompt`, `items:[{value,label,checked?}]`, `confirm_label`. User multi-select.
+- `swipe` — `id`, `prompt`, `cards:[{value,title,body,pros,cons}]`. Per-card good/bad rating across 3+ cards. User navigates forward/back and assigns each card thumbs-up or thumbs-down; response is `{cardValue: "good"|"bad"}`. NOT a single-pick — use `buttons` for that.
+- `checklist` — `id`, `prompt`, `items:[{value,label,checked?}]`, `confirm_label`. User multi-select. For display-only lists, use `list` instead.
 - `sortable` — `id`, `prompt`, `items:[{value,label}]`. Priority order is the answer.
 - `slider` — `id`, `prompt`, `min:{value,label}`, `max:{value,label}`, `default`.
 
 **Status & files**
 
-- `progress` — `title`, `steps:[{label,status}]`. `status ∈ done|active|pending|failed`. Must contain at least one non-`done` step.
+- `progress` — `id?`, `title`, `steps:[{label,status}]`. `status ∈ done|active|pending|failed`. Must contain at least one non-`done` step. **Live updates**: include a stable `id` and re-emit the block in later messages with the same `id` as steps complete — the phone replaces the old snapshot everywhere, including when the user scrolls back to the original message. Without an `id`, the block is frozen.
 - `diff` — `file`, `language`, `hunks:[{header,lines:[{op,text}]}]`, `stats?`. `op ∈ " "|"+"|"-"`.
 - `file-tree` — `summary`, `nodes:[{path,children?,status?}]`. `status ∈ added|modified|deleted|renamed`. NESTED, not flat.
 - `terminal` — `command`, `output`, `exit_code?`. Output must be real.
@@ -275,6 +275,12 @@ Every block also accepts `confidence` (`high|medium|low`), `collapsed`
 - `confirm-danger` — `id`, `title`, `description`, `command`. Long-press to confirm.
 - `commit` — `id`, `message`, `files`, `stats?`. Proposed, not already made.
 - `run-command` — `id`, `command`, `description`, `risk` (`safe|moderate|dangerous`).
+
+**Display (non-interactive prose & lists)**
+
+- `prose` — `content` (markdown subset: `#`/`##`/`###` headings, `-`/`*` bullets, `**bold**`, `*italic*`, `` `inline code` ``). Use this for any wrapped paragraph text. NOT `code`.
+- `list` — `title?`, `style?` (`bullet`|`numbered`|`check`), `items:[string]`. Immutable, display-only enumeration. NOT `checklist` (interactive) or `progress` (stateful).
+- `label` — `text`. Small section heading to group adjacent blocks.
 
 **Auxiliary**
 
@@ -293,9 +299,17 @@ Never emit `javascript:`, `data:`, `vbscript:`, `blob:`, `file:`, or
 ## Pitfalls
 
 - `checklist` for your own plan — it's interactive; either act, or offer
-  real user choices.
-- `code` with `language:"text"` — prose belongs in `text`, not in `code`.
-- `progress` blocks that are entirely `done` — use `text` + `file-tree`/`diff`.
+  real user choices. For display-only items use `list`.
+- `code` with `language:"text"` (or any language) for prose — `code` has
+  no word wrap on mobile and looks broken. Use `prose` for paragraphs,
+  `list` for bullets.
+- `progress` without an `id` then "step 2 done" in a later message — the
+  original snapshot stays stale. Always include an `id` and re-emit the
+  whole block with updated `steps` to make it live.
+- `progress` blocks that are entirely `done` — that's a status report,
+  not progress. Use `text` + `file-tree`/`diff`.
+- `swipe` for a single binary choice — use `buttons`. `swipe` is for
+  rating 3+ cards good/bad.
 - Flat `files:[...]` on `file-tree` — use nested `nodes` with `children`.
 - `title`/`content` on `terminal` — needs `command`+`output` only.
 - Inventing field names — invalid schemas crash older renderers.
