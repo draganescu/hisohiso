@@ -1447,7 +1447,7 @@ const RoomController = () => {
       connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
 
     return (
-      <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-bg pt-[env(safe-area-inset-top)] text-ink">
+      <main className="relative flex h-[100dvh] flex-col overflow-hidden bg-bg pt-[env(safe-area-inset-top)] text-ink">
         {/* Off-screen focus proxy. Keeps Safari's user-gesture trust when a
             click handler programmatically focuses the inline composer textarea. */}
         <textarea
@@ -1754,7 +1754,7 @@ const RoomController = () => {
             PWAs (no API anchors anything to the keyboard); the modal
             sidesteps that by being the viewport while the keyboard is up. */}
         <button
-          className="fixed bottom-4 left-4 right-4 z-30 rounded-full border border-ink bg-filled px-5 py-3.5 text-sm font-medium text-on-ink shadow-[0_12px_28px_-8px_rgba(10,10,10,0.4)] transition hover:bg-transparent hover:text-ink sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto"
+          className="absolute bottom-4 left-4 right-4 z-30 rounded-full border border-ink bg-filled px-5 py-3.5 text-sm font-medium text-on-ink shadow-[0_12px_28px_-8px_rgba(10,10,10,0.4)] transition hover:bg-transparent hover:text-ink sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto"
           onClick={() => openComposer()}
           type="button"
         >
