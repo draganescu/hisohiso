@@ -3,151 +3,182 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hisohiso</title>
-    <meta name="description" content="Hisohiso: minimal encrypted chat. No accounts. No tracking. No cloud history. Just a room." />
+    <meta name="theme-color" content="#f5f5f3" />
+    <title>hisohiso — a private encrypted line for people and local agents</title>
+    <meta name="description" content="A private encrypted line. Open it from a link, talk to a friend or to an agent on your machine — Claude Code, Codex, Hermes. No account. No history on our server. Close the room and it's gone." />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.json" />
-
-    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://hisohiso.org/" />
-    <meta property="og:title" content="Hisohiso — Fuck your bubble color." />
-    <meta property="og:description" content="Encrypted chat with no accounts, no cloud history, no tracking. Open a room, share a link, talk." />
     <meta property="og:image" content="https://hisohiso.org/og.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-
-    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Hisohiso — Fuck your bubble color." />
-    <meta name="twitter:description" content="Encrypted chat with no accounts, no cloud history, no tracking. Open a room, share a link, talk." />
-    <meta name="twitter:image" content="https://hisohiso.org/og.png" />
-    <style>
-      :root {
-        color-scheme: light;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: "Space Grotesk", "IBM Plex Sans", "SF Pro Text", sans-serif;
-        background: radial-gradient(circle at top left, #f2f0e9 0%, #e7e0d2 35%, #cfc3ab 100%);
-        color: #171613;
-      }
-      a {
-        color: inherit;
-      }
-    </style>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="page">
-      <section id="hero" class="section hero">
-        <p class="eyebrow">Hisohiso</p>
-        <h1>Fuck your bubble color.</h1>
-        <p class="lead">Just chat. No accounts. No tracking. No feeds. No blue vs green.</p>
-        <p class="stats" id="stats"></p>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="room-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/" aria-label="hisohiso home">
+          <span class="wave wave--brand" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="brand-name">hisohiso</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="topnav" aria-expanded="false">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
+        <nav class="topnav" id="topnav" aria-label="Primary">
+          <a class="topnav-link" href="/" aria-current="page">index</a>
+          <a class="topnav-link" href="/security/">protocol</a>
+          <a class="topnav-link" href="/coding-agents/">agents</a>
+          <a class="topnav-link" href="/hermes/">hermes</a>
+          <a class="topnav-link" href="/alternatives/">alternatives</a>
+          <a class="topnav-link" href="https://github.com/draganescu/hisohiso">source</a>
+          <a class="topnav-cta" href="/new">open channel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">hisohiso · ひそひそ · whispering</p>
+        <h1 id="hero-title">
+          A private encrypted line for people and agents.
+        </h1>
+        <p class="lead">
+          Open it from a link. Talk to a friend, your other phone, or a local agent — Claude Code, Codex, Hermes. No account. No history on our server. Close the room and it's gone.
+        </p>
+
+        <figure class="channel" aria-labelledby="channel-cap">
+          <div class="channel-row">
+            <span class="channel-side">you write</span>
+            <span class="channel-plain">can you look at this with me?</span>
+          </div>
+          <div class="channel-row channel-row--wire">
+            <span class="channel-side">the server moves</span>
+            <span class="channel-cipher" data-cipher aria-hidden="true">7f3a91c4e0b28d5f6a1c9047eb3</span>
+            <span class="channel-tag">ciphertext</span>
+          </div>
+          <div class="channel-row">
+            <span class="channel-side">they read</span>
+            <span class="channel-plain">can you look at this with me?</span>
+          </div>
+          <figcaption id="channel-cap" class="channel-cap">
+            One link. Two ends. The server in the middle moves bytes it cannot read. The other end can be a friend, your other phone, or an agent running on your own machine — Claude Code, Codex, Hermes.
+          </figcaption>
+        </figure>
+
         <div class="hero-actions">
-          <a class="cta" href="/new">Start a room</a>
-          <a class="link" href="/rooms">Your rooms</a>
+          <a class="cta" href="/new">open a channel</a>
+          <a class="link" href="/coding-agents/">agents</a>
+          <a class="link" href="/alternatives/">alternatives</a>
+        </div>
+        <p class="hero-meta">open source · self-hostable · runs in any browser</p>
+      </section>
+
+      <section class="section numbered" aria-labelledby="chat-title">
+        <h2 id="chat-title">Most apps are secure. <span class="accent">None are quiet.</span></h2>
+        <p>
+          An account ties you to a number. A contact graph shows who you know. A read receipt shows when. None of that is hisohiso. You share a link with one person, and what you say lives between the two of you.
+        </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">what people use it for</p>
+            <h3>A conversation that leaves no trace.</h3>
+            <p>Open a channel. Send the link to one person. Talk. Close the room. Nothing left on our server. Nothing left in a chat app that wants you to come back tomorrow.</p>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">the tradeoff</p>
+            <h3>Less convenient. On purpose.</h3>
+            <p>No contact list to search. No history that follows you between phones. The boring parts of a chat app are the parts that quietly index you. We left them out.</p>
+          </article>
         </div>
       </section>
 
-      <section id="concept" class="section">
-        <h2>It&rsquo;s just a room.</h2>
+      <section class="section numbered" aria-labelledby="agents-title">
+        <h2 id="agents-title">Drive your agent. <span class="accent">Don't type at it.</span></h2>
         <p>
-          You open a link. You share it. People knock. You approve. You talk. Anyone can disband the room.
-          No profiles. No phone numbers. No cloud archive. No algorithm.
+          Slack and Telegram weren't built for an agent. So you end up typing twice and pasting diffs into code blocks. We give the agent its own room — and the room knows about diffs, buttons, terminal output, and a clear yes/no.
         </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">for coding</p>
+            <h3>Claude Code. Codex.</h3>
+            <p>The agent stays in your repo. Your phone stays in your hand. A diff comes back as a card. An approval is a tap. A risky command stops and waits.</p>
+            <a class="link" href="/coding-agents/">read more →</a>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">for everything else</p>
+            <h3>Hermes.</h3>
+            <p>Hermes already touches your shell, your browser, your notes, your local models. We give it one private line to your phone — no chat company in the middle of your home automation.</p>
+            <a class="link" href="/hermes/">read more →</a>
+          </article>
+        </div>
       </section>
 
-      <section id="identity" class="section">
-        <h2>Everyone same color.</h2>
+      <section class="section numbered" aria-labelledby="position-title">
+        <h2 id="position-title">One room. One person. <span class="accent">One agent. Done.</span></h2>
         <p>
-          Messaging turned into identity. Blue vs green. Verified vs unverified. Real name vs username.
-          We don&rsquo;t care. Here, everyone is just text in the same room.
+          If you want a workshop full of cockpits, dashboards, schedules, and provider switches, the polished apps will beat us. We are smaller on purpose. Open one room. Use it. Close it. Open a new one tomorrow if you need to.
         </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">go bigger when</p>
+            <h3>You're running ten agents at once.</h3>
+            <p>Many sessions. Many providers. Many branches. PR dashboards. Schedules. That is a different product. Use Paseo. Use Happy. We will not be jealous.</p>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">stay small when</p>
+            <h3>You want the line, and nothing else.</h3>
+            <p>A private room between a phone, a person, and the machine where the real work is. Open it. Use it. Close it.</p>
+          </article>
+        </div>
       </section>
 
-      <section id="privacy" class="section">
-        <h2>Private by design.</h2>
-        <p>
-          Messages are encrypted in your browser. The server only routes unreadable data. Messages live on
-          your device. Lose the link, lose the room.
-        </p>
+      <section class="section numbered" aria-labelledby="benefits-title">
+        <h2 id="benefits-title">What we left out <span class="accent">is the point.</span></h2>
+        <ul class="bullets">
+          <li><strong>No signup.</strong> A link is all you need to talk.</li>
+          <li><strong>No history on the server.</strong> Your messages live in your browser, not in our database.</li>
+          <li><strong>No social layer.</strong> No profile. No contact graph. No read receipts. No nudges to come back.</li>
+          <li><strong>Your own router, if you want.</strong> The whole thing fits on a small server you control. Our default router never sees plaintext either.</li>
+        </ul>
       </section>
 
-      <section id="manifesto" class="section">
-        <h2>Not a platform.</h2>
+      <section class="section numbered manifesto" aria-labelledby="plain-title">
+        <h2 id="plain-title">Read the code <span class="accent">before you trust it.</span></h2>
         <p>
-          Not social media. Not enterprise chat. Not productivity software. Just a shared space for people
-          who already know each other.
+          Encrypted apps are easier to ship than to verify. Ours is small on purpose — small enough that a curious developer can read the server, the client crypto, and the deployment files in an afternoon. The promise is exact. The server never sees what you said.
         </p>
+        <p class="footnote">If you want to see the wiring before you talk, start with the protocol page.</p>
       </section>
 
-      <section id="open" class="section">
-        <h2>Open.</h2>
-        <p>
-          The protocol is simple. Run your own server. Add features if you want. Charge for them if you want.
-          Or just use it.
-        </p>
+      <section class="cta-band" aria-labelledby="end-title">
+        <span class="wave wave--big" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <h2 id="end-title">Open it. Use it. <span class="accent">Close it.</span></h2>
+        <p>Nothing to install for chat. A browser is enough.</p>
+        <div class="hero-actions">
+          <a class="cta" href="/new">open a channel</a>
+          <a class="link" href="/security/">protocol</a>
+          <a class="link" href="/coding-agents/">agents</a>
+          <a class="link" href="/hermes/">hermes</a>
+        </div>
       </section>
 
-      <section id="agents" class="section">
-        <h2>Or: an agent on your laptop. You in your pocket.</h2>
-        <p>
-          Hisohiso also ships <a href="https://github.com/draganescu/hisohiso/tree/main/cli">a CLI</a>
-          that runs a daemon on your machine. From your phone you spawn a Claude session, kill one
-          that&rsquo;s stuck, and watch its output stream in &mdash; as diffs, buttons, swipeable
-          cards. Not chat retrofitted for agents. A real agent surface for a 5-inch screen.
-        </p>
-        <p style="margin-top: 12px;">
-          Native AI apps lose the connection to your terminal and you can&rsquo;t tell why.
-          Telegram bots can&rsquo;t render a diff. This sits in between, on purpose.
-        </p>
-        <p style="margin-top: 12px;">
-          Claude Code only, for now. Install is a curl pipe. The app is a PWA. If that scares
-          you off, come back later &mdash; this is the early-access shape.
-        </p>
-      </section>
-
-      <section id="selfhost" class="section">
-        <h2>Repo + easy deploy</h2>
-        <p>
-          The code lives in the <a href="https://github.com/draganescu/hisohiso">hisohiso</a> repo. It ships with
-          Docker Compose, FrankenPHP/Caddy, and Mercure wiring, so most people can self-host it by setting a few
-          environment variables and running one compose command.
-        </p>
-        <p style="margin-top: 12px;">
-          Want Hermes Agent specifically? The <a href="/hermes">Hermes setup page</a> has the public skill URL and wrapper flow.
-        </p>
-        <p style="margin-top: 12px;">
-          If your server can run Docker and expose HTTP/HTTPS (VPS, homelab box, or container host), you can deploy it.
-          Clone, configure, run, and share a room link.
-        </p>
-      </section>
-
-      <footer class="footer">
-        <p>Minimal protocol. Local storage. No accounts.</p>
-        <p style="margin-top: 8px;"><a href="/security" class="link">How it works</a></p>
-      </footer>
     </main>
-    <script>
-      fetch('/api/stats')
-        .then(r => r.json())
-        .then(d => {
-          const parts = [];
-          if (d.active_rooms > 0) parts.push(d.active_rooms + ' active room' + (d.active_rooms !== 1 ? 's' : ''));
-          if (d.active_people > 0) parts.push(d.active_people + ' ' + (d.active_people !== 1 ? 'people' : 'person') + ' talking');
-          if (parts.length > 0) {
-            document.getElementById('stats').textContent = parts.join(' · ') + ' right now';
-          } else if (d.total_rooms > 0) {
-            document.getElementById('stats').textContent = d.total_rooms + ' room' + (d.total_rooms !== 1 ? 's' : '') + ' created';
-          }
-        })
-        .catch(() => {});
-    </script>
+
+    <footer class="footer">
+      <p>hisohiso — the quiet line between you and your agent.</p>
+      <p class="footer-links">
+        <a class="link" href="/">index</a>
+        <a class="link" href="/security/">protocol</a>
+        <a class="link" href="/coding-agents/">agents</a>
+        <a class="link" href="/hermes/">hermes</a>
+        <a class="link" href="/alternatives/">alternatives</a>
+        <a class="link" href="https://github.com/draganescu/hisohiso">source</a>
+      </p>
+      <p class="footer-license">GPLv3 · self-host it · fork it · read the code</p>
+    </footer>
+
+    <script src="/app.js" defer></script>
   </body>
 </html>

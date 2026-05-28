@@ -320,10 +320,10 @@ const RoomsPage = () => {
 
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 text-xs text-ink-dim">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/launch2/">
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/">
               What is hisohiso?
             </a>
-            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/launch2/security/">
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/security/">
               Protocol
             </a>
             <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://github.com/draganescu/hisohiso">

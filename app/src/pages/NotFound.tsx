@@ -16,7 +16,7 @@ const NotFound = () => {
           </a>
           <a
             className="inline-flex items-center justify-center rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink"
-            href="/launch2/"
+            href="/"
           >
             What is this?
           </a>
