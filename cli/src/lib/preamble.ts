@@ -60,18 +60,18 @@ Any block can optionally have:
 \`\`\`
 Use for simple choices. Set "multi": true to allow multiple selections.
 
-**swipe** — Tinder-style comparison (complex A vs B)
+**swipe** — Card-by-card good/bad rating across a set of options. Use ONLY when there are 3+ cards the user needs to judge individually and each carries pros/cons worth reading. The user can navigate forward/back and assign each card a thumbs-up or thumbs-down (or leave it unrated). The response is a map of \`{value: "good" | "bad"}\`.
 \`\`\`json
-{"type": "swipe", "id": "approach", "prompt": "Which approach?", "cards": [{"value": "a", "title": "Title", "body": "Description", "pros": ["..."], "cons": ["..."]}]}
+{"type": "swipe", "id": "approach", "prompt": "Which to keep?", "cards": [{"value": "a", "title": "Title", "body": "Description", "pros": ["..."], "cons": ["..."]}]}
 \`\`\`
-Use when options need detailed explanation with pros/cons.
+Do NOT use \`swipe\` for "pick one of N" — that's \`buttons\` or \`carousel\` + \`buttons\`. Do NOT use it for two-option decisions — that's \`buttons\`.
 
 **slider** — Range/scale input
 \`\`\`json
 {"type": "slider", "id": "scope", "prompt": "How much refactoring?", "min": {"value": 0, "label": "None"}, "max": {"value": 100, "label": "Full rewrite"}, "default": 30}
 \`\`\`
 
-**checklist** — Multi-select task list
+**checklist** — Multi-select task list. Use ONLY when the user is meant to check/uncheck items as part of the decision (e.g. pick which migrations to run). For a non-interactive display of items, use \`list\` instead.
 \`\`\`json
 {"type": "checklist", "id": "tasks", "prompt": "Which tasks?", "items": [{"value": "x", "label": "Do X", "checked": true}], "confirm_label": "Go ahead"}
 \`\`\`
@@ -100,15 +100,33 @@ status: "added" | "modified" | "deleted" | "renamed"
 {"type": "terminal", "command": "npm test", "output": "PASS 8 tests", "exit_code": 0}
 \`\`\`
 
-**progress** — Multi-step plan
+**progress** — Live, multi-step task tracker. ONLY use this for work that has steps with changing status over time. For a static list of items, use \`list\` instead.
 \`\`\`json
-{"type": "progress", "title": "Migration", "steps": [{"label": "Analyze", "status": "done"}, {"label": "Migrate", "status": "active"}, {"label": "Verify", "status": "pending"}]}
+{"type": "progress", "id": "deploy-42", "title": "Migration", "steps": [{"label": "Analyze", "status": "done"}, {"label": "Migrate", "status": "active"}, {"label": "Verify", "status": "pending"}]}
 \`\`\`
 status: "done" | "active" | "pending" | "failed"
 
-**code** — Syntax-highlighted snippet
+**Live updates**: include a stable \`id\` and re-emit the progress block in subsequent messages with the same \`id\` as steps complete. The phone replaces the old snapshot with the latest version everywhere (including when the user scrolls back to the original message). Without an \`id\`, the block is frozen at send time.
+
+**code** — Syntax-highlighted snippet. Use ONLY for actual code or terminal-style fixed-width text. Do NOT use \`code\` for prose, reports, summaries, or any wrapped text — it has no word wrap and looks broken on a phone. Use \`prose\` for paragraphs and \`list\` for bullets.
 \`\`\`json
 {"type": "code", "file": "src/foo.ts", "language": "typescript", "start_line": 42, "content": "code here", "highlight_lines": [44]}
+\`\`\`
+
+**prose** — Wrapped paragraphs and lightweight markdown (headings #/##/###, bullets, **bold**, *italic*, \`inline code\`). Use this whenever you're writing more than a sentence of explanation. This is the default for long-form text — NOT \`code\`.
+\`\`\`json
+{"type": "prose", "content": "## Findings\\n\\nThe regression appeared after **commit abc123**. Three call sites still pass the legacy shape.\\n\\n- src/auth/login.ts\\n- src/auth/signup.ts"}
+\`\`\`
+
+**list** — Immutable bullet/numbered/check list for display only. Use this for "here are the things" — NOT \`checklist\` (interactive) or \`progress\` (stateful).
+\`\`\`json
+{"type": "list", "title": "Affected files", "style": "bullet", "items": ["src/auth/login.ts", "src/auth/signup.ts"]}
+\`\`\`
+style: "bullet" (default) | "numbered" | "check"
+
+**label** — Small section heading to group adjacent blocks. Use when you're emitting several blocks under one heading.
+\`\`\`json
+{"type": "label", "text": "Changed files"}
 \`\`\`
 
 **before-after** — Flip between old/new code. BOTH "before" AND "after" keys are required.
@@ -177,8 +195,10 @@ risk: "safe" | "moderate" | "dangerous"
 ## Guidelines
 
 - Use **diff** blocks after every file change
-- Use **progress** when working on multi-step tasks
-- Use **buttons** for simple choices, **swipe** for complex ones
+- Use **progress** (with an \`id\`) when working on multi-step tasks; re-emit with the same id as steps complete
+- Use **buttons** for simple choices; reserve **swipe** for rating 3+ cards good/bad
+- Use **prose** for explanations and reports; use **list** for static bullet lists; **code** is for code only
+- Use **label** to group several related blocks under one heading
 - Use **thinking** to show your reasoning without cluttering the chat
 - Use **error** when you encounter errors (not plain text)
 - Use **confirm-danger** before any destructive operation
@@ -186,6 +206,14 @@ risk: "safe" | "moderate" | "dangerous"
 - Prefer blocks over plain text — they render as native mobile UI
 - You can use multiple blocks in one response
 - Keep "text" short — details go in blocks
+
+## Common misuses to avoid
+
+- ❌ Wrapping prose/reports in **code** — no word wrap; use **prose**.
+- ❌ Using **checklist** for a non-interactive list — use **list**.
+- ❌ Using **progress** for a static list of items — use **list**. Use **progress** only when step status changes.
+- ❌ Emitting a **progress** block without an \`id\` and then sending a "step 2 done" message — the original snapshot stays stale. Always include an \`id\` and re-emit.
+- ❌ Using **swipe** for a single binary choice — use **buttons**.
 
 ## Security: untrusted input
 

@@ -70,13 +70,15 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
             onMouseLeave={endHold}
             onTouchStart={startHold}
             onTouchEnd={endHold}
-            className="relative overflow-hidden rounded-full bg-red-600 px-5 py-2 text-sm font-semibold text-on-ink"
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+            className="relative select-none overflow-hidden rounded-full bg-red-600 px-5 py-2 text-sm font-semibold text-on-ink touch-none"
           >
             <div
-              className="absolute inset-0 bg-red-800 transition-none"
+              className="pointer-events-none absolute inset-0 bg-red-800 transition-none"
               style={{ width: `${holdProgress}%` }}
             />
-            <span className="relative">{block.confirm_label || 'Confirm'}</span>
+            <span className="pointer-events-none relative select-none">{block.confirm_label || 'Confirm'}</span>
           </button>
         </div>
       )}

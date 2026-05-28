@@ -290,6 +290,22 @@ const RoomController = () => {
 
   const visibleMessages = useMemo(() => [...messages].sort((a, b) => b.timestamp - a.timestamp), [messages]);
   const activeMessage = useMemo(() => messages.find((entry) => entry.id === selectedId) ?? null, [messages, selectedId]);
+  // Latest progress-block snapshot keyed by progress id. When an agent emits
+  // multiple messages updating the same progress (same id), every render — even
+  // re-opening an older message — shows the most recent state.
+  const progressOverrides = useMemo(() => {
+    const map: Record<string, import('../lib/blocks').ProgressBlock> = {};
+    const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
+    for (const m of sorted) {
+      if (!m.blocks) continue;
+      for (const b of m.blocks) {
+        if (b && b.type === 'progress' && typeof b.id === 'string' && b.id) {
+          map[b.id] = b;
+        }
+      }
+    }
+    return map;
+  }, [messages]);
   const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
 
   const {
@@ -1626,7 +1642,7 @@ const RoomController = () => {
                             isMine ? 'bg-surface/5' : 'bg-bg'
                           }`}
                         >
-                          <BlockRenderer blocks={msg.blocks} onRespond={sendBlockResponse} />
+                          <BlockRenderer blocks={msg.blocks} onRespond={sendBlockResponse} progressOverrides={progressOverrides} />
                         </div>
                       )}
 

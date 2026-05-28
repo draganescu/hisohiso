@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { Block, RunCommandBlock as RunCommandBlockType } from '../../lib/blocks';
+import type { Block, ProgressBlock as ProgressBlockType, RunCommandBlock as RunCommandBlockType } from '../../lib/blocks';
 import { sanitizeBlocksForRender } from '../../lib/block-validation';
 import { ConfidenceDot } from './ConfidenceDot';
 import { ButtonsBlockView } from './ButtonsBlock';
@@ -22,6 +22,9 @@ import { CostBlockView } from './CostBlock';
 import { FilePeekBlockView } from './FilePeekBlock';
 import { CarouselBlockView } from './CarouselBlock';
 import { LinkPreviewBlockView } from './LinkPreviewBlock';
+import { ListBlockView } from './ListBlock';
+import { ProseBlockView } from './ProseBlock';
+import { LabelBlockView } from './LabelBlock';
 
 type RespondFn = (blockId: string, type: string, value: unknown) => void;
 type PendingSelection = { type: string; value: unknown };
@@ -29,6 +32,9 @@ type PendingSelection = { type: string; value: unknown };
 interface Props {
   blocks: Block[];
   onRespond: RespondFn;
+  /** Map of progress-block id -> latest version seen anywhere in the thread.
+   * Lets older messages re-render with current progress instead of a stale snapshot. */
+  progressOverrides?: Record<string, ProgressBlockType>;
 }
 
 /** Blocks that auto-submit on selection (have their own safety mechanisms) */
@@ -38,7 +44,7 @@ const isAutoSubmit = (block: Block): boolean => {
   return false;
 };
 
-export const BlockRenderer = ({ blocks, onRespond }: Props) => {
+export const BlockRenderer = ({ blocks, onRespond, progressOverrides }: Props) => {
   const safeBlocks = useMemo(() => sanitizeBlocksForRender(blocks), [blocks]);
   const [pending, setPending] = useState<Map<string, PendingSelection>>(new Map());
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
@@ -103,8 +109,10 @@ export const BlockRenderer = ({ blocks, onRespond }: Props) => {
         return <FileTreeBlockView block={block} />;
       case 'terminal':
         return <TerminalBlockView block={block} />;
-      case 'progress':
-        return <ProgressBlockView block={block} />;
+      case 'progress': {
+        const latest = block.id && progressOverrides?.[block.id];
+        return <ProgressBlockView block={latest || block} />;
+      }
       case 'code':
         return <CodeBlockView block={block} />;
       case 'before-after':
@@ -121,6 +129,12 @@ export const BlockRenderer = ({ blocks, onRespond }: Props) => {
         return <CarouselBlockView block={block} />;
       case 'link-preview':
         return <LinkPreviewBlockView block={block} />;
+      case 'list':
+        return <ListBlockView block={block} />;
+      case 'prose':
+        return <ProseBlockView block={block} />;
+      case 'label':
+        return <LabelBlockView block={block} />;
       default:
         return null;
     }
