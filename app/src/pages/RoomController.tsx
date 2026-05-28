@@ -1423,7 +1423,7 @@ const RoomController = () => {
 
   if (error) {
     return (
-      <main className="min-h-[100dvh] bg-bg text-ink">
+      <main className="min-h-screen bg-bg text-ink">
         <div className="mx-auto flex max-w-xl flex-col gap-5 px-6 py-16">
           <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
           <div className="rounded-[22px] border border-danger bg-danger-soft p-6 text-sm leading-7 text-danger">
@@ -1447,7 +1447,7 @@ const RoomController = () => {
       connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
 
     return (
-      <main className="relative flex h-[100dvh] flex-col overflow-hidden bg-bg pt-[env(safe-area-inset-top)] text-ink">
+      <main className="relative flex h-screen flex-col overflow-hidden bg-bg pt-[env(safe-area-inset-top)] text-ink">
         {/* Off-screen focus proxy. Keeps Safari's user-gesture trust when a
             click handler programmatically focuses the inline composer textarea. */}
         <textarea
@@ -2405,7 +2405,7 @@ const RoomController = () => {
 
   // Pre / post participant states
   return (
-    <main className="min-h-[100dvh] bg-bg text-ink">
+    <main className="min-h-screen bg-bg text-ink">
       <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
         <header>
           <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
