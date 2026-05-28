@@ -1,0 +1,23 @@
+{
+  "name": "hisohiso-demo-video",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts HisohisoDemo out/hisohiso-demo.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.380",
+    "@remotion/tailwind": "^4.0.380",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.380",
+    "tailwindcss": "^3.4.19"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.5",
+    "typescript": "5.5.4"
+  }
+}
