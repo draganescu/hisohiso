@@ -47,7 +47,7 @@ const ThemeToggle = ({ variant = 'segmented' }: Props) => {
             className={
               'rounded-full px-3 py-1 text-xs font-medium transition ' +
               (active
-                ? 'bg-ink text-on-ink'
+                ? 'bg-filled text-on-ink'
                 : 'text-ink-soft hover:text-ink')
             }
           >

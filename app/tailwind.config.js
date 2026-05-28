@@ -16,6 +16,7 @@ export default {
         danger: 'var(--danger)',
         'danger-soft': 'var(--danger-soft)',
         'on-ink': 'var(--on-ink)',
+        filled: 'var(--filled)',
         overlay: 'var(--overlay)',
         'overlay-soft': 'var(--overlay-soft)'
       },

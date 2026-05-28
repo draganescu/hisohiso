@@ -42,7 +42,6 @@ import type { Block, BlockResponse } from '../lib/blocks';
 import { BlockRenderer } from '../components/blocks/BlockRenderer';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
-import ThemeToggle from '../components/ThemeToggle';
 
 type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED' | 'LEFT';
 
@@ -1553,7 +1552,7 @@ const RoomController = () => {
                 <div className="mx-auto mt-5 flex max-w-md items-center gap-2 rounded-full border border-rule bg-bg px-3 py-1.5">
                   <p className="min-w-0 flex-1 truncate text-left text-xs text-ink-soft">{shareUrl}</p>
                   <button
-                    className="shrink-0 rounded-full border border-ink bg-ink px-3 py-1 text-xs font-medium text-on-ink"
+                    className="shrink-0 rounded-full border border-ink bg-filled px-3 py-1 text-xs font-medium text-on-ink"
                     onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
                     type="button"
                   >
@@ -1613,11 +1612,13 @@ const RoomController = () => {
                       <p className="mb-1 px-2 text-[11px] text-ink-dim">{senderLabel}</p>
                     )}
                     <div
-                      className={`max-w-[82%] sm:max-w-[72%] ${
-                        hasBlocks ? 'w-full sm:w-auto sm:min-w-[420px]' : ''
+                      className={`${
+                        hasBlocks
+                          ? 'w-full sm:w-auto sm:min-w-[420px] sm:max-w-[88%]'
+                          : 'max-w-[82%] sm:max-w-[72%]'
                       } rounded-[18px] px-4 py-2.5 leading-6 ${
                         isMine
-                          ? 'rounded-br-[6px] bg-ink text-on-ink'
+                          ? 'rounded-br-[6px] bg-filled text-on-ink'
                           : 'rounded-bl-[6px] border border-rule bg-surface text-ink'
                       }`}
                     >
@@ -1653,7 +1654,7 @@ const RoomController = () => {
                             className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium ${
                               isMine
                                 ? 'bg-surface text-ink'
-                                : 'border border-ink bg-ink text-on-ink'
+                                : 'border border-ink bg-filled text-on-ink'
                             }`}
                             onClick={() => {
                               if (msg.action?.type === 'join-room') void joinActionRoom(msg.action);
@@ -1716,21 +1717,26 @@ const RoomController = () => {
               )}
             </div>
           </div>
-
-          {!autoScroll && unreadCount > 0 && (
-            <button
-              className="sticky bottom-4 left-1/2 z-20 ml-[-90px] inline-flex items-center gap-2 rounded-full border border-ink bg-ink px-4 py-2 text-xs font-medium text-on-ink shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
-              onClick={() => {
-                scrollToLatest();
-                setAutoScroll(true);
-                setUnreadCount(0);
-              }}
-              type="button"
-            >
-              ↑ {unreadCount} new
-            </button>
-          )}
         </div>
+
+        {/* Unread-on-scroll pill. Pinned to the viewport (above the floating
+            Compose button) instead of sticky inside the scroll container — the
+            list is reverse-chronological, so a sticky-bottom element would
+            naturally sit far below the viewport when the user is anywhere near
+            the newest messages and never get pulled into view. */}
+        {!autoScroll && unreadCount > 0 && (
+          <button
+            className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border border-ink bg-filled px-4 py-2 text-xs font-medium text-on-ink shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
+            onClick={() => {
+              scrollToLatest();
+              setAutoScroll(true);
+              setUnreadCount(0);
+            }}
+            type="button"
+          >
+            ↑ {unreadCount} new
+          </button>
+        )}
 
         {/* ---- Floating Compose trigger ----
             Opens the full-screen composer below. We can't pin a normal
@@ -1738,7 +1744,7 @@ const RoomController = () => {
             PWAs (no API anchors anything to the keyboard); the modal
             sidesteps that by being the viewport while the keyboard is up. */}
         <button
-          className="fixed bottom-4 left-4 right-4 z-30 rounded-full border border-ink bg-ink px-5 py-3.5 text-sm font-medium text-on-ink shadow-[0_12px_28px_-8px_rgba(10,10,10,0.4)] transition hover:bg-transparent hover:text-ink sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto"
+          className="fixed bottom-4 left-4 right-4 z-30 rounded-full border border-ink bg-filled px-5 py-3.5 text-sm font-medium text-on-ink shadow-[0_12px_28px_-8px_rgba(10,10,10,0.4)] transition hover:bg-transparent hover:text-ink sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto"
           onClick={() => openComposer()}
           type="button"
         >
@@ -1771,7 +1777,7 @@ const RoomController = () => {
                   {replyTarget ? 'Reply' : 'New message'}
                 </p>
                 <button
-                  className="rounded-full border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-ink disabled:hover:text-on-ink"
+                  className="rounded-full border border-ink bg-filled px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
                   onClick={() => void sendMessage()}
                   type="button"
                   disabled={!chatInput.trim()}
@@ -1898,7 +1904,7 @@ const RoomController = () => {
                         </p>
                         <div className="mt-4 flex gap-2">
                           <button
-                            className="flex-1 rounded-full border border-ink bg-ink px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                            className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                             onClick={() => approveKnock(knock.id)}
                             type="button"
                           >
@@ -2029,7 +2035,7 @@ const RoomController = () => {
                   <p className="mt-2 break-all text-xs text-ink-soft">{shareUrl}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
-                      className="rounded-full border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                      className="rounded-full border border-ink bg-filled px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                       onClick={handleCopy}
                       type="button"
                     >
@@ -2073,16 +2079,6 @@ const RoomController = () => {
                       }`}
                     />
                   </button>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-surface p-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Appearance</p>
-                    <p className="mt-1 text-xs leading-5 text-ink-soft">
-                      Follow the system or pin a palette for this device.
-                    </p>
-                  </div>
-                  <ThemeToggle />
                 </div>
 
                 <div className="mt-3 flex flex-col gap-2 rounded-[14px] border border-rule bg-surface p-4">
@@ -2177,7 +2173,7 @@ const RoomController = () => {
                           }}
                           className={`flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors ${
                             isCurrent
-                              ? 'bg-ink text-on-ink'
+                              ? 'bg-filled text-on-ink'
                               : 'text-ink hover:bg-bg'
                           }`}
                         >
@@ -2213,7 +2209,7 @@ const RoomController = () => {
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <a
                     href="/new"
-                    className="flex-1 rounded-full border border-ink bg-ink px-4 py-2 text-center text-sm font-medium text-on-ink no-underline transition hover:bg-transparent hover:text-ink"
+                    className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-center text-sm font-medium text-on-ink no-underline transition hover:bg-transparent hover:text-ink"
                   >
                     Open a channel
                   </a>
@@ -2281,7 +2277,7 @@ const RoomController = () => {
                   Cancel
                 </button>
                 <button
-                  className="flex-1 rounded-full border border-ink bg-ink px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                  className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                   onClick={() => {
                     setShowLeave(false);
                     void leaveRoom();
@@ -2347,7 +2343,7 @@ const RoomController = () => {
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <button
-                className="rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                 onClick={sendKnock}
                 type="button"
               >
@@ -2391,7 +2387,7 @@ const RoomController = () => {
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
-                className="rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                 onClick={handleCopy}
                 type="button"
               >
@@ -2413,7 +2409,7 @@ const RoomController = () => {
             <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel closed.</h1>
             <p className="mt-3 text-ink-soft">This channel was disbanded or no longer exists.</p>
             <a
-              className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink"
+              className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink"
               href="/rooms"
             >
               Your channels
@@ -2429,7 +2425,7 @@ const RoomController = () => {
               open the link again to rejoin.
             </p>
             <a
-              className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink"
+              className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink"
               href="/rooms"
             >
               Your channels

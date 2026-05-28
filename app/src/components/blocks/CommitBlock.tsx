@@ -77,7 +77,7 @@ export const CommitBlockView = ({ block, onSelect, submitted }: Props) => {
           className={`rounded-full border px-5 py-2 text-sm font-medium transition ${actionStyle(
             'edit',
             'border-ink-fade bg-surface text-ink active:bg-bg',
-            'border-ink bg-ink text-on-ink'
+            'border-ink bg-filled text-on-ink'
           )}`}
         >
           Edit
@@ -89,7 +89,7 @@ export const CommitBlockView = ({ block, onSelect, submitted }: Props) => {
           className={`rounded-full border px-5 py-2 text-sm font-medium transition ${actionStyle(
             'cancel',
             'border-ink-fade bg-surface text-ink-dim active:bg-bg',
-            'border-ink bg-ink text-on-ink'
+            'border-ink bg-filled text-on-ink'
           )}`}
         >
           Cancel

@@ -22,6 +22,10 @@
   --danger: #b91c1c;
   --danger-soft: #fee2e2;
   --on-ink: #ffffff;
+  /* Filled-button / own-bubble fill. In light mode this matches --ink, so the
+     existing "black filled" look is preserved. In dark mode it is *not* pure
+     --ink (which would be #f5f5f3 = a glaring white button) — see .dark. */
+  --filled: #0a0a0a;
   --overlay: rgba(10, 10, 10, 0.45);
   --overlay-soft: rgba(10, 10, 10, 0.2);
   --theme-color: #f5f5f3;
@@ -39,7 +43,15 @@
   --rule-soft: rgba(245, 245, 243, 0.06);
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.16);
-  --on-ink: #0a0a0a;
+  /* on-ink is the text color that sits on top of accent fills (bg-filled,
+     bg-red-*, bg-green-*). It needs to stay light in dark mode so colored
+     buttons keep legible white-ish text — flipping it to #0a0a0a would
+     make e.g. danger buttons render with dark text on a red background. */
+  --on-ink: #f5f5f3;
+  /* Muted elevated surface for filled buttons / own-bubble. Distinct from
+     --surface (#1a1a1a) so it reads as a raised control, but far from
+     pure --ink white so the screen doesn't burn the user's eyes. */
+  --filled: #2e2e2e;
   --overlay: rgba(0, 0, 0, 0.65);
   --overlay-soft: rgba(0, 0, 0, 0.4);
   --theme-color: #0f0f0f;
@@ -47,6 +59,7 @@
 
 body {
   margin: 0;
+  background: var(--bg);
   -webkit-text-size-adjust: 100%;
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
@@ -80,8 +93,15 @@ body {
   overscroll-behavior: none;
 }
 
+/* App shell stays full-viewport always. Using --app-height here (which is
+   driven from visualViewport.height for the composer's sake) caused the
+   shell to permanently shrink after the soft keyboard had been shown once,
+   leaving a white bar below the Compose button. The composer overlay
+   continues to use --app-height since it genuinely needs to fit above
+   the keyboard. */
 .app-shell {
-  height: var(--app-height);
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;

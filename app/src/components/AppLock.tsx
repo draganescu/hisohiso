@@ -109,7 +109,7 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
   );
 
   return (
-    <main className="min-h-screen bg-ink text-on-ink">
+    <main className="min-h-screen bg-filled text-on-ink">
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-16 text-center">
         <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-rule bg-rule text-3xl">
           🔐
