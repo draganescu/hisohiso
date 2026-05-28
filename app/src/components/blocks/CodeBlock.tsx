@@ -17,15 +17,15 @@ export const CodeBlockView = ({ block }: Props) => {
   };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-[#333] bg-[#1b1b1b]">
-      <div className="flex items-center justify-between border-b border-[#333] px-4 py-2">
-        <span className="font-mono text-xs text-[#e0d8c8]">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-ink-soft bg-[#1b1b1b]">
+      <div className="flex items-center justify-between border-b border-ink-soft px-4 py-2">
+        <span className="font-mono text-xs text-ink-soft">
           {block.file && <>{block.file}</>}
           {block.file && block.start_line != null && (
-            <span className="text-[#888]">:{startLine}-{startLine + lines.length - 1}</span>
+            <span className="text-ink-dim">:{startLine}-{startLine + lines.length - 1}</span>
           )}
         </span>
-        <button type="button" onClick={copy} className="text-xs text-[#888] hover:text-white">
+        <button type="button" onClick={copy} className="text-xs text-ink-dim hover:text-on-ink">
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
@@ -38,8 +38,8 @@ export const CodeBlockView = ({ block }: Props) => {
               key={i}
               className={`flex font-mono text-[13px] leading-5 ${isHighlighted ? 'bg-yellow-900/30' : ''}`}
             >
-              <span className="w-12 shrink-0 select-none pr-3 text-right text-[#555]">{lineNum}</span>
-              <span className="whitespace-pre text-[#ccc]">{line}</span>
+              <span className="w-12 shrink-0 select-none pr-3 text-right text-ink-soft">{lineNum}</span>
+              <span className="whitespace-pre text-ink-fade">{line}</span>
             </div>
           );
         })}

@@ -21,10 +21,10 @@ export const LinkPreviewBlockView = ({ block }: Props) => {
 
   const body = (
     <>
-      {domain && <p className="text-xs font-medium text-[#8d816c]">{domain}</p>}
-      <p className="mt-1 text-sm font-semibold text-[#171613]">{block.title}</p>
+      {domain && <p className="text-xs font-medium text-ink-dim">{domain}</p>}
+      <p className="mt-1 text-sm font-semibold text-ink">{block.title}</p>
       {block.description && (
-        <p className="mt-1 text-sm leading-5 text-[#5d564d]">{block.description}</p>
+        <p className="mt-1 text-sm leading-5 text-ink-soft">{block.description}</p>
       )}
     </>
   );
@@ -32,11 +32,11 @@ export const LinkPreviewBlockView = ({ block }: Props) => {
   if (!href) {
     return (
       <div
-        className="mt-3 block rounded-2xl border border-dashed border-[#d5c8b2] bg-[#fdf9f2] p-4"
+        className="mt-3 block rounded-2xl border border-dashed border-ink-fade bg-surface p-4"
         title="Link blocked: unsafe URL scheme"
       >
         {body}
-        <p className="mt-2 text-xs font-medium text-[#c44f2d]">Link blocked — unsafe URL scheme</p>
+        <p className="mt-2 text-xs font-medium text-ink">Link blocked — unsafe URL scheme</p>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export const LinkPreviewBlockView = ({ block }: Props) => {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-3 block rounded-2xl border border-[#d5c8b2] bg-[#fdf9f2] p-4 no-underline transition hover:border-[#d9592f]"
+      className="mt-3 block rounded-2xl border border-ink-fade bg-surface p-4 no-underline transition hover:border-ink"
       onClick={(e) => e.stopPropagation()}
     >
       {body}

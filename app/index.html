@@ -3,21 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-    <title>Hisohiso</title>
-    <meta name="description" content="Hisohiso: minimal encrypted chat. No accounts. No tracking." />
-    <meta name="theme-color" content="#171613" />
+    <title>hisohiso — a private encrypted line</title>
+    <meta name="description" content="A private encrypted line. Open a channel from a link, talk to a friend or to an agent on your machine. No account. No history on our server. Close the channel and it's gone." />
+    <meta name="theme-color" content="#f5f5f3" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <script>
+      // Pre-paint theme application — avoids a light-flash on dark-preferring
+      // devices. Mirrors src/lib/theme.ts; kept tiny + dependency-free so it
+      // runs before the bundle loads.
+      (function () {
+        try {
+          var v = localStorage.getItem('hisohiso.theme');
+          var sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = v === 'dark' || ((!v || v === 'system') && sys);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
-  <body class="bg-[#f4efe2] text-[#171613]">
+  <body class="bg-bg text-ink">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

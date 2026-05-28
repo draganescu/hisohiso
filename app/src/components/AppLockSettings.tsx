@@ -111,11 +111,11 @@ const AppLockSettings = () => {
         : 'On — unlocks with your PIN.';
 
   return (
-    <section className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 shadow-[0_10px_24px_rgba(23,22,19,0.1)]">
+    <section className="rounded-[22px] border border-rule bg-surface p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold">App lock</h2>
-          <p className="mt-2 text-sm text-[#3a362f]">
+          <p className="mt-2 text-sm text-ink-soft">
             Locks the whole app when it is suspended or backgrounded — so a phone
             left unlocked in the app switcher can&apos;t be opened without your
             passkey or PIN.
@@ -128,19 +128,19 @@ const AppLockSettings = () => {
           aria-label="Toggle app lock"
           onClick={toggle}
           className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition ${
-            config.enabled ? 'bg-[#171613]' : 'bg-[#cdbfa8]'
+            config.enabled ? 'bg-ink' : 'bg-ink-fade'
           }`}
         >
           <span
-            className={`absolute top-1 h-5 w-5 rounded-full bg-[#f6f0e8] transition-all ${
+            className={`absolute top-1 h-5 w-5 rounded-full bg-surface transition-all ${
               config.enabled ? 'left-6' : 'left-1'
             }`}
           />
         </button>
       </div>
 
-      <p className="mt-3 text-xs uppercase tracking-[0.15em] text-[#6a6358]">{statusLine}</p>
-      {status && <p className="mt-2 text-xs text-[#3a362f]">{status}</p>}
+      <p className="mt-3 text-xs uppercase tracking-[0.15em] text-ink-dim">{statusLine}</p>
+      {status && <p className="mt-2 text-xs text-ink-soft">{status}</p>}
 
       {config.enabled && (
         <div className="mt-4 flex flex-wrap gap-2">
@@ -150,7 +150,7 @@ const AppLockSettings = () => {
               setStatus(null);
               setSetupOpen(true);
             }}
-            className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold"
+            className="rounded-full border border-ink px-4 py-2 text-xs font-semibold"
           >
             {configured ? 'Change PIN' : 'Set PIN'}
           </button>
@@ -159,7 +159,7 @@ const AppLockSettings = () => {
               type="button"
               onClick={() => void addPasskey()}
               disabled={busy}
-              className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full border border-ink px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add passkey unlock
             </button>
@@ -169,7 +169,7 @@ const AppLockSettings = () => {
               type="button"
               onClick={removePasskey}
               disabled={busy}
-              className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full border border-ink px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Remove passkey
             </button>
@@ -178,15 +178,15 @@ const AppLockSettings = () => {
       )}
 
       {config.enabled && !passkeySupported && (
-        <p className="mt-3 text-xs text-[#6a6358]">
+        <p className="mt-3 text-xs text-ink-dim">
           This device has no passkey/biometric support, so unlock uses your PIN.
         </p>
       )}
 
       {setupOpen && (
-        <div className="mt-4 rounded-xl border border-[#1716131f] bg-[#fefaf2] p-4">
+        <div className="mt-4 rounded-xl border border-rule bg-bg p-4">
           <p className="text-sm font-semibold">{configured ? 'Change PIN' : 'Set a PIN'}</p>
-          <p className="mt-1 text-xs text-[#6a6358]">
+          <p className="mt-1 text-xs text-ink-dim">
             At least 4 digits.{' '}
             {passkeySupported
               ? 'A passkey is enrolled as the fast path; the PIN is the fallback.'
@@ -202,7 +202,7 @@ const AppLockSettings = () => {
               setPin(e.target.value);
               if (error) setError(null);
             }}
-            className="mt-3 w-full rounded-full border border-[#17161333] bg-white px-4 py-2 text-sm tracking-[0.2em]"
+            className="mt-3 w-full rounded-full border border-rule bg-surface px-4 py-2 text-sm tracking-[0.2em]"
           />
           <input
             type="password"
@@ -214,15 +214,15 @@ const AppLockSettings = () => {
               setConfirmPin(e.target.value);
               if (error) setError(null);
             }}
-            className="mt-2 w-full rounded-full border border-[#17161333] bg-white px-4 py-2 text-sm tracking-[0.2em]"
+            className="mt-2 w-full rounded-full border border-rule bg-surface px-4 py-2 text-sm tracking-[0.2em]"
           />
-          {error && <p className="mt-2 text-xs text-[#6b2411]">{error}</p>}
+          {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           <div className="mt-3 flex gap-2">
             <button
               type="button"
               onClick={() => void saveSetup()}
               disabled={busy}
-              className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-xs font-semibold text-[#f6f0e8] disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-ink bg-ink px-4 py-2 text-xs font-semibold text-on-ink disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy ? 'Saving…' : 'Save'}
             </button>
@@ -230,7 +230,7 @@ const AppLockSettings = () => {
               type="button"
               onClick={closeSetup}
               disabled={busy}
-              className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-ink px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancel
             </button>

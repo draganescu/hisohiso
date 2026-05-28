@@ -4,6 +4,7 @@ import jsQR from 'jsqr';
 import { getToken, listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
 import { navigateTo } from '../lib/navigation';
 import AppLockSettings from '../components/AppLockSettings';
+import ThemeToggle from '../components/ThemeToggle';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -54,7 +55,7 @@ const RoomsPage = () => {
   const handleJoin = () => {
     const secret = extractSecret(joinValue);
     if (!secret) {
-      setJoinError('Paste a room link or secret.');
+      setJoinError('Paste a channel link or secret.');
       return;
     }
     setJoinError('');
@@ -133,46 +134,49 @@ const RoomsPage = () => {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#efe7d5] text-[#171613]">
-      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
-        <header className="flex items-start justify-between">
+    <main className="min-h-screen bg-bg text-ink">
+      <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+        <header className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-[#3a362f]">Hisohiso</p>
-            <h1 className="mt-3 text-3xl font-semibold">Your rooms</h1>
-            <p className="mt-2 text-sm text-[#3a362f]">Stored locally on this device only.</p>
+            <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Your channels.</h1>
+            <p className="mt-2 text-sm text-ink-soft">Stored on this device only.</p>
           </div>
           <a
-            className="mt-4 shrink-0 rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+            className="mt-1 shrink-0 rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
             href="/new"
           >
-            Start a room
+            Open a channel
           </a>
         </header>
 
-        <section className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-6 shadow-[0_10px_24px_rgba(23,22,19,0.1)]">
-          <h2 className="text-lg font-semibold">Join with a link</h2>
-          <p className="mt-2 text-sm text-[#3a362f]">Paste a room URL or secret to join.</p>
+        <section className="rounded-[22px] border border-rule bg-surface p-6">
+          <h2 className="text-lg font-semibold tracking-[-0.015em]">Join with a link.</h2>
+          <p className="mt-2 text-sm text-ink-soft">Paste a channel URL or secret.</p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
-              className="flex-1 rounded-full border border-[#17161333] bg-white/80 px-4 py-2 text-sm"
-              placeholder="https://hisohiso.org/ROOM_SECRET"
+              className="flex-1 rounded-full border border-rule bg-surface px-4 py-2.5 text-sm focus:border-ink focus:outline-none"
+              placeholder="https://hisohiso.org/room#…"
               value={joinValue}
               onChange={(event) => setJoinValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') handleJoin();
+              }}
             />
             <button
-              className="rounded-full border-2 border-[#171613] bg-[#171613] px-5 py-2 text-sm font-semibold text-[#f6f0e8]"
+              className="rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
               onClick={handleJoin}
               type="button"
             >
               Join
             </button>
           </div>
-          {joinError && <p className="mt-2 text-xs text-[#6b2411]">{joinError}</p>}
+          {joinError && <p className="mt-2 text-xs text-danger">{joinError}</p>}
 
           <canvas ref={canvasRef} className="hidden" />
           {hasCamera && !scanning && (
             <button
-              className="mt-4 rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+              className="mt-4 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink transition hover:border-ink"
               onClick={() => void startScan()}
               type="button"
             >
@@ -191,11 +195,11 @@ const RoomsPage = () => {
                   style={{ maxHeight: '320px', objectFit: 'cover' }}
                 />
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className="h-48 w-48 rounded-2xl border-2 border-white/50" />
+                  <div className="h-48 w-48 rounded-2xl border border-surface/50" />
                 </div>
               </div>
               <button
-                className="mt-3 rounded-full border-2 border-[#171613] px-5 py-2 text-sm font-semibold"
+                className="mt-3 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink"
                 onClick={stopCamera}
                 type="button"
               >
@@ -204,24 +208,24 @@ const RoomsPage = () => {
             </div>
           )}
 
-          {scanError && <p className="mt-2 text-xs text-[#6b2411]">{scanError}</p>}
+          {scanError && <p className="mt-2 text-xs text-danger">{scanError}</p>}
         </section>
 
         {rooms.length === 0 && (
-          <div className="rounded-2xl border border-[#1716132e] bg-[#f7f2e6] p-8">
-            <p className="text-[#3a362f]">No rooms yet. Start one or join using a link.</p>
-            <a className="mt-4 inline-block text-sm underline" href="/new">
-              Start a room
+          <div className="rounded-[22px] border border-dashed border-rule bg-surface p-8">
+            <p className="text-ink-soft">No channels yet. Open one or paste a link above.</p>
+            <a className="mt-4 inline-block text-sm font-medium text-ink underline decoration-rule underline-offset-4" href="/new">
+              Open a channel →
             </a>
           </div>
         )}
 
         {rooms.length > 0 && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {rooms.map((room) => {
               const hasToken = !!getToken(room.roomHash);
               const isEditing = editingHash === room.roomHash;
-              const displayName = room.nickname || 'Unnamed room';
+              const displayName = room.nickname || 'Unnamed channel';
               const relativeTime = (() => {
                 const seconds = Math.floor(Date.now() / 1000) - room.lastSeen;
                 if (seconds < 60) return 'just now';
@@ -233,17 +237,17 @@ const RoomsPage = () => {
               return (
                 <div
                   key={room.roomHash}
-                  className="flex overflow-hidden rounded-2xl border border-[#1716132e] bg-[#f7f2e6] shadow-[0_10px_24px_rgba(23,22,19,0.1)]"
+                  className="flex overflow-hidden rounded-[22px] border border-rule bg-surface transition hover:border-ink"
                 >
-                  <div className="w-1.5 shrink-0" style={{ backgroundColor: room.color || '#ccc' }} />
+                  <div className="w-1 shrink-0" style={{ backgroundColor: room.color || 'var(--ink-fade)' }} />
                   <div className="flex-1 p-5 sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: room.color || '#ccc' }} />
+                          <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: room.color || 'var(--ink-fade)' }} />
                           {isEditing ? (
                             <input
-                              className="min-w-0 flex-1 rounded-lg border border-[#17161333] bg-white/80 px-2 py-1 text-lg font-semibold"
+                              className="min-w-0 flex-1 rounded-lg border border-rule bg-surface px-2 py-1 text-lg font-semibold focus:border-ink focus:outline-none"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => {
@@ -266,7 +270,7 @@ const RoomsPage = () => {
                           ) : (
                             <button
                               type="button"
-                              className="min-w-0 truncate text-lg font-semibold hover:underline"
+                              className="min-w-0 truncate text-lg font-semibold tracking-[-0.015em] hover:underline"
                               onClick={() => {
                                 setEditingHash(room.roomHash);
                                 setEditValue(room.nickname || '');
@@ -277,27 +281,27 @@ const RoomsPage = () => {
                             </button>
                           )}
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[#6a6358]">
-                          <span className="uppercase tracking-[0.15em]">{hasToken ? 'Participant' : 'Link saved'}</span>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-dim">
+                          <span>{hasToken ? 'Joined' : 'Link saved'}</span>
                           {room.handle && (
                             <>
-                              <span className="text-[#cdbfa8]">&middot;</span>
+                              <span className="text-ink-fade">·</span>
                               <span>{room.handle}</span>
                             </>
                           )}
-                          <span className="text-[#cdbfa8]">&middot;</span>
+                          <span className="text-ink-fade">·</span>
                           <span>{relativeTime}</span>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <a
-                          className="rounded-full border-2 border-[#171613] bg-[#171613] px-4 py-2 text-xs font-semibold text-[#f6f0e8]"
+                          className="rounded-full border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                           href={`/room#${room.roomSecret}`}
                         >
                           Open
                         </a>
                         <button
-                          className="rounded-full border-2 border-[#171613] px-4 py-2 text-xs font-semibold"
+                          className="rounded-full border border-rule bg-surface px-4 py-1.5 text-xs font-medium text-ink transition hover:border-ink"
                           onClick={() => handleForget(room.roomHash)}
                           type="button"
                         >
@@ -314,11 +318,20 @@ const RoomsPage = () => {
 
         <AppLockSettings />
 
-        <a className="text-sm underline" href="/">
-          Back to landing
-        </a>
-
-        <p className="mt-8 text-center text-[10px] tracking-[0.2em] text-[#b0a898]">v0.57</p>
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 text-xs text-ink-dim">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/launch2/">
+              What is hisohiso?
+            </a>
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/launch2/security/">
+              Protocol
+            </a>
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://github.com/draganescu/hisohiso">
+              Source
+            </a>
+          </div>
+          <ThemeToggle variant="pill" />
+        </div>
       </div>
     </main>
   );

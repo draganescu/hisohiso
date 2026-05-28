@@ -109,14 +109,14 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
   );
 
   return (
-    <main className="min-h-screen bg-[#171613] text-[#f4efe4]">
+    <main className="min-h-screen bg-ink text-on-ink">
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-16 text-center">
-        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#f4efe455] bg-[#f4efe414] text-3xl">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-rule bg-rule text-3xl">
           🔐
         </div>
-        <p className="text-[11px] uppercase tracking-[0.35em] text-[#c9bda8]">Hisohiso locked</p>
+        <p className="text-[11px] uppercase tracking-[0.35em] text-ink-fade">Hisohiso locked</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Unlock</h1>
-        <p className="mt-3 max-w-sm text-sm leading-6 text-[#d8cebd]">
+        <p className="mt-3 max-w-sm text-sm leading-6 text-ink-fade">
           The app locked while it was in the background.{' '}
           {showPasskey
             ? 'Use your device passkey or enter your PIN to continue.'
@@ -128,7 +128,7 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
             type="button"
             onClick={() => void tryPasskey()}
             disabled={busy}
-            className="mt-8 w-full rounded-full bg-[#f4efe4] px-5 py-3 text-sm font-semibold text-[#171613] shadow-lg shadow-black/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-8 w-full rounded-full bg-bg px-5 py-3 text-sm font-semibold text-ink shadow-lg shadow-black/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? 'Unlocking…' : 'Unlock with passkey'}
           </button>
@@ -147,13 +147,13 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
             }}
             placeholder="PIN"
             aria-label="App lock PIN"
-            className="w-full rounded-full border border-[#f4efe455] bg-[#f4efe414] px-5 py-3 text-center text-sm tracking-[0.3em] text-[#f4efe4] placeholder:tracking-normal placeholder:text-[#c9bda8] focus:border-[#f4efe4] focus:outline-none"
+            className="w-full rounded-full border border-rule bg-rule px-5 py-3 text-center text-sm tracking-[0.3em] text-on-ink placeholder:tracking-normal placeholder:text-ink-fade focus:border-bg focus:outline-none"
           />
-          {error && <p className="mt-3 text-sm text-[#f0a58f]">{error}</p>}
+          {error && <p className="mt-3 text-sm text-danger">{error}</p>}
           <button
             type="submit"
             disabled={busy}
-            className="mt-3 w-full rounded-full border border-[#f4efe455] px-5 py-3 text-sm font-semibold text-[#f4efe4] transition hover:bg-[#f4efe414] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-3 w-full rounded-full border border-rule px-5 py-3 text-sm font-semibold text-on-ink transition hover:bg-rule disabled:cursor-not-allowed disabled:opacity-60"
           >
             Unlock with PIN
           </button>

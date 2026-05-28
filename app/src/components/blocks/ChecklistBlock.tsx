@@ -29,11 +29,11 @@ export const ChecklistBlockView = ({ block, onSelect, submitted }: Props) => {
             className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${
               submitted
                 ? checked.includes(item.value)
-                  ? 'border-[#d9592f] bg-[#fdf1ec]'
-                  : 'border-[#e8e0d0] bg-[#f9f5ee] opacity-50'
+                  ? 'border-ink bg-bg'
+                  : 'border-rule bg-bg opacity-50'
                 : checked.includes(item.value)
-                ? 'border-[#d9592f] bg-[#fdf1ec]'
-                : 'border-[#d5c8b2] bg-[#fdf9f2]'
+                ? 'border-ink bg-bg'
+                : 'border-ink-fade bg-surface'
             }`}
           >
             <input
@@ -41,9 +41,9 @@ export const ChecklistBlockView = ({ block, onSelect, submitted }: Props) => {
               checked={checked.includes(item.value)}
               disabled={submitted}
               onChange={() => toggle(item.value)}
-              className="h-4 w-4 accent-[#d9592f]"
+              className="h-4 w-4 accent-ink"
             />
-            <span className="text-sm text-[#171613]">{item.label}</span>
+            <span className="text-sm text-ink">{item.label}</span>
           </label>
         ))}
       </div>

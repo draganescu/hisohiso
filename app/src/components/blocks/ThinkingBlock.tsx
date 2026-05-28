@@ -13,15 +13,15 @@ export const ThinkingBlockView = ({ block }: Props) => {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 rounded-xl border border-[#e8e0d0] bg-[#f9f5ee] px-4 py-2.5 text-left"
+        className="flex w-full items-center gap-2 rounded-xl border border-rule bg-bg px-4 py-2.5 text-left"
       >
         <span className="text-base">&#129504;</span>
-        <span className="flex-1 text-sm text-[#6a5e4e]">{block.summary || 'Reasoning'}</span>
-        <span className="text-xs text-[#8d816c]">{open ? '▾' : '▸'}</span>
+        <span className="flex-1 text-sm text-ink-dim">{block.summary || 'Reasoning'}</span>
+        <span className="text-xs text-ink-dim">{open ? '▾' : '▸'}</span>
       </button>
       {open && (
-        <div className="mt-1 rounded-xl border border-[#e8e0d0] bg-[#f9f5ee] px-4 py-3">
-          <p className="whitespace-pre-wrap text-sm leading-6 text-[#5d564d]">{block.content}</p>
+        <div className="mt-1 rounded-xl border border-rule bg-bg px-4 py-3">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-ink-soft">{block.content}</p>
         </div>
       )}
     </div>

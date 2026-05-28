@@ -83,28 +83,28 @@ export const SortableBlockView = ({ block, onSelect, submitted }: Props) => {
             ref={(el) => { rowRefs.current[idx] = el; }}
             className={`flex items-center gap-2 rounded-xl border px-4 py-3 transition-colors ${
               submitted
-                ? 'border-[#e8e0d0] bg-[#f9f5ee]'
+                ? 'border-rule bg-bg'
                 : draggingIdx === idx
-                ? 'border-[#d9592f] bg-[#fdf1ec] shadow-lg'
-                : 'border-[#d5c8b2] bg-[#fdf9f2]'
+                ? 'border-ink bg-bg shadow-lg'
+                : 'border-ink-fade bg-surface'
             }`}
           >
             {!submitted && (
               <span
                 onTouchStart={(e) => onTouchStart(idx, e)}
-                className="flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center rounded-lg text-lg text-[#8d816c] active:bg-[#e8dfd0]"
+                className="flex h-8 w-8 shrink-0 touch-none select-none items-center justify-center rounded-lg text-lg text-ink-dim active:bg-bg"
               >
                 &#9776;
               </span>
             )}
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8dfd0] text-xs font-bold text-[#6a5e4e]">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bg text-xs font-bold text-ink-dim">
               {idx + 1}
             </span>
-            <span className="flex-1 text-sm text-[#171613]">{item.label}</span>
+            <span className="flex-1 text-sm text-ink">{item.label}</span>
             {!submitted && (
               <span className="flex shrink-0 gap-1">
-                <button type="button" onClick={() => moveUp(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-[#8d816c] active:bg-[#e8dfd0] active:text-[#171613]" aria-label="Move up">&#8593;</button>
-                <button type="button" onClick={() => moveDown(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-[#8d816c] active:bg-[#e8dfd0] active:text-[#171613]" aria-label="Move down">&#8595;</button>
+                <button type="button" onClick={() => moveUp(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-ink-dim active:bg-bg active:text-ink" aria-label="Move up">&#8593;</button>
+                <button type="button" onClick={() => moveDown(idx)} className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-ink-dim active:bg-bg active:text-ink" aria-label="Move down">&#8595;</button>
               </span>
             )}
           </div>

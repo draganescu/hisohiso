@@ -72,13 +72,13 @@ export const RunCommandBlockView = ({ block, onSelect, submitted }: Props) => {
   const isLocked = submitted || (needsHold && selected !== null);
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-[#333] bg-[#1b1b1b]">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-ink-soft bg-[#1b1b1b]">
       {block.description && (
-        <div className="border-b border-[#333] px-4 py-2 text-sm text-[#aaa]">{block.description}</div>
+        <div className="border-b border-ink-soft px-4 py-2 text-sm text-ink-fade">{block.description}</div>
       )}
-      <div className="px-4 py-3 font-mono text-sm text-[#ccc]">$ {block.command}</div>
+      <div className="px-4 py-3 font-mono text-sm text-ink-fade">$ {block.command}</div>
       {!isLocked && (
-        <div className="flex gap-2 border-t border-[#333] px-4 py-3">
+        <div className="flex gap-2 border-t border-ink-soft px-4 py-3">
           {needsHold ? (
             <button
               type="button"
@@ -87,7 +87,7 @@ export const RunCommandBlockView = ({ block, onSelect, submitted }: Props) => {
               onMouseLeave={endHold}
               onTouchStart={startHold}
               onTouchEnd={endHold}
-              className={`relative overflow-hidden rounded-full px-5 py-2 text-sm font-semibold text-white ${riskColor[risk]}`}
+              className={`relative overflow-hidden rounded-full px-5 py-2 text-sm font-semibold text-on-ink ${riskColor[risk]}`}
             >
               <div className="absolute inset-0 bg-red-800 transition-none" style={{ width: `${holdProgress}%` }} />
               <span className="relative">Hold to run</span>
@@ -96,8 +96,8 @@ export const RunCommandBlockView = ({ block, onSelect, submitted }: Props) => {
             <button
               type="button"
               onClick={selectRun}
-              className={`rounded-full px-5 py-2 text-sm font-semibold text-white transition ${
-                selected === 'run' ? `${riskColor[risk]} ring-2 ring-white ring-offset-2 ring-offset-[#1b1b1b]` : riskColor[risk]
+              className={`rounded-full px-5 py-2 text-sm font-semibold text-on-ink transition ${
+                selected === 'run' ? `${riskColor[risk]} ring-2 ring-on-ink ring-offset-2 ring-offset-[#1b1b1b]` : riskColor[risk]
               }`}
             >
               Run
@@ -108,8 +108,8 @@ export const RunCommandBlockView = ({ block, onSelect, submitted }: Props) => {
             onClick={selectSkip}
             className={`rounded-full border px-5 py-2 text-sm font-medium transition ${
               selected === 'skip'
-                ? 'border-white bg-[#555] text-white'
-                : 'border-[#555] text-[#aaa]'
+                ? 'border-surface bg-[#555] text-on-ink'
+                : 'border-ink-soft text-ink-fade'
             }`}
           >
             Skip
@@ -117,7 +117,7 @@ export const RunCommandBlockView = ({ block, onSelect, submitted }: Props) => {
         </div>
       )}
       {isLocked && selected && (
-        <div className={`border-t border-[#333] px-4 py-2 text-sm font-medium ${selected === 'run' ? 'text-green-400' : 'text-[#888]'}`}>
+        <div className={`border-t border-ink-soft px-4 py-2 text-sm font-medium ${selected === 'run' ? 'text-green-400' : 'text-ink-dim'}`}>
           {selected === 'run' ? 'Running...' : 'Skipped'}
         </div>
       )}

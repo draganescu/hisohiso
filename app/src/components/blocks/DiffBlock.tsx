@@ -18,9 +18,9 @@ export const DiffBlockView = ({ block }: Props) => {
   };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-[#d5c8b2] bg-[#1b1b1b]">
-      <div className="flex items-center justify-between border-b border-[#333] px-4 py-2.5">
-        <span className="font-mono text-sm text-[#e0d8c8]">{block.file}</span>
+    <div className="mt-3 overflow-hidden rounded-2xl border border-ink-fade bg-[#1b1b1b]">
+      <div className="flex items-center justify-between border-b border-ink-soft px-4 py-2.5">
+        <span className="font-mono text-sm text-ink-soft">{block.file}</span>
         {block.stats && (
           <span className="flex gap-2 text-xs font-semibold">
             <span className="text-green-400">+{block.stats.additions}</span>
@@ -33,7 +33,7 @@ export const DiffBlockView = ({ block }: Props) => {
           <button
             type="button"
             onClick={() => toggleHunk(hi)}
-            className="w-full border-b border-[#333] bg-[#252525] px-4 py-1.5 text-left font-mono text-xs text-[#888]"
+            className="w-full border-b border-ink-soft bg-[#252525] px-4 py-1.5 text-left font-mono text-xs text-ink-dim"
           >
             {expandedHunks.has(hi) ? '▾' : '▸'} {hunk.header}
           </button>
@@ -47,10 +47,10 @@ export const DiffBlockView = ({ block }: Props) => {
                       ? 'bg-[#1a2e1a] text-green-300'
                       : line.op === '-'
                       ? 'bg-[#2e1a1a] text-red-300'
-                      : 'text-[#aaa]'
+                      : 'text-ink-fade'
                   }`}
                 >
-                  <span className="mr-2 inline-block w-4 text-center text-[#666]">{line.op}</span>
+                  <span className="mr-2 inline-block w-4 text-center text-ink-dim">{line.op}</span>
                   {line.text}
                 </div>
               ))}

@@ -28,22 +28,22 @@ export const CommitBlockView = ({ block, onSelect, submitted }: Props) => {
     selected === action
       ? selectedStyle
       : submitted
-      ? 'border-[#d5c8b2] bg-[#f4ede1] text-[#a89e90] opacity-50'
+      ? 'border-ink-fade bg-bg text-ink-dim opacity-50'
       : base;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-[#d5c8b2] bg-[#fdf9f2]">
-      <div className="border-b border-[#e8e0d0] px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#8d816c]">Commit</p>
-        <p className="mt-1 text-base font-bold text-[#171613]">{subject}</p>
-        {body && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#3f3529]">{body}</p>}
+    <div className="mt-3 overflow-hidden rounded-2xl border border-ink-fade bg-surface">
+      <div className="border-b border-rule px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-dim">Commit</p>
+        <p className="mt-1 text-base font-bold text-ink">{subject}</p>
+        {body && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{body}</p>}
       </div>
       {(block.files || block.stats) && (
-        <div className="border-b border-[#e8e0d0] px-4 py-2.5">
+        <div className="border-b border-rule px-4 py-2.5">
           {block.files && (
             <div className="flex flex-wrap gap-1.5">
               {block.files.map((f) => (
-                <span key={f} className="rounded-full bg-[#e8dfd0] px-2.5 py-0.5 font-mono text-xs text-[#3f3529]">
+                <span key={f} className="rounded-full bg-bg px-2.5 py-0.5 font-mono text-xs text-ink">
                   {f}
                 </span>
               ))}
@@ -64,8 +64,8 @@ export const CommitBlockView = ({ block, onSelect, submitted }: Props) => {
           onClick={() => select('commit')}
           className={`rounded-full px-5 py-2 text-sm font-semibold transition ${actionStyle(
             'commit',
-            'bg-green-600 text-white active:bg-green-700',
-            'bg-green-600 text-white ring-2 ring-green-400 ring-offset-2'
+            'bg-green-600 text-on-ink active:bg-green-700',
+            'bg-green-600 text-on-ink ring-2 ring-green-400 ring-offset-2'
           )}`}
         >
           Commit
@@ -76,8 +76,8 @@ export const CommitBlockView = ({ block, onSelect, submitted }: Props) => {
           onClick={() => select('edit')}
           className={`rounded-full border px-5 py-2 text-sm font-medium transition ${actionStyle(
             'edit',
-            'border-[#d5c8b2] bg-[#fdf9f2] text-[#171613] active:bg-[#f4ede1]',
-            'border-[#d9592f] bg-[#d9592f] text-white'
+            'border-ink-fade bg-surface text-ink active:bg-bg',
+            'border-ink bg-ink text-on-ink'
           )}`}
         >
           Edit
@@ -88,15 +88,15 @@ export const CommitBlockView = ({ block, onSelect, submitted }: Props) => {
           onClick={() => select('cancel')}
           className={`rounded-full border px-5 py-2 text-sm font-medium transition ${actionStyle(
             'cancel',
-            'border-[#d5c8b2] bg-[#fdf9f2] text-[#8d816c] active:bg-[#f4ede1]',
-            'border-[#d9592f] bg-[#d9592f] text-white'
+            'border-ink-fade bg-surface text-ink-dim active:bg-bg',
+            'border-ink bg-ink text-on-ink'
           )}`}
         >
           Cancel
         </button>
       </div>
       {submitted && selected && (
-        <div className="border-t border-[#e8e0d0] px-4 py-2 text-sm font-medium capitalize text-[#8d816c]">
+        <div className="border-t border-rule px-4 py-2 text-sm font-medium capitalize text-ink-dim">
           {selected === 'commit' ? 'Committed' : selected === 'edit' ? 'Editing...' : 'Cancelled'}
         </div>
       )}
