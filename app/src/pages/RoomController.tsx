@@ -1613,8 +1613,10 @@ const RoomController = () => {
                       <p className="mb-1 px-2 text-[11px] text-ink-dim">{senderLabel}</p>
                     )}
                     <div
-                      className={`max-w-[82%] sm:max-w-[72%] ${
-                        hasBlocks ? 'w-full sm:w-auto sm:min-w-[420px]' : ''
+                      className={`${
+                        hasBlocks
+                          ? 'w-full sm:w-auto sm:min-w-[420px] sm:max-w-[88%]'
+                          : 'max-w-[82%] sm:max-w-[72%]'
                       } rounded-[18px] px-4 py-2.5 leading-6 ${
                         isMine
                           ? 'rounded-br-[6px] bg-ink text-on-ink'
@@ -1716,21 +1718,26 @@ const RoomController = () => {
               )}
             </div>
           </div>
-
-          {!autoScroll && unreadCount > 0 && (
-            <button
-              className="sticky bottom-4 left-1/2 z-20 ml-[-90px] inline-flex items-center gap-2 rounded-full border border-ink bg-ink px-4 py-2 text-xs font-medium text-on-ink shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
-              onClick={() => {
-                scrollToLatest();
-                setAutoScroll(true);
-                setUnreadCount(0);
-              }}
-              type="button"
-            >
-              ↑ {unreadCount} new
-            </button>
-          )}
         </div>
+
+        {/* Unread-on-scroll pill. Pinned to the viewport (above the floating
+            Compose button) instead of sticky inside the scroll container — the
+            list is reverse-chronological, so a sticky-bottom element would
+            naturally sit far below the viewport when the user is anywhere near
+            the newest messages and never get pulled into view. */}
+        {!autoScroll && unreadCount > 0 && (
+          <button
+            className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border border-ink bg-ink px-4 py-2 text-xs font-medium text-on-ink shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
+            onClick={() => {
+              scrollToLatest();
+              setAutoScroll(true);
+              setUnreadCount(0);
+            }}
+            type="button"
+          >
+            ↑ {unreadCount} new
+          </button>
+        )}
 
         {/* ---- Floating Compose trigger ----
             Opens the full-screen composer below. We can't pin a normal
