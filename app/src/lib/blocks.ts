@@ -144,6 +144,8 @@ export interface ProgressStep {
 
 export interface ProgressBlock extends BlockBase {
   type: 'progress';
+  /** When set, later messages with a progress block sharing this id replace this one in-place. */
+  id?: string;
   title?: string;
   steps: ProgressStep[];
 }
@@ -271,6 +273,30 @@ export interface LinkPreviewBlock extends BlockBase {
   domain?: string;
 }
 
+// ─── 22. List (immutable) ────────────────────────────────────────────────
+
+export interface ListBlock extends BlockBase {
+  type: 'list';
+  title?: string;
+  style?: 'bullet' | 'numbered' | 'check';
+  items: string[];
+}
+
+// ─── 23. Prose ───────────────────────────────────────────────────────────
+
+export interface ProseBlock extends BlockBase {
+  type: 'prose';
+  /** Markdown subset: headings (# / ## / ###), paragraphs, bullets (- or *), `code`, *italic*, **bold**. */
+  content: string;
+}
+
+// ─── 24. Label ───────────────────────────────────────────────────────────
+
+export interface LabelBlock extends BlockBase {
+  type: 'label';
+  text: string;
+}
+
 // ─── Union type ───────────────────────────────────────────────────────────
 
 export type Block =
@@ -293,7 +319,10 @@ export type Block =
   | CostBlock
   | FilePeekBlock
   | CarouselBlock
-  | LinkPreviewBlock;
+  | LinkPreviewBlock
+  | ListBlock
+  | ProseBlock
+  | LabelBlock;
 
 // ─── Block response (user interaction reply) ──────────────────────────────
 

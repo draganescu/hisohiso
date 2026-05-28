@@ -95,7 +95,7 @@ const validateBlock = (raw: unknown): Block | null => {
       return toBlock({ ...baseBlock(raw), command: raw.command, output: raw.output, exit_code: isNumber(raw.exit_code) ? raw.exit_code : undefined });
     case 'progress':
       if (!Array.isArray(raw.steps)) return invalidBlock(raw.type, 'Expected steps[]', raw);
-      return toBlock({ ...baseBlock(raw), title: isString(raw.title) ? raw.title : undefined, steps: raw.steps.filter((step): step is { label: string; status: 'done' | 'active' | 'pending' | 'failed' } => isRecord(step) && isString(step.label) && isString(step.status) && stepStatuses.has(step.status)) });
+      return toBlock({ ...baseBlock(raw), id: isString(raw.id) ? raw.id : undefined, title: isString(raw.title) ? raw.title : undefined, steps: raw.steps.filter((step): step is { label: string; status: 'done' | 'active' | 'pending' | 'failed' } => isRecord(step) && isString(step.label) && isString(step.status) && stepStatuses.has(step.status)) });
     case 'code':
       if (!isString(raw.content)) return invalidBlock(raw.type, 'Expected content string', raw);
       return toBlock({ ...baseBlock(raw), file: isString(raw.file) ? raw.file : undefined, language: isString(raw.language) ? raw.language : undefined, start_line: isNumber(raw.start_line) ? raw.start_line : undefined, content: raw.content, highlight_lines: Array.isArray(raw.highlight_lines) ? raw.highlight_lines.filter(isNumber) : undefined });
@@ -128,6 +128,19 @@ const validateBlock = (raw: unknown): Block | null => {
     case 'link-preview':
       if (!isString(raw.url)) return invalidBlock(raw.type, 'Expected url string', raw);
       return toBlock(raw);
+    case 'list': {
+      if (!Array.isArray(raw.items)) return invalidBlock(raw.type, 'Expected items[]', raw);
+      const items = raw.items.filter(isString);
+      if (items.length === 0) return invalidBlock(raw.type, 'Expected at least one string item', raw);
+      const style = isString(raw.style) && ['bullet', 'numbered', 'check'].includes(raw.style) ? raw.style : undefined;
+      return toBlock({ ...baseBlock(raw), title: isString(raw.title) ? raw.title : undefined, style, items });
+    }
+    case 'prose':
+      if (!isString(raw.content)) return invalidBlock(raw.type, 'Expected content string', raw);
+      return toBlock({ ...baseBlock(raw), content: raw.content });
+    case 'label':
+      if (!isString(raw.text)) return invalidBlock(raw.type, 'Expected text string', raw);
+      return toBlock({ ...baseBlock(raw), text: raw.text });
     default:
       return null;
   }
