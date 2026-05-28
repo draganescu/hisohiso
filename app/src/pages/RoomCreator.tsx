@@ -52,7 +52,7 @@ const RoomCreator = () => {
   };
 
   return (
-    <main className="min-h-screen bg-bg text-ink">
+    <main className="min-h-[100dvh] bg-bg text-ink">
       <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
         <header className="flex items-start justify-between gap-4">
           <div>
