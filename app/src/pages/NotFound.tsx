@@ -1,6 +1,6 @@
 const NotFound = () => {
   return (
-    <main className="min-h-screen bg-bg text-ink">
+    <main className="min-h-[100dvh] bg-bg text-ink">
       <div className="mx-auto flex max-w-xl flex-col gap-4 px-6 py-16">
         <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
         <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel not found.</h1>

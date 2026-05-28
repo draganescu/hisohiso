@@ -1423,7 +1423,7 @@ const RoomController = () => {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-bg text-ink">
+      <main className="min-h-[100dvh] bg-bg text-ink">
         <div className="mx-auto flex max-w-xl flex-col gap-5 px-6 py-16">
           <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
           <div className="rounded-[22px] border border-danger bg-danger-soft p-6 text-sm leading-7 text-danger">
@@ -1611,15 +1611,13 @@ const RoomController = () => {
                     {senderLabel && (
                       <p className="mb-1 px-2 text-[11px] text-ink-dim">{senderLabel}</p>
                     )}
-                    <div
-                      className={`${
-                        hasBlocks
-                          ? 'w-full sm:w-auto sm:min-w-[420px] sm:max-w-[88%]'
-                          : 'max-w-[82%] sm:max-w-[72%]'
-                      } rounded-[18px] px-4 py-2.5 leading-6 ${
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(msg.id)}
+                      className={`max-w-[82%] cursor-pointer rounded-[18px] px-4 py-2.5 text-left leading-6 transition-colors sm:max-w-[72%] ${
                         isMine
-                          ? 'rounded-br-[6px] bg-filled text-on-ink'
-                          : 'rounded-bl-[6px] border border-rule bg-surface text-ink'
+                          ? 'rounded-br-[6px] bg-filled text-on-ink hover:brightness-110'
+                          : 'rounded-bl-[6px] border border-rule bg-surface text-ink hover:border-ink'
                       }`}
                     >
                       <p className="whitespace-pre-line break-words text-[15px]">
@@ -1638,30 +1636,42 @@ const RoomController = () => {
                       </p>
 
                       {hasBlocks && msg.blocks && (
-                        <div
-                          className={`mt-3 rounded-[12px] p-3 ${
-                            isMine ? 'bg-surface/5' : 'bg-bg'
+                        <span
+                          className={`mt-2 inline-block rounded-full px-3 py-1 text-[11px] font-medium ${
+                            isMine
+                              ? 'bg-surface/15 text-on-ink'
+                              : 'border border-rule bg-bg text-ink-soft'
                           }`}
                         >
-                          <BlockRenderer blocks={msg.blocks} onRespond={sendBlockResponse} progressOverrides={progressOverrides} />
-                        </div>
+                          {msg.blocks.length} interactive{' '}
+                          {msg.blocks.length === 1 ? 'block' : 'blocks'} — tap to view
+                        </span>
                       )}
 
                       {msg.action?.type === 'join-room' && (
                         <div className="mt-3 flex flex-col items-start gap-2">
-                          <button
-                            type="button"
+                          <span
+                            role="button"
+                            tabIndex={0}
                             className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium ${
                               isMine
                                 ? 'bg-surface text-ink'
                                 : 'border border-ink bg-filled text-on-ink'
                             }`}
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               if (msg.action?.type === 'join-room') void joinActionRoom(msg.action);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (msg.action?.type === 'join-room') void joinActionRoom(msg.action);
+                              }
                             }}
                           >
                             {msg.action.label} →
-                          </button>
+                          </span>
                           {msg.action.code && (
                             <div
                               className={`text-[11px] font-mono ${
@@ -1676,7 +1686,7 @@ const RoomController = () => {
                           )}
                         </div>
                       )}
-                    </div>
+                    </button>
                     <div
                       className={`mt-1 flex items-center gap-2 px-2 text-[10px] text-ink-dim ${
                         isMine ? 'flex-row-reverse' : ''
@@ -1860,10 +1870,109 @@ const RoomController = () => {
 
         <QrModal open={showQr} onClose={() => setShowQr(false)} value={shareUrl} />
 
+        {/* ---- Message detail ---- */}
+        {activeMessage && (
+          <div className="fixed inset-x-0 top-0 z-50 flex h-[100dvh] flex-col bg-bg text-ink">
+            <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
+              <button
+                className="text-sm font-medium text-ink-soft hover:text-ink"
+                onClick={() => setSelectedId(null)}
+                type="button"
+              >
+                Back
+              </button>
+              <p className="text-sm font-semibold">
+                {activeMessage.direction === 'out' ? 'Sent message' : 'Message'}
+              </p>
+              <button
+                className="text-sm font-medium text-ink-soft hover:text-ink"
+                onClick={() => openComposer(activeMessage.id)}
+                type="button"
+              >
+                Reply
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-6">
+              <div className="mx-auto flex max-w-2xl flex-col gap-4">
+                <div className="flex items-baseline justify-between gap-3 text-xs text-ink-dim">
+                  <span>{getMessageLabel(activeMessage)}</span>
+                  <span>{formatMailStamp(activeMessage.timestamp)}</span>
+                </div>
+
+                <article
+                  className={`rounded-[18px] px-5 py-4 leading-7 ${
+                    activeMessage.direction === 'out'
+                      ? 'bg-filled text-on-ink'
+                      : 'border border-rule bg-surface text-ink'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap break-words text-[15px]">
+                    {activeMessage.block_response
+                      ? formatBlockResponse(activeMessage) || activeMessage.content
+                      : activeMessage.content || 'Empty message'}
+                  </p>
+                </article>
+
+                {activeMessage.blocks && activeMessage.blocks.length > 0 && (
+                  <div className="rounded-[14px] border border-rule bg-surface p-4">
+                    <BlockRenderer
+                      blocks={activeMessage.blocks}
+                      onRespond={sendBlockResponse}
+                      progressOverrides={progressOverrides}
+                    />
+                  </div>
+                )}
+
+                {activeMessage.action?.type === 'join-room' && (
+                  <div className="flex flex-col items-start gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink"
+                      onClick={() => {
+                        if (activeMessage.action?.type === 'join-room') {
+                          void joinActionRoom(activeMessage.action);
+                        }
+                      }}
+                    >
+                      {activeMessage.action.label} →
+                    </button>
+                    {activeMessage.action.code && (
+                      <div className="text-[11px] font-mono text-ink-dim">
+                        code:{' '}
+                        <span className="font-semibold tracking-[0.25em]">
+                          {activeMessage.action.code}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-2 flex flex-wrap gap-2 pb-[env(safe-area-inset-bottom)]">
+                  <button
+                    type="button"
+                    className="rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
+                    onClick={() => void handleCopyMessage(activeMessage.content)}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-danger bg-surface px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger-soft"
+                    onClick={() => void handleDeleteMessage(activeMessage.id)}
+                  >
+                    Delete local copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ---- Knock queue ---- */}
         {showQueue && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100%-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
+            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Notifications</p>
@@ -1929,8 +2038,8 @@ const RoomController = () => {
 
         {/* ---- Help / channel settings (includes Sender field, replaces /iam) ---- */}
         {showHelp && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100%-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
+            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
@@ -2014,8 +2123,8 @@ const RoomController = () => {
 
         {/* ---- Channel menu ---- */}
         {showMenu && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100%-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
+            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
@@ -2133,8 +2242,8 @@ const RoomController = () => {
 
         {/* ---- Channel switcher ---- */}
         {showSwitcher && (
-          <div className="fixed inset-0 z-40 bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100%-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
+            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Switch</p>
@@ -2227,7 +2336,7 @@ const RoomController = () => {
 
         {/* ---- Disband (destructive) ---- */}
         {showDisband && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
+          <div className="fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-danger bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
               <p className="text-[11px] uppercase tracking-[0.28em] text-danger">Destructive</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em]">
@@ -2261,7 +2370,7 @@ const RoomController = () => {
 
         {/* ---- Leave (recoverable) ---- */}
         {showLeave && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-6">
+          <div className="fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
               <h2 className="text-xl font-semibold tracking-[-0.015em]">Leave this channel?</h2>
               <p className="mt-3 text-sm leading-6 text-ink-soft">
@@ -2296,7 +2405,7 @@ const RoomController = () => {
 
   // Pre / post participant states
   return (
-    <main className="min-h-screen bg-bg text-ink">
+    <main className="min-h-[100dvh] bg-bg text-ink">
       <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
         <header>
           <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
