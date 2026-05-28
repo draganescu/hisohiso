@@ -93,16 +93,14 @@ body {
   overscroll-behavior: none;
 }
 
-/* App shell uses --app-height (= window.visualViewport.height, set from
-   main.tsx) rather than 100vh / 100dvh. On iOS PWA standalone with
-   viewport-fit=cover + apple-mobile-web-app-status-bar-style=black-translucent,
-   visualViewport.height reports the actual visible region all the way to the
-   home-indicator edge, whereas 100dvh stops at the safe-area boundary and
-   leaves a system-default strip below — that's the "white bar" the recent
-   PRs (#109 / #112) chased without ever truly fixing. This restores the
-   pre-launch2 sizing that was edge-to-edge on every iPhone form factor. */
+/* Match the sizing RoomsPage uses (min-h-[100dvh]), which extends edge-to-edge
+   in this iOS configuration. The previous `height: var(--app-height)` lined up
+   with what the pre-launch2 channel screen used in the codebase, but the rest
+   of the page chain (#root, body, html) is what actually carries the bg to
+   the physical edges — the shell just has to take at least the viewport height
+   so the flex layout has somewhere to grow into. */
 .app-shell {
-  height: var(--app-height);
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
