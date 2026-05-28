@@ -17,14 +17,14 @@ export const BeforeAfterBlockView = ({ block }: Props) => {
           <button
             type="button"
             onClick={() => setShowAfter(false)}
-            className={`px-3 py-1 text-xs font-medium ${!showAfter ? 'bg-ink text-on-ink' : 'text-ink-dim'}`}
+            className={`px-3 py-1 text-xs font-medium ${!showAfter ? 'bg-filled text-on-ink' : 'text-ink-dim'}`}
           >
             {block.before.label}
           </button>
           <button
             type="button"
             onClick={() => setShowAfter(true)}
-            className={`px-3 py-1 text-xs font-medium ${showAfter ? 'bg-ink text-on-ink' : 'text-ink-dim'}`}
+            className={`px-3 py-1 text-xs font-medium ${showAfter ? 'bg-filled text-on-ink' : 'text-ink-dim'}`}
           >
             {block.after.label}
           </button>

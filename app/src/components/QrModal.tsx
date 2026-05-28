@@ -43,7 +43,7 @@ const QrModal = ({ open, onClose, value }: QrModalProps) => {
           {src ? <img src={src} alt="Channel QR code" className="h-56 w-56" /> : <div className="text-sm text-ink-dim">Loading…</div>}
         </div>
         <button
-          className="mt-6 w-full rounded-full border border-ink bg-ink px-4 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+          className="mt-6 w-full rounded-full border border-ink bg-filled px-4 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
           onClick={onClose}
           type="button"
         >

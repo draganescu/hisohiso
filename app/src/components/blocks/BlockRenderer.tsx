@@ -171,7 +171,7 @@ export const BlockRenderer = ({ blocks, onRespond, progressOverrides }: Props) =
         <button
           type="button"
           onClick={submitAll}
-          className="mt-4 w-full rounded-full bg-ink py-3 text-sm font-semibold text-on-ink active:bg-[#c04d27]"
+          className="mt-4 w-full rounded-full bg-filled py-3 text-sm font-semibold text-on-ink active:bg-[#c04d27]"
         >
           Send{pending.size > 1 ? ` (${pending.size})` : ''}
         </button>

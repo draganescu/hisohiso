@@ -143,7 +143,7 @@ const RoomsPage = () => {
             <p className="mt-2 text-sm text-ink-soft">Stored on this device only.</p>
           </div>
           <a
-            className="mt-1 shrink-0 rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+            className="mt-1 shrink-0 rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
             href="/new"
           >
             Open a channel
@@ -164,7 +164,7 @@ const RoomsPage = () => {
               }}
             />
             <button
-              className="rounded-full border border-ink bg-ink px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+              className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
               onClick={handleJoin}
               type="button"
             >
@@ -295,7 +295,7 @@ const RoomsPage = () => {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <a
-                          className="rounded-full border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                          className="rounded-full border border-ink bg-filled px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
                           href={`/room#${room.roomSecret}`}
                         >
                           Open

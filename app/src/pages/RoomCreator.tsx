@@ -122,7 +122,7 @@ const RoomCreator = () => {
             <button
               type="button"
               onClick={() => void create()}
-              className="mt-6 w-full rounded-full border border-ink bg-ink py-3 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+              className="mt-6 w-full rounded-full border border-ink bg-filled py-3 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
             >
               Open channel
             </button>

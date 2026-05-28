@@ -222,7 +222,7 @@ const AppLockSettings = () => {
               type="button"
               onClick={() => void saveSetup()}
               disabled={busy}
-              className="rounded-full border border-ink bg-ink px-4 py-2 text-xs font-semibold text-on-ink disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-ink bg-filled px-4 py-2 text-xs font-semibold text-on-ink disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy ? 'Saving…' : 'Save'}
             </button>

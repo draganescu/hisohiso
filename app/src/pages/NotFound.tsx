@@ -9,7 +9,7 @@ const NotFound = () => {
         </p>
         <div className="mt-2 flex flex-wrap gap-3">
           <a
-            className="inline-flex items-center justify-center rounded-full border border-ink bg-ink px-5 py-2 text-sm font-medium text-on-ink"
+            className="inline-flex items-center justify-center rounded-full border border-ink bg-filled px-5 py-2 text-sm font-medium text-on-ink"
             href="/rooms"
           >
             Your channels
