@@ -47,15 +47,18 @@ were closed when a message was sent can still receive it on next open.
 
 ## Local setup
 
-Requires Docker + Docker Compose.
+Requires Docker + Docker Compose, plus [Bun](https://bun.sh).
 
 ```bash
-./run-local.sh
+bun dev
 ```
 
-App runs at `http://localhost:8087`.
+(or `./run-local.sh`, which calls the same thing). The launcher derives a
+stable port and compose project name from the worktree path, so you can run
+multiple worktrees in parallel — each gets its own containers, its own host
+port (printed on startup), and its own `./data` SQLite.
 
-Stop with `docker compose down`.
+Stop with `docker compose down` from the same worktree.
 
 ## Production setup
 

@@ -1,15 +1,21 @@
 services:
   app:
     build: .
-    # 8087 is the local dev port. Bound to 127.0.0.1 so it never reaches
-    # the public interface — even in production where compose.prod.yaml
-    # adds 80/443 alongside it, the dev port stays loopback-only.
+    # Host port is supplied by scripts/dev.mjs (`bun dev`), which derives a
+    # stable per-worktree port from a hash of the worktree path so multiple
+    # worktrees can run in parallel without colliding. Bound to 127.0.0.1 so
+    # it never reaches the public interface — even in production where
+    # compose.prod.yaml adds 80/443 alongside it, the dev port stays loopback-only.
     ports:
-      - '127.0.0.1:8087:80'
+      - '127.0.0.1:${HISOHISO_PORT:-8087}:80'
     environment:
       - SERVER_NAME=:80
-      - MERCURE_PUBLISHER_JWT_KEY=!ChangeMe!
-      - MERCURE_SUBSCRIBER_JWT_KEY=!ChangeMe!
+      # JWT keys are injected by scripts/dev.mjs (derived from the worktree
+      # path so each worktree has stable, isolated keys). The !ChangeMe!
+      # fallbacks intentionally cause the server to refuse to start when run
+      # without the dev launcher — fail loud rather than ship a placeholder.
+      - MERCURE_PUBLISHER_JWT_KEY=${MERCURE_PUBLISHER_JWT_KEY:-!ChangeMe!}
+      - MERCURE_SUBSCRIBER_JWT_KEY=${MERCURE_SUBSCRIBER_JWT_KEY:-!ChangeMe!}
       - MERCURE_HUB_URL=http://localhost/.well-known/mercure
       - CHAT_DB_PATH=/data/chat.sqlite
     volumes:
