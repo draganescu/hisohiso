@@ -87,30 +87,21 @@ body,
   height: 100%;
 }
 
-/* Paint the page background on <html> as well as <body>. With
-   viewport-fit=cover and apple-mobile-web-app-status-bar-style=black-translucent,
-   iOS PWA standalone and some mobile Safari configurations let the body's
-   height: 100% stop short of the physical screen edges (around the home
-   indicator, the dancing URL bar, etc.). The area that the body doesn't
-   cover reveals <html>, which without an explicit background falls back to
-   the UA default white — that's the white bar that shows below the Compose
-   button on a real device even after .app-shell is set to 100dvh. Painting
-   <html> with --bg makes those gaps blend instead of flash white. */
 html,
 body {
-  background: var(--bg);
   overscroll-behavior: none;
 }
 
-/* App shell stays full-viewport always. Using --app-height here (which is
-   driven from visualViewport.height for the composer's sake) caused the
-   shell to permanently shrink after the soft keyboard had been shown once,
-   leaving a white bar below the Compose button. The composer overlay
-   continues to use --app-height since it genuinely needs to fit above
-   the keyboard. */
+/* App shell uses --app-height (= window.visualViewport.height, set from
+   main.tsx) rather than 100vh / 100dvh. On iOS PWA standalone with
+   viewport-fit=cover + apple-mobile-web-app-status-bar-style=black-translucent,
+   visualViewport.height reports the actual visible region all the way to the
+   home-indicator edge, whereas 100dvh stops at the safe-area boundary and
+   leaves a system-default strip below — that's the "white bar" the recent
+   PRs (#109 / #112) chased without ever truly fixing. This restores the
+   pre-launch2 sizing that was edge-to-edge on every iPhone form factor. */
 .app-shell {
-  height: 100vh;
-  height: 100dvh;
+  height: var(--app-height);
   display: flex;
   flex-direction: column;
   overflow: hidden;
