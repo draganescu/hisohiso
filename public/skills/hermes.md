@@ -91,7 +91,7 @@ cat > "$HOME/.hermes/skills/autonomous-ai-agents/hisohiso-mobile-ui/SKILL.md" <<
 ---
 name: hisohiso-mobile-ui
 description: "When bridged into a hisohiso room, emit ONE raw JSON envelope per turn. Blocks are touch-screen widgets (tap, swipe, drag, expand) — not text formatting and not a way to structure prose. Default to text-only. Act first; never reply with a plan and a 'shall I proceed?'."
-version: 3.0.0
+version: 3.1.0
 author: Hisohiso
 license: MIT
 metadata:
@@ -139,6 +139,9 @@ There is no decorative block.
 3. Total blocks ≤ 4. Never two blocks of the same type carrying different
    slices of the same content.
 4. JSON parses with no fences or surrounding prose.
+5. Any `prose` block? It must be unavoidable multi-paragraph narrative. If
+   it would read fine as `text` or a `list`, convert it — `prose` is a last
+   resort, never a default.
 
 If any answer is "no", restructure before emitting.
 
@@ -225,6 +228,18 @@ run, use `checklist` and `confirm_label`.
 `code` is for *code* in a real language. Never smuggle prose into a
 styled box. Write the sentence in `text`.
 
+### ❌ `prose` as a dumping ground for markdown
+
+```json
+{"type":"prose","content":"## Summary\n\nI updated the config and restarted the daemon. Everything works now."}
+```
+
+`prose` is markdown, not a widget — it adds nothing a sentence in `text`
+doesn't. If it fits in 1–2 sentences it's `text`; a set of items is a
+`list`; file changes are `file-tree`/`diff`. Reach for `prose` ONLY when
+there is genuinely unavoidable multi-paragraph narrative no structured
+block can carry. This is the single most common failure mode — guard it.
+
 ### ❌ `progress` block where every step is `done`
 
 That's a status report, not progress. Use `text` plus `file-tree`/`diff`.
@@ -278,7 +293,7 @@ Every block also accepts `confidence` (`high|medium|low`), `collapsed`
 
 **Display (non-interactive prose & lists)**
 
-- `prose` — `content` (markdown subset: `#`/`##`/`###` headings, `-`/`*` bullets, `**bold**`, `*italic*`, `` `inline code` ``). Use this for any wrapped paragraph text. NOT `code`.
+- `prose` — `content` (markdown subset: `#`/`##`/`###` headings, `-`/`*` bullets, `**bold**`, `*italic*`, `` `inline code` ``). LAST RESORT, not a default — it's markdown, not a widget, so it earns nothing over `text`. Short answers go in `text`; structured content goes in `list`/`diff`/`file-tree`/etc. Reserve `prose` for genuinely unavoidable multi-paragraph narrative no other block can carry. NOT `code`.
 - `list` — `title?`, `style?` (`bullet`|`numbered`|`check`), `items:[string]`. Immutable, display-only enumeration. NOT `checklist` (interactive) or `progress` (stateful).
 - `label` — `text`. Small section heading to group adjacent blocks.
 
@@ -301,8 +316,10 @@ Never emit `javascript:`, `data:`, `vbscript:`, `blob:`, `file:`, or
 - `checklist` for your own plan — it's interactive; either act, or offer
   real user choices. For display-only items use `list`.
 - `code` with `language:"text"` (or any language) for prose — `code` has
-  no word wrap on mobile and looks broken. Use `prose` for paragraphs,
-  `list` for bullets.
+  no word wrap on mobile and looks broken. Put paragraphs in `text`, bullets
+  in `list`; only unavoidable long narrative goes in `prose`.
+- `prose` for anything that fits in `text` or a `list` — `prose` is
+  markdown, not a widget; it's a last resort, never the default reach.
 - `progress` without an `id` then "step 2 done" in a later message — the
   original snapshot stays stale. Always include an `id` and re-emit the
   whole block with updated `steps` to make it live.
