@@ -1398,8 +1398,13 @@ const RoomController = () => {
           {/* Top padding clears the floating header pills at rest. Bottom
               padding clears the floating Compose button. Messages can still
               scroll under both — the padding only positions the at-rest
-              first/last messages so they're not permanently obscured. */}
-          <div className="mx-auto w-full max-w-[820px] px-4 pt-16 pb-28 sm:px-6 sm:pb-32">
+              first/last messages so they're not permanently obscured.
+              The pills are pushed down by env(safe-area-inset-top) (see
+              paddingTop above), so this padding must carry the same inset —
+              otherwise on notch / Dynamic Island devices the flat 4rem lands
+              behind the lowered pills. Matching the inset keeps a constant
+              gap below the pills on every device. */}
+          <div className="mx-auto w-full max-w-[820px] px-4 pt-[calc(env(safe-area-inset-top)+4rem)] pb-28 sm:px-6 sm:pb-32">
             {showEmptyState && (
               <div className="glass-panel rounded-[28px] border-dashed p-6 text-center sm:p-8">
                 <p className="text-lg font-semibold tracking-[-0.02em] text-ink sm:text-xl">
