@@ -38,42 +38,30 @@ import {
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
-import type { Block, BlockResponse } from '../lib/blocks';
+import type { BlockResponse } from '../lib/blocks';
+import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
+import { formatBlockResponse, getMessagePreview, toChatMessageRecord } from '../lib/room-message';
+import {
+  fetchOutbox,
+  fetchRoomStatus,
+  parseRoomEvent,
+  postEncryptedRoomMessage,
+  postPresence,
+  postApprove,
+  postDisband,
+  postKnock,
+  postLeave,
+  postReject,
+  postRoomSettings,
+  postWrappedToken,
+  refreshSubscriberToken,
+  type OutboxMessage,
+  type RoomLookupResponse,
+} from '../lib/room-session';
 import { BlockRenderer } from '../components/blocks/BlockRenderer';
+import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
-
-type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT' | 'DESTROYED' | 'LEFT';
-
-type RoomLookupResponse = {
-  status: 'exists';
-  has_participants: boolean;
-  catch_up_enabled?: boolean;
-};
-
-type RoomEvent = {
-  v: number;
-  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy' | 'settings' | 'token';
-  room_hash: string;
-  from?: string | null;
-  ts: number;
-  body: Record<string, unknown>;
-};
-
-type OutboxMessage = {
-  msg_id: string;
-  ts: number;
-  sender_hash: string | null;
-  encrypted_payload: string;
-};
-
-type KnockRequest = {
-  id: string;
-  msgId: string;
-  pubkey: string;
-  ts: number;
-  message?: string | null;
-};
 
 const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
 
@@ -122,36 +110,6 @@ const formatMailStamp = (timestamp: number): string => {
   });
 };
 
-const getMessagePreview = (content: string): string => {
-  const normalized = content.replace(/\r\n?/g, '\n').trim();
-  if (!normalized) {
-    return 'Empty message';
-  }
-  const compact = normalized
-    .split('\n')
-    .map((line) => line.replace(/[^\S\n]+/g, ' ').trimEnd())
-    .join('\n');
-  return compact.length > 160 ? `${compact.slice(0, 157)}...` : compact;
-};
-
-const formatBlockResponse = (msg: ChatMessage): string | null => {
-  const br = msg.block_response;
-  if (!br) return null;
-  const val = br.value;
-  const label = Array.isArray(val) ? val.join(', ') : String(val);
-  switch (br.type) {
-    case 'buttons': return `Selected: ${label}`;
-    case 'swipe': return `Chose: ${label}`;
-    case 'slider': return `Set to: ${label}`;
-    case 'checklist': return `Checked: ${label}`;
-    case 'sortable': return `Order: ${label}`;
-    case 'confirm-danger': return val ? 'Confirmed' : 'Cancelled';
-    case 'commit': return label === 'commit' ? 'Committed' : label === 'edit' ? 'Editing' : 'Cancelled';
-    case 'run-command': return label === 'run' ? 'Running command' : 'Skipped';
-    default: return label;
-  }
-};
-
 const getMessageLabel = (message: ChatMessage): string => {
   if (message.type === 'system') {
     return 'System';
@@ -189,7 +147,7 @@ const RoomController = () => {
   const [roomNickname, setRoomNickname] = useState<string>(() => initialContext?.roomNickname ?? '');
   const [roomColor, setRoomColor] = useState<string>(() => initialContext?.roomColor ?? '#ccc');
   const [allRooms, setAllRooms] = useState<StoredRoom[]>([]);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardVisible = useKeyboardViewport(showComposer);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [knockKey, setKnockKey] = useState<CryptoKey | null>(null);
   const [token, setTokenState] = useState<string | null>(() => initialContext?.token ?? null);
@@ -363,48 +321,15 @@ const RoomController = () => {
     const parsed: EncryptedPayload =
       typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
     const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
-    let messageText = plaintext;
-    let messageHandle: string | null = null;
-    let messageAction: MessageAction | null = null;
-    let messageBlocks: Block[] | null = null;
-    let messageBlockResponse: BlockResponse | null = null;
-    if (plaintext.trim().startsWith('{')) {
-      try {
-        const obj = JSON.parse(plaintext) as {
-          text?: string;
-          handle?: string | null;
-          action?: MessageAction;
-          blocks?: Block[];
-          block_response?: BlockResponse;
-        };
-        if (typeof obj.text === 'string') messageText = obj.text;
-        if (typeof obj.handle === 'string') messageHandle = obj.handle;
-        if (obj.action && typeof obj.action === 'object' && obj.action.type === 'join-room' && typeof obj.action.roomSecret === 'string') {
-          messageAction = obj.action;
-        }
-        if (Array.isArray(obj.blocks) && obj.blocks.length > 0) messageBlocks = obj.blocks;
-        if (obj.block_response && typeof obj.block_response === 'object' && obj.block_response.block_id) {
-          messageBlockResponse = obj.block_response;
-        }
-      } catch {
-        messageText = plaintext;
-      }
-    }
-    const direction = tokenHash && from === tokenHash ? 'out' : 'in';
-    if (direction === 'in') setHasCompanion(true);
-    const messageRecord: ChatMessage = {
-      id: msgId,
-      room_hash: roomHash,
+    const messageRecord = toChatMessageRecord({
+      msgId,
+      roomHash,
       timestamp: ts,
-      content: messageText,
-      type: 'chat',
-      direction,
-      from: from ?? null,
-      handle: messageHandle,
-      action: messageAction,
-      blocks: messageBlocks,
-      block_response: messageBlockResponse
-    };
+      from,
+      plaintext,
+      ownTokenHash: tokenHash,
+    });
+    if (messageRecord.direction === 'in') setHasCompanion(true);
     persistMessage(messageRecord);
     setMessages((prev) => {
       if (prev.find((item) => item.id === msgId)) return prev;
@@ -495,7 +420,6 @@ const RoomController = () => {
 
   useEffect(() => {
     if (!showComposer) {
-      setKeyboardVisible(false);
       return;
     }
 
@@ -515,23 +439,6 @@ const RoomController = () => {
       const proxy = focusProxyRef.current;
       if (proxy) proxy.disabled = true;
     });
-
-    const isTouch = window.matchMedia('(pointer: coarse)').matches;
-    if (!isTouch || !window.visualViewport) {
-      return;
-    }
-
-    const baseHeight = window.innerHeight;
-    const checkKeyboard = () => {
-      const visible = window.visualViewport!.height < baseHeight * 0.75;
-      setKeyboardVisible(visible);
-    };
-
-    checkKeyboard();
-    window.visualViewport.addEventListener('resize', checkKeyboard);
-    return () => {
-      window.visualViewport?.removeEventListener('resize', checkKeyboard);
-    };
   }, [showComposer]);
 
   useEffect(() => {
@@ -598,14 +505,7 @@ const RoomController = () => {
 
         const existingToken = getToken(hash);
         if (existingToken) {
-          const presenceResponse = await fetch(`/api/rooms/${hash}/presence`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Chat-Token': existingToken
-            },
-            signal
-          });
+          const presenceResponse = await postPresence(hash, existingToken, { signal });
           if (!active) return;
 
           if (presenceResponse.status === 404) {
@@ -623,11 +523,7 @@ const RoomController = () => {
             // local copy never blocks Mercure subscription. Cheap; the server
             // mints a fresh one without minting a new participant.
             try {
-              const subRes = await fetch(`/api/rooms/${hash}/sub-token`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Chat-Token': existingToken },
-                signal
-              });
+              const subRes = await refreshSubscriberToken(hash, existingToken, { signal });
               if (!active) return;
               if (subRes.ok) {
                 const subData = (await subRes.json()) as { subscriber_jwt?: string };
@@ -659,7 +555,7 @@ const RoomController = () => {
           }
         }
 
-        const response = await fetch(`/api/rooms/${hash}`, { signal });
+        const response = await fetchRoomStatus(hash, { signal });
         if (!active) return;
 
         if (response.status === 404) {
@@ -738,7 +634,7 @@ const RoomController = () => {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`/api/rooms/${roomHash}`);
+        const r = await fetchRoomStatus(roomHash);
         if (!r.ok || cancelled) return;
         const data = (await r.json()) as RoomLookupResponse;
         if (!cancelled) setCatchUpEnabled(!!data.catch_up_enabled);
@@ -772,8 +668,8 @@ const RoomController = () => {
 
     const handleEvent = async (event: MessageEvent) => {
       try {
-        const payload = JSON.parse(event.data) as RoomEvent;
-        if (!payload || payload.room_hash !== roomHash) {
+        const payload = parseRoomEvent(event.data, roomHash);
+        if (!payload) {
           return;
         }
 
@@ -889,9 +785,7 @@ const RoomController = () => {
               (max, m) => (m.timestamp > max ? m.timestamp : max),
               0
             );
-            const r = await fetch(`/api/rooms/${roomHash}/outbox?since_ts=${localMax}`, {
-              headers: { 'X-Chat-Token': token }
-            });
+            const r = await fetchOutbox(roomHash, token, localMax);
             if (!r.ok) return;
             const data = (await r.json()) as { messages: OutboxMessage[] };
             for (const m of data.messages) {
@@ -1010,15 +904,7 @@ const RoomController = () => {
       const ephemeral = await generateEphemeralKeyPair();
       knockEphemeralRef.current = { privateKey: ephemeral.privateKey, msgId };
       const encrypted = await encryptText(knockKey, roomHash, 'knock', msgId, knockMessage);
-      const response = await fetch(`/api/rooms/${roomHash}/knock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          msg_id: msgId,
-          encrypted_payload: JSON.stringify(encrypted),
-          knock_pubkey: ephemeral.publicKey
-        })
-      });
+      const response = await postKnock(roomHash, msgId, JSON.stringify(encrypted), ephemeral.publicKey);
 
       if (response.ok) {
         // Capture the lobby JWT so the SSE effect can subscribe to the room
@@ -1055,14 +941,7 @@ const RoomController = () => {
         // ephemeral keypair. We commit sha256(tag) on /approve so the knocker's
         // first /presence can prove it's the same client that decrypted the wrap.
         const binding = await beginApprove(knock.pubkey, knock.msgId);
-        const approveRes = await fetch(`/api/rooms/${roomHash}/approve`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Chat-Token': token
-          },
-          body: JSON.stringify({ claim_tag_hash: binding.claimTagHash })
-        });
+        const approveRes = await postApprove(roomHash, token, binding.claimTagHash);
         if (!approveRes.ok) return;
         const approveBody = (await approveRes.json()) as {
           new_participant_token?: string;
@@ -1076,18 +955,11 @@ const RoomController = () => {
         // Mercure once they upgrade out of the lobby.
         const bundle = JSON.stringify({ token: newToken, subscriber_jwt: newSubJwt });
         const wrapped = await binding.wrap(bundle);
-        await fetch(`/api/rooms/${roomHash}/token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Chat-Token': token
-          },
-          body: JSON.stringify({
-            knock_msg_id: knock.msgId,
-            approver_pubkey: wrapped.approver_pubkey,
-            nonce: wrapped.nonce,
-            ct: wrapped.ct
-          })
+        await postWrappedToken(roomHash, token, {
+          knock_msg_id: knock.msgId,
+          approver_pubkey: wrapped.approver_pubkey,
+          nonce: wrapped.nonce,
+          ct: wrapped.ct
         });
         setHasCompanion(true);
         setKnocks((prev) => prev.filter((item) => item.id !== knockId));
@@ -1103,13 +975,7 @@ const RoomController = () => {
       if (!roomHash || !token) {
         return;
       }
-      await fetch(`/api/rooms/${roomHash}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Chat-Token': token
-        }
-      });
+      await postReject(roomHash, token);
       setKnocks((prev) => prev.filter((item) => item.id !== knockId));
     },
     [roomHash, token]
@@ -1169,17 +1035,7 @@ const RoomController = () => {
     const payload = JSON.stringify({ text: trimmed, handle: handle || null });
     const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
 
-    const response = await fetch(`/api/rooms/${roomHash}/message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Chat-Token': token
-      },
-      body: JSON.stringify({
-        msg_id: msgId,
-        encrypted_payload: JSON.stringify(encrypted)
-      })
-    });
+    const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
 
     if (response.ok) {
       const messageRecord: ChatMessage = {
@@ -1222,11 +1078,7 @@ const RoomController = () => {
         block_response: { block_id: blockId, type: blockType, value }
       });
       const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
-      const response = await fetch(`/api/rooms/${roomHash}/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Chat-Token': token },
-        body: JSON.stringify({ msg_id: msgId, encrypted_payload: JSON.stringify(encrypted) })
-      });
+      const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
       if (response.ok) {
         const messageRecord: ChatMessage = {
           id: msgId,
@@ -1254,13 +1106,7 @@ const RoomController = () => {
     if (!roomHash || !token) {
       return;
     }
-    const response = await fetch(`/api/rooms/${roomHash}/disband`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Chat-Token': token
-      }
-    });
+    const response = await postDisband(roomHash, token);
     if (response.ok || response.status === 404) {
       await wipeLocalRoom(roomHash);
       setRoomState('DESTROYED');
@@ -1274,13 +1120,7 @@ const RoomController = () => {
     if (!roomHash || !token) {
       return;
     }
-    const response = await fetch(`/api/rooms/${roomHash}/leave`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Chat-Token': token
-      }
-    });
+    const response = await postLeave(roomHash, token);
     if (response.ok || response.status === 404) {
       await wipeLocalRoom(roomHash);
       setRoomState('LEFT');
@@ -1297,11 +1137,7 @@ const RoomController = () => {
     setCatchUpBusy(true);
     setCatchUpEnabled(next); // optimistic; settings Mercure event will reconfirm
     try {
-      const r = await fetch(`/api/rooms/${roomHash}/settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Chat-Token': token },
-        body: JSON.stringify({ catch_up_enabled: next })
-      });
+      const r = await postRoomSettings(roomHash, token, next);
       if (!r.ok) {
         setCatchUpEnabled(!next);
       }
