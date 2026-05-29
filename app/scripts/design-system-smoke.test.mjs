@@ -16,10 +16,11 @@ assert.match(styles, /\.message-card\b/, 'message card class exists');
 assert.match(styles, /prefers-reduced-motion/, 'reduced motion preference is respected');
 
 assert.match(roomController, /className="app-shell app-chrome/, 'room uses redesigned app chrome');
-assert.match(roomController, /className="chat-header/, 'room uses redesigned header chrome');
+assert.match(roomController, /pointer-events-auto pill-control/, 'header controls float as glass pills over the messages');
 assert.match(roomController, /className="floating-action/, 'compose CTA uses redesigned floating action');
 assert.match(roomController, /className=\{`message-card/, 'messages use redesigned message card primitive');
-assert.match(roomController, /className="modal-shell/, 'overlays use redesigned modal shell');
+assert.match(roomController, /className="modal-frame"/, 'overlays use the modal-frame outer wrapper');
+assert.match(roomController, /className="modal-shell flex/, 'overlays use redesigned modal shell');
 
 assert.match(roomsPage, /className="app-page app-chrome/, 'rooms index uses redesigned app page');
 assert.match(roomCreator, /className="app-page app-chrome/, 'room creator uses redesigned app page');

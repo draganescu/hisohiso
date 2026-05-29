@@ -92,7 +92,13 @@ body {
 html,
 body,
 #root {
-  height: 100%;
+  /* min-height (not height) so html/body/#root grow with content and the
+     viewport scrolls naturally. The channel screen relies on document-level
+     scroll so messages can pass under the notch and Safari URL bar; setting
+     `height: 100%` here would trap the page in viewport-height and break
+     that. Static pages still paint their background to the bottom because
+     they use .app-page { min-height: 100dvh } themselves. */
+  min-height: 100%;
 }
 
 html,
@@ -102,17 +108,31 @@ body {
     radial-gradient(circle at 95% 5%, rgba(16, 185, 129, 0.10), transparent 28rem),
     var(--bg);
   overscroll-behavior: none;
+  /* Horizontal clip lives here, not on inner containers. Putting
+     `overflow-x: hidden` on any inner element makes that element a scroll
+     container (CSS spec: when one axis is non-visible, the other resolves
+     to auto), which captures touch input but has no overflow to consume —
+     iOS Safari then registers the gesture and refuses to scroll the
+     document. Clipping at the root keeps the inner tree free of
+     accidental scroll containers.
+     KNOWN ISSUES, to revisit:
+       - text-selection handles in the message detail view can't be dragged
+         on iOS (long-press selects a word; the handles appear but won't
+         extend the selection). Likely the same root cause — body
+         overflow-x:hidden interacts badly with WebKit selection.
+       - fast scroll-to-bottom can snap back to top once the cap shifts
+         windowStart and items drop off the rendered top. */
+  overflow-x: hidden;
 }
 
 .app-shell {
-  height: 100vh;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  overscroll-behavior: contain;
+  /* Channel screen lets the document scroll so messages can pass under the
+     notch, the Safari URL bar, and (in PWA mode) the phone's bottom edge.
+     We only guarantee the screen is at least viewport-tall — content can
+     extend beyond and the page scrolls. Floating pills/compose are
+     position:fixed and sit above this layer. */
+  min-height: 100dvh;
   background: var(--bg);
-  padding-top: env(safe-area-inset-top);
 }
 
 .app-page {
@@ -125,7 +145,6 @@ body {
 .app-chrome {
   position: relative;
   isolation: isolate;
-  overflow-x: hidden;
 }
 
 .app-chrome::before,
@@ -154,33 +173,13 @@ body {
   background: radial-gradient(circle, rgba(16, 185, 129, 0.11), transparent 62%);
 }
 
-.no-scroll {
+/* Applied to <html> (documentElement) while any modal is open. Putting
+   overflow:hidden on <html> — not <body> — is what actually locks the
+   viewport scroll in modern browsers: the document scroller is
+   `documentElement`, so a body lock is a silent no-op and wheel/touch
+   pass through to the page behind the overlay. */
+.scroll-locked {
   overflow: hidden;
-}
-
-.chat-scroll {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-}
-
-.chat-scroll::before {
-  content: "";
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: block;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--rule), transparent);
-}
-
-.chat-header {
-  z-index: 30;
-  border-bottom: 1px solid var(--rule-soft);
-  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
-  backdrop-filter: blur(22px) saturate(145%);
-  -webkit-backdrop-filter: blur(22px) saturate(145%);
-  box-shadow: 0 1px 0 var(--rule-soft), 0 18px 50px -45px rgba(0, 0, 0, 0.55);
 }
 
 .glass-panel {
@@ -248,6 +247,24 @@ body {
   -webkit-backdrop-filter: blur(28px) saturate(150%);
 }
 
+/* Full-viewport overlay that flex-centers a modal-shell, leaving margin on
+   all four sides (respecting safe-area insets) so the overlay always reads
+   as a backdrop behind a floating card — never as a sheet that bleeds to
+   any edge. Pair with `max-h-full` on the inner card. */
+.modal-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay);
+  padding-top: max(1.5rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+}
+
 .pill-control {
   border: 1px solid var(--rule);
   background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
@@ -267,18 +284,6 @@ body {
   border-color: color-mix(in srgb, var(--accent) 62%, var(--rule));
   box-shadow: 0 0 0 4px var(--accent-soft);
   outline: none;
-}
-
-.composer-scroll {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-}
-
-.composer-editable[data-empty='true']::before {
-  content: attr(data-placeholder);
-  color: var(--ink-dim);
-  pointer-events: none;
 }
 
 .composer-overlay {

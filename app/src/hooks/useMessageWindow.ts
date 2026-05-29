@@ -30,6 +30,28 @@ export const useMessageWindow = <T extends { id: string }>(
   const [windowStart, setWindowStart] = useState(0);
   const [windowEnd, setWindowEnd] = useState(0);
 
+  // When `scrollContainerRef.current` is null we operate on the document
+  // scroller (the whole viewport). These helpers smooth over the API gap
+  // between Element scrolling and window scrolling so the windowing logic
+  // below doesn't have to branch on every read/write.
+  const readScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (el) return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+    return {
+      scrollTop: window.scrollY,
+      scrollHeight: document.documentElement.scrollHeight,
+    };
+  }, [scrollContainerRef]);
+
+  const writeScrollTop = useCallback(
+    (value: number) => {
+      const el = scrollContainerRef.current;
+      if (el) el.scrollTop = value;
+      else window.scrollTo({ top: value });
+    },
+    [scrollContainerRef]
+  );
+
   // Tracks the id at the visual top of items between renders so we can detect
   // prepends (live new messages always sort to index 0 in the desc array) and
   // shift indices to keep the rendered slice anchored to the same messages.
@@ -77,22 +99,19 @@ export const useMessageWindow = <T extends { id: string }>(
 
   const expandToNewer = useCallback(() => {
     if (windowStart === 0) return;
-    const el = scrollContainerRef.current;
-    if (el) {
-      scrollAnchorRef.current = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
-    }
+    scrollAnchorRef.current = readScroll();
     const newStart = Math.max(0, windowStart - cfg.pageSize);
     const newEnd = windowEnd - newStart > cfg.cap ? windowEnd - cfg.pageSize : windowEnd;
     setWindowStart(newStart);
     if (newEnd !== windowEnd) setWindowEnd(newEnd);
-  }, [scrollContainerRef, windowStart, windowEnd, cfg.pageSize, cfg.cap]);
+  }, [readScroll, windowStart, windowEnd, cfg.pageSize, cfg.cap]);
 
   useLayoutEffect(() => {
-    const el = scrollContainerRef.current;
     const anchor = scrollAnchorRef.current;
-    if (!el || !anchor) return;
-    const delta = el.scrollHeight - anchor.scrollHeight;
-    if (delta !== 0) el.scrollTop = anchor.scrollTop + delta;
+    if (!anchor) return;
+    const { scrollHeight } = readScroll();
+    const delta = scrollHeight - anchor.scrollHeight;
+    if (delta !== 0) writeScrollTop(anchor.scrollTop + delta);
     scrollAnchorRef.current = null;
   });
 
@@ -102,9 +121,10 @@ export const useMessageWindow = <T extends { id: string }>(
   const [bottomSentinel, setBottomSentinel] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const root = scrollContainerRef.current;
-    if (!root || (!topSentinel && !bottomSentinel)) return;
+    if (!topSentinel && !bottomSentinel) return;
 
+    // `root: null` ⇒ viewport. We pass the element ref's current when
+    // present, falling back to viewport so document-scroll mode just works.
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -113,7 +133,7 @@ export const useMessageWindow = <T extends { id: string }>(
           else if (entry.target === bottomSentinel) expandToOlder();
         }
       },
-      { root, rootMargin: cfg.rootMargin }
+      { root: scrollContainerRef.current, rootMargin: cfg.rootMargin }
     );
 
     if (topSentinel) observer.observe(topSentinel);
