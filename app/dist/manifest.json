@@ -1,12 +1,12 @@
 {
-  "name": "Hisohiso",
-  "short_name": "Hisohiso",
-  "description": "Hisohiso: minimal encrypted chat. No accounts. No tracking.",
+  "name": "hisohiso — a private encrypted line",
+  "short_name": "hisohiso",
+  "description": "A private encrypted line. Open a channel from a link. No account. No history on our server.",
   "start_url": "/rooms",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f7f2e6",
-  "theme_color": "#171613",
+  "background_color": "#f5f5f3",
+  "theme_color": "#f5f5f3",
   "icons": [
     {
       "src": "/icons/icon-192.png",
