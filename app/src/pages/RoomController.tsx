@@ -1271,7 +1271,7 @@ const RoomController = () => {
     return (
       <main className="app-page app-chrome text-ink">
         <div className="mx-auto flex max-w-xl flex-col gap-5 px-6 py-16">
-          <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
+          <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
           <div className="rounded-[22px] border border-danger bg-danger-soft p-6 text-sm leading-7 text-danger">
             {error}
           </div>
@@ -1342,7 +1342,7 @@ const RoomController = () => {
                 style={{ backgroundColor: connectionColor }}
                 aria-hidden="true"
               />
-              <span className="hidden text-[11px] text-ink-dim sm:inline">{connectionLabel}</span>
+              <span className="hidden text-[0.6875rem] text-ink-dim sm:inline">{connectionLabel}</span>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -1357,7 +1357,7 @@ const RoomController = () => {
                 <path d="M10 17a2 2 0 0 0 4 0" />
               </svg>
               {knocks.length > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-[10px] font-semibold leading-tight text-on-ink">
+                <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-[0.625rem] font-semibold leading-tight text-on-ink">
                   {knocks.length}
                 </span>
               )}
@@ -1458,7 +1458,7 @@ const RoomController = () => {
                 if (isSystem) {
                   return (
                     <div key={msg.id} className="my-1 flex justify-center">
-                      <p className="rounded-full bg-bg px-3 py-1 text-[11px] text-ink-dim">
+                      <p className="rounded-full bg-bg px-3 py-1 text-[0.6875rem] text-ink-dim">
                         {getMessagePreview(msg.content)} · {formatMailStamp(msg.timestamp)}
                       </p>
                     </div>
@@ -1474,7 +1474,7 @@ const RoomController = () => {
                     className={`flex w-full flex-col ${isMine ? 'items-end' : 'items-start'}`}
                   >
                     {senderLabel && (
-                      <p className="mb-1 px-2 text-[11px] text-ink-dim">{senderLabel}</p>
+                      <p className="mb-1 px-2 text-[0.6875rem] text-ink-dim">{senderLabel}</p>
                     )}
                     <button
                       type="button"
@@ -1485,7 +1485,7 @@ const RoomController = () => {
                           : 'message-card-in rounded-bl-[7px] text-ink hover:border-ink'
                       }`}
                     >
-                      <p className="whitespace-pre-line break-words text-[15px]">
+                      <p className="whitespace-pre-line break-words text-[0.9375rem]">
                         {msg.block_response ? (
                           <span className="flex items-center gap-2">
                             <span
@@ -1502,7 +1502,7 @@ const RoomController = () => {
 
                       {hasBlocks && msg.blocks && (
                         <span
-                          className={`mt-2 inline-block rounded-full px-3 py-1 text-[11px] font-medium ${
+                          className={`mt-2 inline-block rounded-full px-3 py-1 text-[0.6875rem] font-medium ${
                             isMine
                               ? 'bg-surface/15 text-on-ink'
                               : 'border border-rule bg-bg text-ink-soft'
@@ -1539,7 +1539,7 @@ const RoomController = () => {
                           </span>
                           {msg.action.code && (
                             <div
-                              className={`text-[11px] font-mono ${
+                              className={`text-[0.6875rem] font-mono ${
                                 isMine ? 'text-on-ink/70' : 'text-ink-dim'
                               }`}
                             >
@@ -1553,7 +1553,7 @@ const RoomController = () => {
                       )}
                     </button>
                     <div
-                      className={`mt-1 flex items-center gap-2 px-2 text-[10px] text-ink-dim ${
+                      className={`mt-1 flex items-center gap-2 px-2 text-[0.625rem] text-ink-dim ${
                         isMine ? 'flex-row-reverse' : ''
                       }`}
                     >
@@ -1644,7 +1644,7 @@ const RoomController = () => {
                   }`}
                 >
                   <p
-                    className={`text-[10px] uppercase tracking-[0.2em] text-ink-dim transition-all duration-200 ${
+                    className={`text-[0.625rem] uppercase tracking-[0.2em] text-ink-dim transition-all duration-200 ${
                       keyboardVisible ? 'hidden' : ''
                     }`}
                   >
@@ -1695,7 +1695,7 @@ const RoomController = () => {
                     void sendMessage();
                   }
                 }}
-                className="block w-full flex-1 resize-none border-0 bg-transparent px-4 py-4 text-[17px] leading-7 text-ink outline-none sm:px-6"
+                className="composer-textarea block w-full flex-1 resize-none border-0 bg-transparent px-4 py-4 leading-7 text-ink outline-none sm:px-6"
               />
 
               {/* Edge-to-edge toolbar pinned to the bottom of the composer.
@@ -1779,7 +1779,7 @@ const RoomController = () => {
                       : 'message-card-in text-ink'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap break-words text-[15px]">
+                  <p className="whitespace-pre-wrap break-words text-[0.9375rem]">
                     {activeMessage.block_response
                       ? formatBlockResponse(activeMessage) || activeMessage.content
                       : activeMessage.content || 'Empty message'}
@@ -1810,7 +1810,7 @@ const RoomController = () => {
                       {activeMessage.action.label} →
                     </button>
                     {activeMessage.action.code && (
-                      <div className="text-[11px] font-mono text-ink-dim">
+                      <div className="text-[0.6875rem] font-mono text-ink-dim">
                         code:{' '}
                         <span className="font-semibold tracking-[0.25em]">
                           {activeMessage.action.code}
@@ -1847,7 +1847,7 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Notifications</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Notifications</p>
                   <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Join queue</h2>
                 </div>
                 <button
@@ -1914,7 +1914,7 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
                   <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Settings</h2>
                 </div>
                 <button
@@ -1927,7 +1927,7 @@ const RoomController = () => {
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 <div className="rounded-[18px] border border-rule bg-surface p-5">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-ink-dim">Channel name</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Channel name</p>
                   <input
                     className="mt-2 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
                     placeholder="Give this channel a name"
@@ -1941,7 +1941,7 @@ const RoomController = () => {
                     Stored locally. Helps you tell channels apart.
                   </p>
 
-                  <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-ink-dim">
+                  <p className="mt-6 text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">
                     Your sender label
                   </p>
                   <input
@@ -1962,7 +1962,7 @@ const RoomController = () => {
                     Shown above each message you send. Stored locally.
                   </p>
 
-                  <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-ink-dim">Storage</p>
+                  <p className="mt-6 text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Storage</p>
                   <p className="mt-2 text-sm leading-6 text-ink-soft">
                     Messages stay on this device. Clear your browser storage and they're gone here.
                   </p>
@@ -1999,7 +1999,7 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
                   <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Menu</h2>
                 </div>
                 <button
@@ -2012,7 +2012,7 @@ const RoomController = () => {
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 <div className="rounded-[14px] border border-rule bg-surface p-4 text-sm">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-ink-dim">Share link</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Share link</p>
                   <p className="mt-2 break-all text-xs text-ink-soft">{shareUrl}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -2118,7 +2118,7 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Switch</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Switch</p>
                   <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Channels</h2>
                 </div>
                 <button
@@ -2177,7 +2177,7 @@ const RoomController = () => {
                             )}
                           </div>
                           {isCurrent && (
-                            <span className="text-[10px] uppercase tracking-[0.2em] text-ink-fade">
+                            <span className="text-[0.625rem] uppercase tracking-[0.2em] text-ink-fade">
                               current
                             </span>
                           )}
@@ -2210,7 +2210,7 @@ const RoomController = () => {
         {showDisband && (
           <div className="fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-danger bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-danger">Destructive</p>
+              <p className="text-[0.6875rem] uppercase tracking-[0.28em] text-danger">Destructive</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em]">
                 Disband this channel?
               </h2>
@@ -2280,7 +2280,7 @@ const RoomController = () => {
     <main className="app-page app-chrome text-ink">
       <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
         <header>
-          <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
+          <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
         </header>
 
         {roomState === 'INIT' && (
@@ -2363,7 +2363,7 @@ const RoomController = () => {
               you.
             </p>
             <div className="mt-6 rounded-[14px] border border-rule bg-bg p-4 text-sm">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-ink-dim">Share link</p>
+              <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Share link</p>
               <p className="mt-2 break-all text-ink-soft">{shareUrl}</p>
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">

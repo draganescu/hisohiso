@@ -28,7 +28,7 @@ export const ErrorBlockView = ({ block }: Props) => {
             {stackOpen ? '▾' : '▸'} Stack trace
           </button>
           {stackOpen && (
-            <pre className="max-h-40 overflow-auto px-4 pb-3 font-mono text-[12px] leading-5 text-red-700">
+            <pre className="max-h-40 overflow-auto px-4 pb-3 font-mono text-[0.75rem] leading-5 text-red-700">
               {block.stack}
             </pre>
           )}

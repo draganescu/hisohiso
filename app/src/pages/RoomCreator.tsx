@@ -56,7 +56,7 @@ const RoomCreator = () => {
       <div className="mx-auto flex max-w-xl flex-col gap-6 px-5 py-10 sm:px-6 sm:py-16">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
+            <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Open a channel.</h1>
             <p className="mt-2 text-sm text-ink-soft">
               Messages stay on this device only. Anyone with the link can join.

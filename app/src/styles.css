@@ -65,9 +65,22 @@
   --glow-accent: 0 0 0 1px rgba(130, 143, 255, 0.18), 0 22px 80px -38px rgba(130, 143, 255, 0.72);
 }
 
+@supports (font: -apple-system-body) {
+  @media (any-pointer: coarse) {
+    :root {
+      /* iOS/iPadOS WebKit only maps Dynamic Type into CSS when a
+         system text style is used. The font shorthand supplies the
+         Dynamic Type-scaled root size; font-family restores our brand
+         stack so only the size follows the user's accessibility setting. */
+      font: -apple-system-body;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+    }
+  }
+}
+
 body {
   margin: 0;
-  -webkit-text-size-adjust: 100%;
   font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -87,6 +100,11 @@ body {
   :root {
     --app-height: -webkit-fill-available;
   }
+}
+
+html {
+  -webkit-text-size-adjust: auto;
+  text-size-adjust: auto;
 }
 
 html,
@@ -311,11 +329,21 @@ body {
   }
 }
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   input,
   textarea,
   select {
-    font-size: max(16px, 1rem);
+    /* iOS zooms focused controls below 16px. Use !important so this
+       floor beats Tailwind text-* utilities on form controls only. */
+    font-size: max(16px, 1rem) !important;
+  }
+
+  .form-zoom-safe {
+    font-size: max(16px, 1rem) !important;
+  }
+
+  .composer-textarea {
+    font-size: max(16px, 1.0625rem) !important;
   }
 }
 

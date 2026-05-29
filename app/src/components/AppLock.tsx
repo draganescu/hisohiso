@@ -114,7 +114,7 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
         <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-rule bg-rule text-3xl">
           🔐
         </div>
-        <p className="text-[11px] uppercase tracking-[0.35em] text-ink-fade">Hisohiso locked</p>
+        <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-fade">Hisohiso locked</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Unlock</h1>
         <p className="mt-3 max-w-sm text-sm leading-6 text-ink-fade">
           The app locked while it was in the background.{' '}
