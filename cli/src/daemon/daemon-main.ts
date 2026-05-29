@@ -167,9 +167,55 @@ export const runDaemon = async (): Promise<void> => {
     // `state` / `messageKey`) can't redirect in-flight chat decryption to the wrong room.
     const iterState = state;
     const iterKey = messageKey;
+    // Same k_knock the pairing flow used in setupControlRoom — re-derived here so
+    // additional phones can knock and be admitted after the initial pair. Without
+    // this the main loop subscribed to the room but had no knock handler, and the
+    // 2nd+ device sat at "waiting for approval" forever.
+    const iterKnockKey = await deriveKnockKey(iterState.controlRoomSecret, iterState.controlRoomPassword);
 
     await new Promise<void>((resolve) => {
       const sse = subscribeToRoom(server, iterState.controlRoomHash, iterState.subscriberJwt, {
+        onKnock: async (knockEvent: RoomEvent) => {
+          const knockPubkey = knockEvent.body?.knock_pubkey;
+          const knockMsgId = knockEvent.body?.msg_id;
+          const rawPayload = knockEvent.body?.encrypted_payload;
+          if (typeof knockPubkey !== 'string' || typeof knockMsgId !== 'string' || !rawPayload) {
+            console.error('Knock missing fields — ignoring.');
+            return;
+          }
+          // Same two-gate auth as setupControlRoom and AgentManager: decrypt with
+          // k_knock (proves the knocker had room_secret + pairing code), then the
+          // cleartext must equal the operator's sessionKnockMessage. Either fails
+          // → drop silently; the legitimate phone retries with correct inputs.
+          let knockText: string;
+          try {
+            const enc: EncryptedPayload = typeof rawPayload === 'string'
+              ? JSON.parse(rawPayload) as EncryptedPayload
+              : rawPayload as EncryptedPayload;
+            knockText = (await decryptText(iterKnockKey, iterState.controlRoomHash, 'knock', knockMsgId, enc)).trim();
+          } catch {
+            console.error('Knock decrypt failed — wrong pairing code, ignoring.');
+            return;
+          }
+          if (knockText !== iterState.sessionKnockMessage) {
+            console.error('Knock message mismatch — ignoring.');
+            return;
+          }
+          console.log('Phone is joining... approving.');
+          try {
+            const binding = await beginApprove(knockPubkey, knockMsgId);
+            const approveRes = await api.approveKnock(server, iterState.controlRoomHash, iterState.participantToken, binding.claimTagHash);
+            const bundle = JSON.stringify({
+              token: approveRes.new_participant_token,
+              subscriber_jwt: approveRes.subscriber_jwt,
+            });
+            const wrapped = await binding.wrap(bundle);
+            await api.sendWrappedToken(server, iterState.controlRoomHash, iterState.participantToken, knockMsgId, wrapped);
+            console.log('Phone connected to control room.');
+          } catch (err) {
+            console.error('Failed to approve knock:', err);
+          }
+        },
         onChat: async (event: RoomEvent) => {
           if (event.from === ownTokenHash) return;
 
