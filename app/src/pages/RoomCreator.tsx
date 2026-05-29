@@ -52,8 +52,8 @@ const RoomCreator = () => {
   };
 
   return (
-    <main className="min-h-[100dvh] bg-bg text-ink">
-      <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
+    <main className="app-page app-chrome text-ink">
+      <div className="mx-auto flex max-w-xl flex-col gap-6 px-5 py-10 sm:px-6 sm:py-16">
         <header className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
@@ -71,7 +71,7 @@ const RoomCreator = () => {
         </header>
 
         {status === 'form' && (
-          <div className="rounded-[22px] border border-rule bg-surface p-7">
+          <div className="glass-panel rounded-[28px] p-7">
             <div className="rounded-[14px] border border-rule bg-bg p-4">
               <p className="text-sm font-semibold tracking-[-0.01em]">Channel key</p>
               <p className="mt-1 text-xs leading-5 text-ink-soft">
@@ -79,7 +79,7 @@ const RoomCreator = () => {
                 same key — share it out of band.
               </p>
               <input
-                className="mt-3 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
+                className="input-field mt-3 w-full rounded-[14px] px-3 py-2 text-base"
                 placeholder="Optional"
                 type="text"
                 name="room-key"
@@ -135,7 +135,7 @@ const RoomCreator = () => {
           </div>
         )}
         {status === 'creating' && (
-          <div className="rounded-[22px] border border-rule bg-surface p-8">
+          <div className="glass-panel rounded-[28px] p-8">
             <p className="text-sm uppercase tracking-[0.32em] text-ink-dim">Opening channel…</p>
           </div>
         )}

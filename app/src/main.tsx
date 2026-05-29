@@ -59,7 +59,7 @@ const updateAppHeight = () => {
     const offsetTop = window.visualViewport?.offsetTop ?? 0;
     document.documentElement.style.setProperty('--app-height', `${height}px`);
     document.documentElement.style.setProperty('--app-offset', `${offsetTop}px`);
-    if (document.body.classList.contains('no-scroll')) {
+    if (document.documentElement.classList.contains('scroll-locked')) {
       window.scrollTo(0, 0);
     }
   });

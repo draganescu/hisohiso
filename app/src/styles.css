@@ -8,59 +8,67 @@
   --app-height: 100vh;
   --app-offset: 0px;
   color-scheme: light;
-  /* Launch2 design tokens. Tailwind reads these via tailwind.config.js
-     (bg, surface, ink, ink-soft/dim/fade, rule, rule-soft, danger, on-ink, overlay).
-     The .dark scope below flips them — no per-component dark: variants. */
-  --bg: #f5f5f3;
-  --surface: #ffffff;
-  --ink: #0a0a0a;
-  --ink-soft: #6b6b6b;
-  --ink-dim: #9a9a9a;
-  --ink-fade: #c4c4c4;
-  --rule: rgba(10, 10, 10, 0.08);
-  --rule-soft: rgba(10, 10, 10, 0.05);
-  --danger: #b91c1c;
-  --danger-soft: #fee2e2;
+  /* Launch3 / 2026 tokens: calm paper by default, high-polish dark mode,
+     and one restrained interactive accent. Tailwind reads the core tokens
+     via tailwind.config.js; component primitives below use the extended set. */
+  --bg: #f4f1ea;
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-strong: #fffdf8;
+  --surface-glass: rgba(255, 255, 255, 0.64);
+  --ink: #0b0d12;
+  --ink-soft: #555c6b;
+  --ink-dim: #8b92a1;
+  --ink-fade: #c8cdd6;
+  --rule: rgba(11, 13, 18, 0.10);
+  --rule-soft: rgba(11, 13, 18, 0.06);
+  --danger: #be123c;
+  --danger-soft: rgba(244, 63, 94, 0.12);
   --on-ink: #ffffff;
-  /* Filled-button / own-bubble fill. In light mode this matches --ink, so the
-     existing "black filled" look is preserved. In dark mode it is *not* pure
-     --ink (which would be #f5f5f3 = a glaring white button) — see .dark. */
-  --filled: #0a0a0a;
-  --overlay: rgba(10, 10, 10, 0.45);
-  --overlay-soft: rgba(10, 10, 10, 0.2);
-  --theme-color: #f5f5f3;
+  --filled: #11131a;
+  --accent: #7170ff;
+  --accent-strong: #5e6ad2;
+  --accent-soft: rgba(113, 112, 255, 0.13);
+  --success: #10b981;
+  --overlay: rgba(11, 13, 18, 0.48);
+  --overlay-soft: rgba(11, 13, 18, 0.16);
+  --theme-color: #f4f1ea;
+  --shadow-soft: 0 18px 60px -34px rgba(12, 16, 24, 0.45);
+  --shadow-float: 0 24px 80px -30px rgba(12, 16, 24, 0.5);
+  --glow-accent: 0 0 0 1px rgba(113, 112, 255, 0.16), 0 20px 70px -38px rgba(113, 112, 255, 0.9);
 }
 
 .dark {
   color-scheme: dark;
-  --bg: #0f0f0f;
-  --surface: #1a1a1a;
-  --ink: #f5f5f3;
-  --ink-soft: #b4b4b4;
-  --ink-dim: #8a8a8a;
-  --ink-fade: #4a4a4a;
-  --rule: rgba(245, 245, 243, 0.10);
-  --rule-soft: rgba(245, 245, 243, 0.06);
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.16);
-  /* on-ink is the text color that sits on top of accent fills (bg-filled,
-     bg-red-*, bg-green-*). It needs to stay light in dark mode so colored
-     buttons keep legible white-ish text — flipping it to #0a0a0a would
-     make e.g. danger buttons render with dark text on a red background. */
-  --on-ink: #f5f5f3;
-  /* Muted elevated surface for filled buttons / own-bubble. Distinct from
-     --surface (#1a1a1a) so it reads as a raised control, but far from
-     pure --ink white so the screen doesn't burn the user's eyes. */
-  --filled: #2e2e2e;
-  --overlay: rgba(0, 0, 0, 0.65);
-  --overlay-soft: rgba(0, 0, 0, 0.4);
-  --theme-color: #0f0f0f;
+  --bg: #07080b;
+  --surface: rgba(20, 22, 28, 0.72);
+  --surface-strong: #11131a;
+  --surface-glass: rgba(19, 21, 28, 0.62);
+  --ink: #f7f8f8;
+  --ink-soft: #c8ccd7;
+  --ink-dim: #8f96a8;
+  --ink-fade: #434858;
+  --rule: rgba(255, 255, 255, 0.10);
+  --rule-soft: rgba(255, 255, 255, 0.06);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.14);
+  --on-ink: #ffffff;
+  --filled: #5e6ad2;
+  --accent: #828fff;
+  --accent-strong: #7170ff;
+  --accent-soft: rgba(130, 143, 255, 0.16);
+  --success: #34d399;
+  --overlay: rgba(0, 0, 0, 0.72);
+  --overlay-soft: rgba(255, 255, 255, 0.10);
+  --theme-color: #07080b;
+  --shadow-soft: 0 22px 80px -42px rgba(0, 0, 0, 0.85);
+  --shadow-float: 0 28px 90px -32px rgba(0, 0, 0, 0.88);
+  --glow-accent: 0 0 0 1px rgba(130, 143, 255, 0.18), 0 22px 80px -38px rgba(130, 143, 255, 0.72);
 }
 
 body {
   margin: 0;
   -webkit-text-size-adjust: 100%;
-  font-feature-settings: "ss01", "cv11";
+  font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -84,78 +92,214 @@ body {
 html,
 body,
 #root {
-  height: 100%;
+  /* min-height (not height) so html/body/#root grow with content and the
+     viewport scrolls naturally. The channel screen relies on document-level
+     scroll so messages can pass under the notch and Safari URL bar; setting
+     `height: 100%` here would trap the page in viewport-height and break
+     that. Static pages still paint their background to the bottom because
+     they use .app-page { min-height: 100dvh } themselves. */
+  min-height: 100%;
 }
 
-/* Paint the page background on <html> as well as <body>. With
-   viewport-fit=cover and apple-mobile-web-app-status-bar-style=black-translucent,
-   iOS PWA standalone and some mobile Safari configurations let the body's
-   height: 100% stop short of the physical screen edges (around the home
-   indicator, the dancing URL bar, etc.). The area that the body doesn't
-   cover reveals <html>, which without an explicit background falls back to
-   the UA default white — that's the white bar that shows below the Compose
-   button on a real device even after .app-shell is set to 100dvh. Painting
-   <html> with --bg makes those gaps blend instead of flash white. */
 html,
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(113, 112, 255, 0.18), transparent 30rem),
+    radial-gradient(circle at 95% 5%, rgba(16, 185, 129, 0.10), transparent 28rem),
+    var(--bg);
   overscroll-behavior: none;
+  /* Horizontal clip lives here, not on inner containers. Putting
+     `overflow-x: hidden` on any inner element makes that element a scroll
+     container (CSS spec: when one axis is non-visible, the other resolves
+     to auto), which captures touch input but has no overflow to consume —
+     iOS Safari then registers the gesture and refuses to scroll the
+     document. Clipping at the root keeps the inner tree free of
+     accidental scroll containers.
+     KNOWN ISSUES, to revisit:
+       - text-selection handles in the message detail view can't be dragged
+         on iOS (long-press selects a word; the handles appear but won't
+         extend the selection). Likely the same root cause — body
+         overflow-x:hidden interacts badly with WebKit selection.
+       - fast scroll-to-bottom can snap back to top once the cap shifts
+         windowStart and items drop off the rendered top. */
+  overflow-x: hidden;
 }
 
-/* App shell stays full-viewport always. Using --app-height here (which is
-   driven from visualViewport.height for the composer's sake) caused the
-   shell to permanently shrink after the soft keyboard had been shown once,
-   leaving a white bar below the Compose button. The composer overlay
-   continues to use --app-height since it genuinely needs to fit above
-   the keyboard. */
 .app-shell {
-  height: 100vh;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  overscroll-behavior: contain;
+  /* Channel screen lets the document scroll so messages can pass under the
+     notch, the Safari URL bar, and (in PWA mode) the phone's bottom edge.
+     We only guarantee the screen is at least viewport-tall — content can
+     extend beyond and the page scrolls. Floating pills/compose are
+     position:fixed and sit above this layer. */
+  min-height: 100dvh;
   background: var(--bg);
-  padding-top: env(safe-area-inset-top);
 }
 
-.no-scroll {
+.app-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  background: var(--bg);
+}
+
+.app-chrome {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-chrome::before,
+.app-chrome::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(8px);
+}
+
+.app-chrome::before {
+  inset: -18rem auto auto -12rem;
+  width: 36rem;
+  height: 36rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(113, 112, 255, 0.18), transparent 64%);
+}
+
+.app-chrome::after {
+  right: -18rem;
+  bottom: -20rem;
+  width: 42rem;
+  height: 42rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.11), transparent 62%);
+}
+
+/* Applied to <html> (documentElement) while any modal is open. Putting
+   overflow:hidden on <html> — not <body> — is what actually locks the
+   viewport scroll in modern browsers: the document scroller is
+   `documentElement`, so a body lock is a silent no-op and wheel/touch
+   pass through to the page behind the overlay. */
+.scroll-locked {
   overflow: hidden;
 }
 
-.chat-scroll {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
+.glass-panel {
+  border: 1px solid var(--rule);
+  background: var(--surface-glass);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
 }
 
-.composer-scroll {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
+.soft-card {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
 }
 
-/* contenteditable composer: render the placeholder via ::before so we
-   don't depend on :empty (which fails the moment iOS leaves a stray
-   <br> behind after a delete). The data-empty attribute is driven by
-   React state, which is the canonical empty/non-empty signal. */
-.composer-editable[data-empty='true']::before {
-  content: attr(data-placeholder);
-  color: var(--ink-dim);
-  pointer-events: none;
+.message-card {
+  position: relative;
+  box-shadow: 0 12px 35px -30px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(18px) saturate(132%);
+  -webkit-backdrop-filter: blur(18px) saturate(132%);
 }
 
-/* The full-screen modal composer pins its own height to the dynamic viewport
-   (via --app-height) so it occupies the space ABOVE the on-screen keyboard
-   rather than sitting under it. iOS/Android Safari refuse to anchor any
-   element to the top of the soft keyboard; the modal sidesteps that by
-   becoming the viewport while the keyboard is up. */
+.message-card-in {
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+}
+
+.message-card-out {
+  border: 1px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: var(--on-ink);
+  box-shadow: var(--glow-accent);
+}
+
+.floating-action {
+  position: fixed;
+  right: 1rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 1rem;
+  z-index: 30;
+  min-height: 3.25rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: var(--on-ink);
+  box-shadow: var(--glow-accent), var(--shadow-float);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.floating-action:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+.floating-action:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.modal-shell {
+  border: 1px solid var(--rule);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+
+/* Full-viewport overlay that flex-centers a modal-shell, leaving margin on
+   all four sides (respecting safe-area insets) so the overlay always reads
+   as a backdrop behind a floating card — never as a sheet that bleeds to
+   any edge. Pair with `max-h-full` on the inner card. */
+.modal-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay);
+  padding-top: max(1.5rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+}
+
+.pill-control {
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset;
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+
+.input-field {
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--surface-strong) 74%, transparent);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.input-field:focus,
+.input-field:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--rule));
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  outline: none;
+}
+
 .composer-overlay {
   height: var(--app-height);
   top: var(--app-offset);
   padding-top: env(safe-area-inset-top);
   will-change: height, top;
   contain: layout style;
+}
+
+@media (min-width: 640px) {
+  .floating-action {
+    left: auto;
+    width: auto;
+    min-width: 9.5rem;
+  }
 }
 
 @media (min-width: 768px) {
@@ -172,5 +316,16 @@ body {
   textarea,
   select {
     font-size: max(16px, 1rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
   }
 }

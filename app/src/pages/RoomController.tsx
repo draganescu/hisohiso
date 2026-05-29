@@ -173,8 +173,12 @@ const RoomController = () => {
   // localStorage); this just gates display.
   const [pairingCodeRevealed, setPairingCodeRevealed] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const composerInputRef = useRef<HTMLDivElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusProxyRef = useRef<HTMLTextAreaElement | null>(null);
+  // Set true on pointerdown of Cancel/Done in our custom toolbar so the
+  // textarea's blur handler knows the dismissal was intentional — it then
+  // skips the iOS Done = send branch. Cleared on the next blur.
+  const suppressSendOnBlurRef = useRef(false);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
   // Ephemeral keypair used to receive the wrapped participant token after a
@@ -423,21 +427,16 @@ const RoomController = () => {
       return;
     }
 
-    // Seed the contenteditable with any preserved draft, then transfer focus
-    // from the proxy to the real editor (the proxy already holds Safari's
-    // user-gesture focus grant). innerText sync is one-shot per open — during
-    // typing, React state is the source of truth and we don't write back.
-    const editable = composerInputRef.current;
-    if (editable && editable.innerText !== chatInput) {
-      editable.innerText = chatInput;
-    }
+    // Transfer focus from the proxy to the real textarea (the proxy already
+    // holds Safari's user-gesture focus grant from openComposer). The
+    // textarea's value is React-controlled via `value={chatInput}` — no
+    // imperative seeding needed.
     requestAnimationFrame(() => {
-      composerInputRef.current?.focus();
-      // Once focus has moved off the proxy, disable it so iOS Safari no
-      // longer counts it as a navigable form field — that removes the
-      // Previous/Next arrows from the keyboard accessory bar.
-      const proxy = focusProxyRef.current;
-      if (proxy) proxy.disabled = true;
+      const el = composerInputRef.current;
+      if (!el) return;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
     });
   }, [showComposer]);
 
@@ -597,37 +596,31 @@ const RoomController = () => {
     };
   }, [roomSecret, wipeLocalRoom, initialContext]);
 
+  // Scroll lock while any modal is open. The channel screen itself now uses
+  // document scroll, so we cannot lock with body { overflow: hidden } the
+  // way the inner-scroll era did — in modern browsers the document scroll
+  // comes from <html>, not <body>, so a body lock is a silent no-op (which
+  // is why wheel/touch were passing through modal overlays to the page
+  // underneath). Toggling overflow:hidden on documentElement actually
+  // locks the viewport scroll for both wheel and touch input.
+  const anyModalOpen =
+    showComposer ||
+    showMenu ||
+    showHelp ||
+    showQueue ||
+    showSwitcher ||
+    showDisband ||
+    showLeave ||
+    showQr ||
+    selectedId !== null;
+
   useEffect(() => {
-    if (roomState === 'PARTICIPANT') {
-      document.body.classList.add('no-scroll');
-      const handleTouchMove = (event: TouchEvent) => {
-        const target = event.target as HTMLElement | null;
-        if (!target) {
-          return;
-        }
-        if (target.tagName === 'TEXTAREA') {
-          return;
-        }
-        let el: HTMLElement | null = target;
-        while (el) {
-          const style = window.getComputedStyle(el);
-          const overflowY = style.overflowY;
-          if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
-            return;
-          }
-          el = el.parentElement;
-        }
-        event.preventDefault();
-      };
-      document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      return () => {
-        document.body.classList.remove('no-scroll');
-        document.removeEventListener('touchmove', handleTouchMove);
-      };
-    }
-    document.body.classList.remove('no-scroll');
-    return undefined;
-  }, [roomState]);
+    if (!anyModalOpen) return undefined;
+    document.documentElement.classList.add('scroll-locked');
+    return () => {
+      document.documentElement.classList.remove('scroll-locked');
+    };
+  }, [anyModalOpen]);
 
   useEffect(() => {
     if (!roomHash) return;
@@ -1160,14 +1153,12 @@ const RoomController = () => {
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
-    // Focus proxy textarea synchronously to keep Safari's user-gesture trust.
-    // The proxy may have been disabled after the previous open (so iOS would
-    // stop drawing Previous/Next arrows) — re-enable it before focusing.
-    const proxy = focusProxyRef.current;
-    if (proxy) {
-      proxy.disabled = false;
-      proxy.focus();
-    }
+    // Focus a hidden proxy textarea synchronously so Safari counts the
+    // subsequent focus jump (to the real composer textarea, after React
+    // commits showComposer=true) as user-gesture-trusted and opens the
+    // keyboard. Without this, the composer would mount but the keyboard
+    // wouldn't appear until the user taps the field manually.
+    focusProxyRef.current?.focus();
     setReplyToId(messageId ?? null);
     setSelectedId(null);
     setShowComposer(true);
@@ -1207,27 +1198,29 @@ const RoomController = () => {
   }, [roomState, showComposer, showMenu, showHelp, showQueue, showDisband, showLeave, showQr, selectedId, openComposer]);
 
   const scrollToLatest = useCallback(() => {
-    // Reset render window to newest BEFORE scrolling so scrollTop=0 lands on the
-    // newest message rather than the visual top of whatever slice was rendered.
+    // Reset render window to newest BEFORE scrolling so the destination is
+    // actually the newest message rather than the visual top of whatever
+    // slice was rendered.
     jumpWindowToLatest();
     requestAnimationFrame(() => {
-      const el = listRef.current;
-      if (el) el.scrollTop = 0;
+      window.scrollTo({ top: 0 });
     });
   }, [jumpWindowToLatest]);
 
   const handleScroll = useCallback(() => {
-    const el = listRef.current;
-    if (!el) {
-      return;
-    }
-    const atTop = el.scrollTop <= 40;
+    const top = window.scrollY;
+    const atTop = top <= 40;
     setAutoScroll(atTop);
-    setHeaderCondensed(el.scrollTop > 32);
+    setHeaderCondensed(top > 32);
     if (atTop) {
       setUnreadCount(0);
     }
   }, []);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   useEffect(() => {
     const prevCount = prevCountRef.current;
@@ -1276,7 +1269,7 @@ const RoomController = () => {
 
   if (error) {
     return (
-      <main className="min-h-[100dvh] bg-bg text-ink">
+      <main className="app-page app-chrome text-ink">
         <div className="mx-auto flex max-w-xl flex-col gap-5 px-6 py-16">
           <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
           <div className="rounded-[22px] border border-danger bg-danger-soft p-6 text-sm leading-7 text-danger">
@@ -1300,7 +1293,7 @@ const RoomController = () => {
       connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
 
     return (
-      <main className="app-shell relative text-ink">
+      <main className="app-shell app-chrome relative text-ink">
         {/* Off-screen focus proxy. Keeps Safari's user-gesture trust when a
             click handler programmatically focuses the inline composer textarea. */}
         <textarea
@@ -1310,45 +1303,52 @@ const RoomController = () => {
           tabIndex={-1}
         />
 
-        {/* ---- Sticky one-row header ---- */}
-        <header className="z-30 border-b border-rule bg-bg/90 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-[820px] items-center gap-3 px-4 py-3 sm:px-6">
+        {/* ---- Floating header pills ----
+            Each control sits in its own glass pill, fixed-positioned over
+            the messages with safe-area-aware top padding. The wrapper rows
+            are pointer-events:none so gaps between pills click through to
+            the message list underneath; each pill re-enables pointer events
+            on itself. Messages scroll under the pills (and the notch / Safari
+            URL bar / PWA edge), which is the explicit design goal. */}
+        <div
+          className="pointer-events-none fixed left-0 right-0 top-0 z-30 flex items-center justify-between gap-2 px-3"
+          style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+        >
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={openSwitcher}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ring-rule transition hover:ring-ink"
-              style={{ backgroundColor: roomColor }}
+              className="pointer-events-auto pill-control flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
               aria-label="Switch channels"
               title="Switch channels"
-            />
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-base font-semibold tracking-[-0.015em] sm:text-lg">
+            >
+              <span
+                className="block h-3.5 w-3.5 rounded-full ring-1 ring-inset ring-rule"
+                style={{ backgroundColor: roomColor }}
+              />
+            </button>
+            <div className="pointer-events-auto pill-control flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5">
+              <h1 className="truncate text-sm font-semibold tracking-[-0.015em]">
                 {roomNickname || 'Channel'}
               </h1>
-              <p className="truncate text-xs text-ink-dim">
-                {handle ? `signed as ${handle}` : 'sender not set'}
-              </p>
             </div>
             <div
-              className="hidden items-center gap-1.5 text-xs text-ink-dim sm:flex"
+              className="pointer-events-auto pill-control flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5"
               title={connectionLabel}
+              aria-label={connectionLabel}
             >
               <span
                 className="inline-block h-1.5 w-1.5 rounded-full"
                 style={{ backgroundColor: connectionColor }}
                 aria-hidden="true"
               />
-              <span>{connectionLabel}</span>
+              <span className="hidden text-[11px] text-ink-dim sm:inline">{connectionLabel}</span>
             </div>
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-full sm:hidden"
-              style={{ backgroundColor: connectionColor }}
-              aria-label={connectionLabel}
-              title={connectionLabel}
-            />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             <button
               aria-label={knocks.length === 0 ? 'Open join queue' : `Open join queue, ${knocks.length} waiting`}
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-rule bg-surface text-ink transition hover:border-ink"
+              className="pointer-events-auto pill-control relative inline-flex h-9 w-9 items-center justify-center rounded-full text-ink"
               onClick={() => setShowQueue(true)}
               type="button"
             >
@@ -1364,7 +1364,7 @@ const RoomController = () => {
             </button>
             <button
               aria-label="Channel info"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rule bg-surface text-ink transition hover:border-ink"
+              className="pointer-events-auto pill-control inline-flex h-9 w-9 items-center justify-center rounded-full text-ink"
               onClick={() => setShowHelp(true)}
               type="button"
             >
@@ -1375,26 +1375,33 @@ const RoomController = () => {
               </svg>
             </button>
             <button
-              className="inline-flex h-9 items-center justify-center rounded-full border border-rule bg-surface px-3.5 text-xs font-medium text-ink transition hover:border-ink"
+              className="pointer-events-auto pill-control inline-flex h-9 items-center justify-center rounded-full px-3.5 text-xs font-medium text-ink"
               onClick={() => setShowMenu(true)}
               type="button"
             >
               Menu
             </button>
           </div>
-        </header>
+        </div>
 
-        {/* ---- Message list (newest at top — preserves windowing logic) ---- */}
-        <div
-          ref={listRef}
-          onScroll={handleScroll}
-          className="chat-scroll relative flex-1 overflow-x-hidden overflow-y-auto"
-        >
-          {/* pb-28 reserves space below the last message so the floating
-              Compose button doesn't cover it. */}
-          <div className="mx-auto w-full max-w-[820px] px-4 pt-5 pb-28 sm:px-6 sm:pb-32">
+        {/* ---- Message list (newest at top, document-scrolled) ----
+            No inner scroll: the document itself scrolls so messages can pass
+            under the notch, the Safari URL bar, and the phone's home-bar in
+            PWA mode. The windowing hook (useMessageWindow) falls back to
+            window/documentElement when listRef.current is null, which is the
+            case here — the ref is intentionally not attached. We avoid
+            `overflow-x: hidden` on any element in the scroll path so we
+            don't accidentally create a non-overflowing scroll container
+            that swallows touch gestures (horizontal clipping lives on
+            html/body instead). */}
+        <div className="relative">
+          {/* Top padding clears the floating header pills at rest. Bottom
+              padding clears the floating Compose button. Messages can still
+              scroll under both — the padding only positions the at-rest
+              first/last messages so they're not permanently obscured. */}
+          <div className="mx-auto w-full max-w-[820px] px-4 pt-16 pb-28 sm:px-6 sm:pb-32">
             {showEmptyState && (
-              <div className="rounded-[22px] border border-dashed border-rule bg-surface p-6 text-center sm:p-8">
+              <div className="glass-panel rounded-[28px] border-dashed p-6 text-center sm:p-8">
                 <p className="text-lg font-semibold tracking-[-0.02em] text-ink sm:text-xl">
                   Invite someone.
                 </p>
@@ -1428,7 +1435,7 @@ const RoomController = () => {
             )}
 
             {!showEmptyState && visibleMessages.length === 0 && (
-              <div className="rounded-[22px] border border-dashed border-rule bg-surface p-8 text-center">
+              <div className="glass-panel rounded-[28px] border-dashed p-8 text-center">
                 <p className="text-base font-semibold text-ink">No messages yet.</p>
                 <p className="mt-2 text-sm leading-6 text-ink-soft">Start with a note.</p>
               </div>
@@ -1467,10 +1474,10 @@ const RoomController = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedId(msg.id)}
-                      className={`max-w-[82%] cursor-pointer rounded-[18px] px-4 py-2.5 text-left leading-6 transition-colors sm:max-w-[72%] ${
+                      className={`message-card max-w-[84%] cursor-pointer rounded-[22px] px-4 py-3 text-left leading-6 transition-colors sm:max-w-[72%] ${
                         isMine
-                          ? 'rounded-br-[6px] bg-filled text-on-ink hover:brightness-110'
-                          : 'rounded-bl-[6px] border border-rule bg-surface text-ink hover:border-ink'
+                          ? 'message-card-out rounded-br-[7px] hover:brightness-110'
+                          : 'message-card-in rounded-bl-[7px] text-ink hover:border-ink'
                       }`}
                     >
                       <p className="whitespace-pre-line break-words text-[15px]">
@@ -1607,152 +1614,122 @@ const RoomController = () => {
             PWAs (no API anchors anything to the keyboard); the modal
             sidesteps that by being the viewport while the keyboard is up. */}
         <button
-          className="fixed bottom-4 left-4 right-4 z-30 rounded-full border border-ink bg-filled px-5 py-3.5 text-sm font-medium text-on-ink shadow-[0_12px_28px_-8px_rgba(10,10,10,0.4)] transition hover:bg-transparent hover:text-ink sm:bottom-6 sm:left-auto sm:right-6 sm:w-auto"
+          className="floating-action px-5 py-3.5 text-sm font-semibold"
           onClick={() => openComposer()}
           type="button"
         >
           {replyTarget ? 'Continue reply' : 'Compose'}
         </button>
 
-        {/* ---- Full-screen modal composer ---- */}
+        {/* ---- Full-screen modal composer ----
+            Layout is a vertical flex column: optional reply preview, then a
+            flex-1 textarea, then an edge-to-edge bottom toolbar with
+            Cancel/Done. The textarea sits flush above the toolbar (no gap)
+            so the toolbar reads as the keyboard's nearest chrome. The iOS
+            accessory bar appears naturally above the keyboard since we use
+            a real <textarea>; its Done button blurs the field, which our
+            blur handler treats as "send if there's content". */}
         {showComposer && (
           <div className="composer-overlay fixed inset-x-0 top-0 z-50 bg-bg text-ink md:inset-0 md:bg-overlay md:px-5 md:py-6">
-            <div className="mx-auto flex h-full w-full flex-col bg-bg md:max-w-3xl md:overflow-hidden md:rounded-[22px] md:border md:border-rule md:bg-surface md:shadow-[0_28px_70px_-20px_rgba(10,10,10,0.35)]">
-              {/* Header collapses while the keyboard is up so the editor
-                  gets as much vertical room as possible. Cancel/Send now
-                  live in the bottom bar so the user's thumb can reach them
-                  while the keyboard is up. */}
-              <div
-                className={`flex items-center justify-center px-4 transition-all duration-200 ease-out ${
-                  keyboardVisible ? 'bg-transparent py-2' : 'border-b border-rule bg-surface py-3 sm:py-4'
-                }`}
-              >
-                <p
-                  className={`text-sm font-semibold tracking-[-0.015em] transition-opacity duration-200 ${
-                    keyboardVisible ? 'opacity-0' : 'opacity-100'
+            <div className="modal-shell mx-auto flex h-full w-full flex-col bg-bg md:max-w-3xl md:overflow-hidden md:rounded-[28px]">
+              {replyTarget && (
+                <div
+                  className={`shrink-0 overflow-hidden border-b border-rule bg-surface px-4 transition-all duration-200 ease-out sm:px-6 ${
+                    keyboardVisible ? 'max-h-10 py-1.5' : 'max-h-40 py-3'
                   }`}
                 >
-                  {replyTarget ? 'Reply' : 'New message'}
-                </p>
-              </div>
+                  <p
+                    className={`text-[10px] uppercase tracking-[0.2em] text-ink-dim transition-all duration-200 ${
+                      keyboardVisible ? 'hidden' : ''
+                    }`}
+                  >
+                    Replying to
+                  </p>
+                  <p
+                    className={`font-medium text-ink transition-all duration-200 ${
+                      keyboardVisible ? 'truncate text-xs' : 'mt-1 text-sm'
+                    }`}
+                  >
+                    {getMessageLabel(replyTarget)}
+                  </p>
+                  <p
+                    className={`whitespace-pre-line text-sm leading-6 text-ink-soft transition-all duration-200 ${
+                      keyboardVisible ? 'hidden' : 'mt-1'
+                    }`}
+                  >
+                    {getMessagePreview(replyTarget.content)}
+                  </p>
+                </div>
+              )}
 
-              {/* Single body surface: editor + action row live on the same
-                  background with no internal seams. The iOS form-assistant
-                  bar (which we cannot hide in plain Safari) sits flush
-                  below this whole card; with no second strip of chrome at
-                  the bottom of our own panel, the native bar reads as
-                  "below the app" rather than clashing with our own
-                  toolbar. The safe-area inset is paid here so it travels
-                  with the body, not as separate trailing chrome. */}
+              <textarea
+                ref={composerInputRef}
+                aria-label={replyTarget ? 'Reply' : 'New message'}
+                placeholder="Write a message…"
+                value={chatInput}
+                enterKeyHint="send"
+                onChange={(event) => setChatInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                    event.preventDefault();
+                    void sendMessage();
+                  }
+                }}
+                onBlur={() => {
+                  // iOS Done = send: a blur with no suppress flag (i.e. not
+                  // triggered by our own Cancel/Done buttons) and a
+                  // non-empty draft is treated as the user dismissing the
+                  // keyboard via the accessory bar's Done button. The
+                  // composer is still open at this point (the modal isn't
+                  // unmounted on blur), so sendMessage will close it.
+                  if (suppressSendOnBlurRef.current) {
+                    suppressSendOnBlurRef.current = false;
+                    return;
+                  }
+                  if (chatInput.trim()) {
+                    void sendMessage();
+                  }
+                }}
+                className="block w-full flex-1 resize-none border-0 bg-transparent px-4 py-4 text-[17px] leading-7 text-ink outline-none sm:px-6"
+              />
+
+              {/* Edge-to-edge toolbar pinned to the bottom of the composer.
+                  No rounded corners (on the modal-shell wrapper, the parent
+                  overflow-hidden + rounded-[28px] clips the corners on
+                  desktop; on mobile the modal is full-bleed so the bar
+                  reads as a true full-width strip). Sits flush against the
+                  textarea above. pointerdown on either button sets the
+                  suppress flag so the textarea's blur handler doesn't
+                  double-fire send. */}
               <div
-                className={`composer-scroll flex min-h-0 flex-1 flex-col px-4 transition-all duration-200 ease-out sm:px-6 ${
-                  keyboardVisible ? 'pb-2 pt-1' : 'pt-4 sm:pt-5'
-                }`}
+                className="composer-toolbar flex shrink-0 items-center justify-between gap-3 border-t border-rule bg-surface-strong px-4 py-3"
                 style={{
                   paddingBottom: keyboardVisible
                     ? undefined
-                    : 'max(env(safe-area-inset-bottom), 1rem)',
+                    : 'max(env(safe-area-inset-bottom), 0.75rem)',
                 }}
               >
-                <div
-                  className={`flex items-start justify-between gap-3 overflow-hidden transition-all duration-200 ease-out ${
-                    keyboardVisible ? 'max-h-0 opacity-0' : 'max-h-16 opacity-100'
-                  }`}
+                <button
+                  className="rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition hover:text-ink"
+                  onPointerDown={() => {
+                    suppressSendOnBlurRef.current = true;
+                  }}
+                  onClick={closeComposer}
+                  type="button"
                 >
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-ink-dim">From</p>
-                    <p className="mt-1 text-base font-medium text-ink">{handle || 'You'}</p>
-                  </div>
-                </div>
-
-                {replyTarget && (
-                  <div
-                    className={`overflow-hidden rounded-[12px] border border-rule bg-bg px-3 transition-all duration-200 ease-out ${
-                      keyboardVisible ? 'mb-2 max-h-10 py-1.5' : 'mt-4 max-h-40 py-3'
-                    }`}
-                  >
-                    <p
-                      className={`transition-all duration-200 ${
-                        keyboardVisible ? 'hidden' : 'text-[10px] uppercase tracking-[0.2em] text-ink-dim'
-                      }`}
-                    >
-                      Replying to
-                    </p>
-                    <p
-                      className={`font-medium text-ink transition-all duration-200 ${
-                        keyboardVisible ? 'truncate text-xs' : 'mt-1 text-sm'
-                      }`}
-                    >
-                      {getMessageLabel(replyTarget)}
-                    </p>
-                    <p
-                      className={`whitespace-pre-line text-sm leading-6 text-ink-soft transition-all duration-200 ${
-                        keyboardVisible ? 'hidden' : 'mt-1'
-                      }`}
-                    >
-                      {getMessagePreview(replyTarget.content)}
-                    </p>
-                  </div>
-                )}
-
-                <div className={`flex min-h-0 flex-1 flex-col transition-all duration-200 ease-out ${keyboardVisible ? 'mt-0' : 'mt-4'}`}>
-                  {/* contenteditable instead of <textarea>: iOS Safari does
-                      not render the form-navigation accessory bar (Previous/
-                      Next arrows + Done) above the keyboard for a plain
-                      contenteditable surface the way it does for textareas
-                      and inputs. innerText is the source of truth coming
-                      out; React state is the source of truth going in
-                      (seeded once per open in the showComposer effect). */}
-                  <div
-                    ref={composerInputRef}
-                    role="textbox"
-                    aria-label={replyTarget ? 'Reply' : 'New message'}
-                    aria-multiline="true"
-                    contentEditable
-                    suppressContentEditableWarning
-                    data-empty={chatInput.length === 0 ? 'true' : 'false'}
-                    data-placeholder="Write a message…"
-                    className="composer-editable block min-h-[6rem] w-full flex-1 overflow-y-auto whitespace-pre-wrap break-words border-0 bg-transparent pr-2 text-[17px] leading-7 text-ink outline-none"
-                    onInput={(event) => {
-                      setChatInput(event.currentTarget.innerText);
-                      requestAnimationFrame(() => {
-                        const el = composerInputRef.current;
-                        if (el) el.scrollTop = el.scrollHeight - el.clientHeight;
-                      });
-                    }}
-                    onKeyDown={(event) => {
-                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                        event.preventDefault();
-                        void sendMessage();
-                      }
-                    }}
-                  />
-                </div>
-
-                {/* Action row — same surface and padding as the editor, no
-                    border, no contrasting fill. The composer reads as one
-                    panel; the native keyboard chrome sits cleanly below. */}
-                <div
-                  className={`flex shrink-0 items-center justify-between gap-3 transition-all duration-200 ease-out ${
-                    keyboardVisible ? 'mt-2' : 'mt-4'
-                  }`}
+                  Cancel
+                </button>
+                <button
+                  className="rounded-full border border-ink bg-filled px-6 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
+                  onPointerDown={() => {
+                    suppressSendOnBlurRef.current = true;
+                  }}
+                  onClick={() => void sendMessage()}
+                  type="button"
+                  disabled={!chatInput.trim()}
                 >
-                  <button
-                    className="rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition hover:text-ink"
-                    onClick={closeComposer}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="rounded-full border border-ink bg-filled px-6 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
-                    onClick={() => void sendMessage()}
-                    type="button"
-                    disabled={!chatInput.trim()}
-                  >
-                    Send
-                  </button>
-                </div>
+                  Done
+                </button>
               </div>
             </div>
           </div>
@@ -1791,10 +1768,10 @@ const RoomController = () => {
                 </div>
 
                 <article
-                  className={`rounded-[18px] px-5 py-4 leading-7 ${
+                  className={`message-card rounded-[22px] px-5 py-4 leading-7 ${
                     activeMessage.direction === 'out'
-                      ? 'bg-filled text-on-ink'
-                      : 'border border-rule bg-surface text-ink'
+                      ? 'message-card-out'
+                      : 'message-card-in text-ink'
                   }`}
                 >
                   <p className="whitespace-pre-wrap break-words text-[15px]">
@@ -1861,8 +1838,8 @@ const RoomController = () => {
 
         {/* ---- Knock queue ---- */}
         {showQueue && (
-          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="modal-frame">
+            <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Notifications</p>
@@ -1878,7 +1855,7 @@ const RoomController = () => {
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 {knocks.length === 0 && (
-                  <div className="rounded-[22px] border border-dashed border-rule bg-surface p-8 text-center">
+                  <div className="glass-panel rounded-[28px] border-dashed p-8 text-center">
                     <p className="text-base font-semibold">No one is waiting.</p>
                     <p className="mt-2 text-sm text-ink-soft">
                       New join requests appear here. The bell badge lights up when someone knocks.
@@ -1928,8 +1905,8 @@ const RoomController = () => {
 
         {/* ---- Help / channel settings (includes Sender field, replaces /iam) ---- */}
         {showHelp && (
-          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="modal-frame">
+            <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
@@ -2013,8 +1990,8 @@ const RoomController = () => {
 
         {/* ---- Channel menu ---- */}
         {showMenu && (
-          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="modal-frame">
+            <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
@@ -2132,8 +2109,8 @@ const RoomController = () => {
 
         {/* ---- Channel switcher ---- */}
         {showSwitcher && (
-          <div className="fixed inset-x-0 top-0 z-40 h-[100dvh] bg-overlay px-4 pt-[env(safe-area-inset-top)]">
-            <div className="mx-auto mt-6 flex h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-rule bg-bg shadow-[0_24px_60px_-20px_rgba(10,10,10,0.3)]">
+          <div className="modal-frame">
+            <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.32em] text-ink-dim">Switch</p>
@@ -2295,25 +2272,25 @@ const RoomController = () => {
 
   // Pre / post participant states
   return (
-    <main className="min-h-[100dvh] bg-bg text-ink">
+    <main className="app-page app-chrome text-ink">
       <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 py-16">
         <header>
           <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
         </header>
 
         {roomState === 'INIT' && (
-          <div className="rounded-[22px] border border-rule bg-surface p-8">
+          <div className="glass-panel rounded-[28px] p-8">
             <p className="text-sm uppercase tracking-[0.32em] text-ink-dim">Opening channel…</p>
           </div>
         )}
 
         {roomState === 'LOBBY_WAITING' && (
-          <div className="rounded-[22px] border border-rule bg-surface p-8">
+          <div className="glass-panel rounded-[28px] p-8">
             <h1 className="text-3xl font-semibold tracking-[-0.025em]">Join this channel.</h1>
             <p className="mt-3 text-ink-soft">Ask to be let in. Someone inside has to approve you.</p>
 
             <input
-              className="mt-6 w-full rounded-[10px] border border-rule bg-surface px-3 py-2.5 text-base focus:border-ink focus:outline-none"
+              className="input-field mt-6 w-full rounded-[14px] px-3 py-2.5 text-base"
               placeholder="Channel key or pairing code"
               type="text"
               name="room-key"
@@ -2331,7 +2308,7 @@ const RoomController = () => {
             </p>
 
             <textarea
-              className="mt-4 w-full rounded-[10px] border border-rule bg-surface px-3 py-2.5 text-base focus:border-ink focus:outline-none"
+              className="input-field mt-4 w-full rounded-[14px] px-3 py-2.5 text-base"
               placeholder="Optional note (e.g. who you are)"
               rows={3}
               autoCorrect="off"
@@ -2374,7 +2351,7 @@ const RoomController = () => {
         )}
 
         {roomState === 'LOBBY_EMPTY' && (
-          <div className="rounded-[22px] border border-rule bg-surface p-8">
+          <div className="glass-panel rounded-[28px] p-8">
             <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel quiet.</h1>
             <p className="mt-3 text-ink-soft">
               No one is currently in this channel. Ask someone inside to open it so they can approve
@@ -2404,7 +2381,7 @@ const RoomController = () => {
         )}
 
         {roomState === 'DESTROYED' && (
-          <div className="rounded-[22px] border border-rule bg-surface p-8">
+          <div className="glass-panel rounded-[28px] p-8">
             <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel closed.</h1>
             <p className="mt-3 text-ink-soft">This channel was disbanded or no longer exists.</p>
             <a
@@ -2417,7 +2394,7 @@ const RoomController = () => {
         )}
 
         {roomState === 'LEFT' && (
-          <div className="rounded-[22px] border border-rule bg-surface p-8">
+          <div className="glass-panel rounded-[28px] p-8">
             <h1 className="text-3xl font-semibold tracking-[-0.025em]">You left this channel.</h1>
             <p className="mt-3 text-ink-soft">
               Its messages were wiped from this device. The channel stays open for everyone else —
