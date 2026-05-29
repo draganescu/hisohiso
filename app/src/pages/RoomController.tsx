@@ -215,7 +215,7 @@ const RoomController = () => {
   // localStorage); this just gates display.
   const [pairingCodeRevealed, setPairingCodeRevealed] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerInputRef = useRef<HTMLDivElement | null>(null);
   const focusProxyRef = useRef<HTMLTextAreaElement | null>(null);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
@@ -499,10 +499,21 @@ const RoomController = () => {
       return;
     }
 
-    // Transfer focus from proxy to real textarea (works on Safari because
-    // the proxy already holds the user-gesture focus grant)
+    // Seed the contenteditable with any preserved draft, then transfer focus
+    // from the proxy to the real editor (the proxy already holds Safari's
+    // user-gesture focus grant). innerText sync is one-shot per open — during
+    // typing, React state is the source of truth and we don't write back.
+    const editable = composerInputRef.current;
+    if (editable && editable.innerText !== chatInput) {
+      editable.innerText = chatInput;
+    }
     requestAnimationFrame(() => {
       composerInputRef.current?.focus();
+      // Once focus has moved off the proxy, disable it so iOS Safari no
+      // longer counts it as a navigable form field — that removes the
+      // Previous/Next arrows from the keyboard accessory bar.
+      const proxy = focusProxyRef.current;
+      if (proxy) proxy.disabled = true;
     });
 
     const isTouch = window.matchMedia('(pointer: coarse)').matches;
@@ -1313,8 +1324,14 @@ const RoomController = () => {
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
-    // Focus proxy textarea synchronously to keep Safari's user-gesture trust
-    focusProxyRef.current?.focus();
+    // Focus proxy textarea synchronously to keep Safari's user-gesture trust.
+    // The proxy may have been disabled after the previous open (so iOS would
+    // stop drawing Previous/Next arrows) — re-enable it before focusing.
+    const proxy = focusProxyRef.current;
+    if (proxy) {
+      proxy.disabled = false;
+      proxy.focus();
+    }
     setReplyToId(messageId ?? null);
     setSelectedId(null);
     setShowComposer(true);
@@ -1765,20 +1782,15 @@ const RoomController = () => {
         {showComposer && (
           <div className="composer-overlay fixed inset-x-0 top-0 z-50 bg-bg text-ink md:inset-0 md:bg-overlay md:px-5 md:py-6">
             <div className="mx-auto flex h-full w-full flex-col bg-bg md:max-w-3xl md:overflow-hidden md:rounded-[22px] md:border md:border-rule md:bg-surface md:shadow-[0_28px_70px_-20px_rgba(10,10,10,0.35)]">
-              {/* Header collapses while the keyboard is up so the textarea
-                  gets as much vertical room as possible. */}
+              {/* Header collapses while the keyboard is up so the editor
+                  gets as much vertical room as possible. Cancel/Send now
+                  live in the bottom bar so the user's thumb can reach them
+                  while the keyboard is up. */}
               <div
-                className={`flex items-center justify-between px-4 transition-all duration-200 ease-out ${
+                className={`flex items-center justify-center px-4 transition-all duration-200 ease-out ${
                   keyboardVisible ? 'bg-transparent py-2' : 'border-b border-rule bg-surface py-3 sm:py-4'
                 }`}
               >
-                <button
-                  className="text-sm font-medium text-ink-soft hover:text-ink"
-                  onClick={closeComposer}
-                  type="button"
-                >
-                  Cancel
-                </button>
                 <p
                   className={`text-sm font-semibold tracking-[-0.015em] transition-opacity duration-200 ${
                     keyboardVisible ? 'opacity-0' : 'opacity-100'
@@ -1786,14 +1798,6 @@ const RoomController = () => {
                 >
                   {replyTarget ? 'Reply' : 'New message'}
                 </p>
-                <button
-                  className="rounded-full border border-ink bg-filled px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
-                  onClick={() => void sendMessage()}
-                  type="button"
-                  disabled={!chatInput.trim()}
-                >
-                  Send
-                </button>
               </div>
 
               <div
@@ -1843,16 +1847,28 @@ const RoomController = () => {
                 )}
 
                 <div className={`flex min-h-0 flex-1 flex-col transition-all duration-200 ease-out ${keyboardVisible ? 'mt-0' : 'mt-4'}`}>
-                  <textarea
+                  {/* contenteditable instead of <textarea>: iOS Safari does
+                      not render the form-navigation accessory bar (Previous/
+                      Next arrows + Done) above the keyboard for a plain
+                      contenteditable surface the way it does for textareas
+                      and inputs. innerText is the source of truth coming
+                      out; React state is the source of truth going in
+                      (seeded once per open in the showComposer effect). */}
+                  <div
                     ref={composerInputRef}
-                    className="block min-h-[6rem] w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent pr-2 text-[17px] leading-7 text-ink outline-none"
-                    placeholder="Write a message…"
-                    value={chatInput}
-                    onChange={(event) => {
-                      setChatInput(event.target.value);
+                    role="textbox"
+                    aria-label={replyTarget ? 'Reply' : 'New message'}
+                    aria-multiline="true"
+                    contentEditable
+                    suppressContentEditableWarning
+                    data-empty={chatInput.length === 0 ? 'true' : 'false'}
+                    data-placeholder="Write a message…"
+                    className="composer-editable block min-h-[6rem] w-full flex-1 overflow-y-auto whitespace-pre-wrap break-words border-0 bg-transparent pr-2 text-[17px] leading-7 text-ink outline-none"
+                    onInput={(event) => {
+                      setChatInput(event.currentTarget.innerText);
                       requestAnimationFrame(() => {
-                        const ta = composerInputRef.current;
-                        if (ta) ta.scrollTop = ta.scrollHeight - ta.clientHeight;
+                        const el = composerInputRef.current;
+                        if (el) el.scrollTop = el.scrollHeight - el.clientHeight;
                       });
                     }}
                     onKeyDown={(event) => {
@@ -1863,6 +1879,31 @@ const RoomController = () => {
                     }}
                   />
                 </div>
+              </div>
+
+              {/* Bottom action bar — sits flush with the bottom of the
+                  composer overlay, which itself is sized to --app-height
+                  (the viewport above the keyboard). Padding accounts for
+                  the home indicator when the keyboard is not up. */}
+              <div
+                className="flex items-center justify-between gap-3 border-t border-rule bg-surface px-4 py-3 sm:px-6"
+                style={{ paddingBottom: keyboardVisible ? undefined : 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+              >
+                <button
+                  className="rounded-full border border-rule bg-bg px-5 py-2.5 text-sm font-medium text-ink-soft transition hover:border-ink hover:text-ink"
+                  onClick={closeComposer}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="rounded-full border border-ink bg-filled px-6 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
+                  onClick={() => void sendMessage()}
+                  type="button"
+                  disabled={!chatInput.trim()}
+                >
+                  Send
+                </button>
               </div>
             </div>
           </div>
