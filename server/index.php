@@ -5,6 +5,7 @@ require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mercure.php';
 require_once __DIR__ . '/outbox.php';
+require_once __DIR__ . '/rate_limit.php';
 
 // Without this, an uncaught PDOException (SQLite busy past the 5s busy_timeout
 // under heavy room-switch contention) or any other Throwable from a handler
@@ -231,6 +232,11 @@ if ($path === '/api/rooms' && $method === 'POST') {
     $pdo = db();
     $exists = room_exists($room_hash);
     if (!$exists) {
+        // Only the creation branch is rate-limited — clients hit this endpoint
+        // on every room open to probe existence (the $exists path below), which
+        // is legitimately frequent and must not be throttled. Capping creation
+        // blunts mass room-squatting that bloats the rooms/participants tables.
+        enforce_rate_limit('rooms_create', 30, 60);
         $now = time();
         $stmt = $pdo->prepare('INSERT INTO rooms (room_hash, created_at, last_activity_at, catch_up_enabled)
             VALUES (:room_hash, :created_at, :last_activity_at, :catch_up)');
@@ -278,6 +284,11 @@ if (preg_match('#^/api/rooms/([^/]+)/knock$#', $path, $matches) && $method === '
     if (!room_exists($room_hash)) {
         json_response(['error' => 'room_not_found'], 404);
     }
+    // /knock is unauthenticated and fans out to every member (+ an ECDH on each
+    // receiving daemon), so cap per-IP volume. 20/min is far above any human
+    // knock-then-retry pattern while still defusing a flood; counted after the
+    // room_exists check so probes against non-existent rooms don't consume it.
+    enforce_rate_limit('knock', 20, 60);
     $body = read_json_body();
     if (!isset($body['msg_id']) || !isset($body['encrypted_payload']) || !isset($body['knock_pubkey'])) {
         json_response(['error' => 'missing_knock_payload'], 400);
