@@ -1800,10 +1800,23 @@ const RoomController = () => {
                 </p>
               </div>
 
+              {/* Single body surface: editor + action row live on the same
+                  background with no internal seams. The iOS form-assistant
+                  bar (which we cannot hide in plain Safari) sits flush
+                  below this whole card; with no second strip of chrome at
+                  the bottom of our own panel, the native bar reads as
+                  "below the app" rather than clashing with our own
+                  toolbar. The safe-area inset is paid here so it travels
+                  with the body, not as separate trailing chrome. */}
               <div
                 className={`composer-scroll flex min-h-0 flex-1 flex-col px-4 transition-all duration-200 ease-out sm:px-6 ${
-                  keyboardVisible ? 'py-1' : 'py-4 sm:py-5'
+                  keyboardVisible ? 'pb-2 pt-1' : 'pt-4 sm:pt-5'
                 }`}
+                style={{
+                  paddingBottom: keyboardVisible
+                    ? undefined
+                    : 'max(env(safe-area-inset-bottom), 1rem)',
+                }}
               >
                 <div
                   className={`flex items-start justify-between gap-3 overflow-hidden transition-all duration-200 ease-out ${
@@ -1879,31 +1892,31 @@ const RoomController = () => {
                     }}
                   />
                 </div>
-              </div>
 
-              {/* Bottom action bar — sits flush with the bottom of the
-                  composer overlay, which itself is sized to --app-height
-                  (the viewport above the keyboard). Padding accounts for
-                  the home indicator when the keyboard is not up. */}
-              <div
-                className="flex items-center justify-between gap-3 border-t border-rule bg-surface px-4 py-3 sm:px-6"
-                style={{ paddingBottom: keyboardVisible ? undefined : 'max(env(safe-area-inset-bottom), 0.75rem)' }}
-              >
-                <button
-                  className="rounded-full border border-rule bg-bg px-5 py-2.5 text-sm font-medium text-ink-soft transition hover:border-ink hover:text-ink"
-                  onClick={closeComposer}
-                  type="button"
+                {/* Action row — same surface and padding as the editor, no
+                    border, no contrasting fill. The composer reads as one
+                    panel; the native keyboard chrome sits cleanly below. */}
+                <div
+                  className={`flex shrink-0 items-center justify-between gap-3 transition-all duration-200 ease-out ${
+                    keyboardVisible ? 'mt-2' : 'mt-4'
+                  }`}
                 >
-                  Cancel
-                </button>
-                <button
-                  className="rounded-full border border-ink bg-filled px-6 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
-                  onClick={() => void sendMessage()}
-                  type="button"
-                  disabled={!chatInput.trim()}
-                >
-                  Send
-                </button>
+                  <button
+                    className="rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition hover:text-ink"
+                    onClick={closeComposer}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="rounded-full border border-ink bg-filled px-6 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
+                    onClick={() => void sendMessage()}
+                    type="button"
+                    disabled={!chatInput.trim()}
+                  >
+                    Send
+                  </button>
+                </div>
               </div>
             </div>
           </div>
