@@ -135,6 +135,16 @@ body {
   touch-action: pan-y;
 }
 
+/* contenteditable composer: render the placeholder via ::before so we
+   don't depend on :empty (which fails the moment iOS leaves a stray
+   <br> behind after a delete). The data-empty attribute is driven by
+   React state, which is the canonical empty/non-empty signal. */
+.composer-editable[data-empty='true']::before {
+  content: attr(data-placeholder);
+  color: var(--ink-dim);
+  pointer-events: none;
+}
+
 /* The full-screen modal composer pins its own height to the dynamic viewport
    (via --app-height) so it occupies the space ABOVE the on-screen keyboard
    rather than sitting under it. iOS/Android Safari refuse to anchor any
