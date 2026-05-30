@@ -18,6 +18,22 @@ services:
       - MERCURE_SUBSCRIBER_JWT_KEY=${MERCURE_SUBSCRIBER_JWT_KEY:-!ChangeMe!}
       - MERCURE_HUB_URL=http://localhost/.well-known/mercure
       - CHAT_DB_PATH=/data/chat.sqlite
+    # Override the FrankenPHP base image's HEALTHCHECK, which probes
+    # 127.0.0.1:2019 (the Caddy admin API). We deliberately disable that via
+    # `admin off` in Caddyfile, so the default check is hard-failing in dev
+    # and the container shows up as `unhealthy` even when serving fine.
+    # /api/stats is unauthenticated, cheap, and proves Caddy + PHP + SQLite
+    # are wired up. Plain HTTP (no --resolve / SNI dance like prod) because
+    # the dev container only listens on :80. compose.prod.yaml has the
+    # equivalent HTTPS override.
+    healthcheck:
+      test:
+        - 'CMD-SHELL'
+        - 'curl -fsS http://127.0.0.1/api/stats >/dev/null || exit 1'
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     volumes:
       - ./data:/data
       # ./server lives at /app/public/api in the image (FrankenPHP's worker
