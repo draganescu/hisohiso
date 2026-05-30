@@ -3,9 +3,11 @@ services:
     ports:
       - '80:80'
       - '443:443'
-      # HTTP/3 / QUIC — Caddy advertises `alt-svc: h3=":443"; ma=2592000`
-      # but the UDP port also needs publishing for it to actually work.
-      - '443:443/udp'
+      # HTTP/3 / QUIC is intentionally NOT published. Long-lived Mercure SSE
+      # streams over QUIC get killed on mobile/weak-signal networks (carriers
+      # deprioritize UDP, NAT rebinding breaks connection migration), leaving
+      # rooms stuck on the disconnected indicator. HTTP/3 is also disabled in
+      # the Caddyfile global block (`servers { protocols h1 h2 }`). See #118.
     environment:
       - SERVER_NAME=${SERVER_NAME}
       - MERCURE_PUBLISHER_JWT_KEY=${MERCURE_PUBLISHER_JWT_KEY}
