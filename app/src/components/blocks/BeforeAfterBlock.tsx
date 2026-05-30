@@ -30,7 +30,7 @@ export const BeforeAfterBlockView = ({ block }: Props) => {
           </button>
         </div>
       </div>
-      <pre className="overflow-x-auto p-4 font-mono text-[13px] leading-5 text-ink-fade">
+      <pre className="overflow-x-auto p-4 font-mono text-[0.8125rem] leading-5 text-ink-fade">
         {side.content}
       </pre>
     </div>

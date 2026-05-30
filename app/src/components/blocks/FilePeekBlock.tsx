@@ -20,7 +20,7 @@ export const FilePeekBlockView = ({ block }: Props) => {
       </div>
       <div className="max-h-60 overflow-auto">
         {lines.map((line, i) => (
-          <div key={i} className="flex font-mono text-[13px] leading-5">
+          <div key={i} className="flex font-mono text-[0.8125rem] leading-5">
             <span className="w-12 shrink-0 select-none pr-3 text-right text-ink-soft">{startLine + i}</span>
             <span className="whitespace-pre text-ink-fade">{line}</span>
           </div>

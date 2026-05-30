@@ -34,7 +34,7 @@ export const CarouselBlockView = ({ block }: Props) => {
             <p className="text-sm font-semibold text-ink">{card.title}</p>
             {card.subtitle && <p className="mt-1 font-mono text-xs text-ink-dim">{card.subtitle}</p>}
             {card.preview && (
-              <p className="mt-2 font-mono text-[13px] leading-5 text-ink">{card.preview}</p>
+              <p className="mt-2 font-mono text-[0.8125rem] leading-5 text-ink">{card.preview}</p>
             )}
             {card.meta && <p className="mt-2 text-xs text-ink-dim">{card.meta}</p>}
           </div>

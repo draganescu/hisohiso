@@ -42,7 +42,7 @@ export const DiffBlockView = ({ block }: Props) => {
               {hunk.lines.map((line, li) => (
                 <div
                   key={li}
-                  className={`whitespace-pre px-4 py-0.5 font-mono text-[13px] leading-5 ${
+                  className={`whitespace-pre px-4 py-0.5 font-mono text-[0.8125rem] leading-5 ${
                     line.op === '+'
                       ? 'bg-[#1a2e1a] text-green-300'
                       : line.op === '-'

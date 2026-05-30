@@ -49,7 +49,7 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
         </p>
         <p className="mt-2 text-sm leading-6 text-ink">{block.description}</p>
         {block.command && (
-          <pre className="mt-2 rounded-xl bg-[#1b1b1b] px-4 py-2 font-mono text-[13px] text-ink-fade">
+          <pre className="mt-2 rounded-xl bg-[#1b1b1b] px-4 py-2 font-mono text-[0.8125rem] text-ink-fade">
             $ {block.command}
           </pre>
         )}
