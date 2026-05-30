@@ -160,7 +160,7 @@ export const BlockRenderer = ({ blocks, onRespond, progressOverrides }: Props) =
             {block.confidence && (
               <div className="mb-1 flex items-center gap-1.5">
                 <ConfidenceDot level={block.confidence} />
-                <span className="text-[11px] text-ink-dim">{block.confidence} confidence</span>
+                <span className="text-[0.6875rem] text-ink-dim">{block.confidence} confidence</span>
               </div>
             )}
             {content}

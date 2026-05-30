@@ -29,7 +29,7 @@ export const TerminalBlockView = ({ block }: Props) => {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
-      <pre className="max-h-60 overflow-auto p-4 font-mono text-[13px] leading-5 text-ink-fade">
+      <pre className="max-h-60 overflow-auto p-4 font-mono text-[0.8125rem] leading-5 text-ink-fade">
         {block.output}
       </pre>
       {block.exit_code != null && (

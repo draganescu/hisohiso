@@ -138,7 +138,7 @@ const RoomsPage = () => {
       <div className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-10 sm:px-6 sm:py-16">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
+            <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Your channels.</h1>
             <p className="mt-2 text-sm text-ink-soft">Stored on this device only.</p>
           </div>
@@ -155,7 +155,7 @@ const RoomsPage = () => {
           <p className="mt-2 text-sm text-ink-soft">Paste a channel URL or secret.</p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
-              className="input-field flex-1 rounded-full px-4 py-2.5 text-sm"
+              className="form-zoom-safe input-field flex-1 rounded-full px-4 py-2.5"
               placeholder="https://hisohiso.org/room#…"
               value={joinValue}
               onChange={(event) => setJoinValue(event.target.value)}

@@ -10,6 +10,18 @@
 	# the container and read the running config (which holds the Mercure JWT
 	# keys in cleartext) or hot-swap routes.
 	admin off
+
+	# Disable HTTP/3 (QUIC). Mercure delivers room events over a long-lived
+	# SSE stream; on mobile/weak-signal networks carriers deprioritize UDP and
+	# NAT rebinding breaks QUIC connection migration, so the stream gets killed
+	# at the QUIC layer (H3_REQUEST_CANCELLED) and rooms silently stop
+	# receiving. The one-shot `GET /` degrades to TCP fine — that's why the
+	# site "loads" but rooms stall. Restricting to h1/h2 keeps SSE on TCP,
+	# which recovers from the same conditions. See issue #118. (The matching
+	# UDP/443 port publish is also removed from compose.prod.yaml.)
+	servers {
+		protocols h1 h2
+	}
 }
 
 {$SERVER_NAME} {
@@ -27,6 +39,12 @@
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "interest-cohort=(), geolocation=(), camera=(), microphone=()"
+		# Flush the HTTP/3 advertisement we previously served with a 30-day TTL
+		# (`alt-svc: h3=":443"; ma=2592000`). Clients cache that and keep
+		# attempting QUIC long after we stop advertising it; `Alt-Svc: clear`
+		# tells them to drop the cached entry and fall back to h1/h2. Keep this
+		# for ~2 weeks (until ~2026-06-12), then remove it. See issue #118.
+		Alt-Svc "clear"
 		-Server
 		-X-Powered-By
 	}

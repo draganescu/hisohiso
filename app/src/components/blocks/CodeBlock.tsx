@@ -36,7 +36,7 @@ export const CodeBlockView = ({ block }: Props) => {
           return (
             <div
               key={i}
-              className={`flex font-mono text-[13px] leading-5 ${isHighlighted ? 'bg-yellow-900/30' : ''}`}
+              className={`flex font-mono text-[0.8125rem] leading-5 ${isHighlighted ? 'bg-yellow-900/30' : ''}`}
             >
               <span className="w-12 shrink-0 select-none pr-3 text-right text-ink-soft">{lineNum}</span>
               <span className="whitespace-pre text-ink-fade">{line}</span>

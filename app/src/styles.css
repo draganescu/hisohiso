@@ -65,9 +65,22 @@
   --glow-accent: 0 0 0 1px rgba(130, 143, 255, 0.18), 0 22px 80px -38px rgba(130, 143, 255, 0.72);
 }
 
+@supports (font: -apple-system-body) {
+  @media (any-pointer: coarse) {
+    :root {
+      /* iOS/iPadOS WebKit only maps Dynamic Type into CSS when a
+         system text style is used. The font shorthand supplies the
+         Dynamic Type-scaled root size; font-family restores our brand
+         stack so only the size follows the user's accessibility setting. */
+      font: -apple-system-body;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+    }
+  }
+}
+
 body {
   margin: 0;
-  -webkit-text-size-adjust: 100%;
   font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -89,6 +102,11 @@ body {
   }
 }
 
+html {
+  -webkit-text-size-adjust: auto;
+  text-size-adjust: auto;
+}
+
 html,
 body,
 #root {
@@ -108,21 +126,30 @@ body {
     radial-gradient(circle at 95% 5%, rgba(16, 185, 129, 0.10), transparent 28rem),
     var(--bg);
   overscroll-behavior: none;
-  /* Horizontal clip lives here, not on inner containers. Putting
-     `overflow-x: hidden` on any inner element makes that element a scroll
-     container (CSS spec: when one axis is non-visible, the other resolves
-     to auto), which captures touch input but has no overflow to consume —
-     iOS Safari then registers the gesture and refuses to scroll the
-     document. Clipping at the root keeps the inner tree free of
-     accidental scroll containers.
+  /* Horizontal clip lives here, not on inner containers. It MUST be
+     `overflow-x: clip` — never `hidden`. `hidden` forces the cross axis to
+     compute to `auto` (CSS spec: when one axis is non-visible the other
+     resolves to auto), which turns the element into a scroll container.
+     Because body grows with its content it has no internal overflow to
+     consume, so the real scroll lands on the viewport — but the nearest
+     scroll container to a wheel/touch gesture is now this empty body, and
+     `overscroll-behavior: none` blocks the gesture from chaining up to the
+     viewport. Net effect: Firefox two-finger wheel and iOS touch drag do
+     nothing, while scrollbar drag / selection autoscroll (which drive the
+     viewport scroller directly) still work. `clip` clips identically but
+     does NOT establish a scroll container, so the cross axis stays
+     `visible` and gestures reach the viewport.
      KNOWN ISSUES, to revisit:
-       - text-selection handles in the message detail view can't be dragged
-         on iOS (long-press selects a word; the handles appear but won't
-         extend the selection). Likely the same root cause — body
-         overflow-x:hidden interacts badly with WebKit selection.
-       - fast scroll-to-bottom can snap back to top once the cap shifts
-         windowStart and items drop off the rendered top. */
-  overflow-x: hidden;
+       - iOS message-detail selection handles wouldn't drag (long-press
+         selects a word, handles appear but won't extend). Suspected the
+         same body-as-scroll-container cause; switching to `clip` may have
+         resolved it, but it's unverified on a device — confirm before
+         claiming the win.
+       - Fast scroll-to-bottom can snap back to top once the cap shifts
+         windowStart and items drop off the rendered top. Unrelated to
+         overflow (it's a useMessageWindow anchoring bug); tracked here so
+         it isn't lost. */
+  overflow-x: clip;
 }
 
 .app-shell {
@@ -311,11 +338,21 @@ body {
   }
 }
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   input,
   textarea,
   select {
-    font-size: max(16px, 1rem);
+    /* iOS zooms focused controls below 16px. Use !important so this
+       floor beats Tailwind text-* utilities on form controls only. */
+    font-size: max(16px, 1rem) !important;
+  }
+
+  .form-zoom-safe {
+    font-size: max(16px, 1rem) !important;
+  }
+
+  .composer-textarea {
+    font-size: max(16px, 1.0625rem) !important;
   }
 }
 
