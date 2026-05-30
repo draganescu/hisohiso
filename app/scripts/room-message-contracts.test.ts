@@ -53,4 +53,12 @@ assert(ownRecord.content === 'plain text', 'plain text should be preserved');
 assert(getMessagePreview(' hello\nworld '.repeat(20)).length <= 163, 'message preview should be compact and bounded');
 assert(formatBlockResponse(record) === 'Selected: yes, ship', 'block response labels should be stable');
 
+// Swipe responses carry a { cardValue: 'good' | 'bad' } map — it must render as
+// readable text, never "[object Object]".
+const swipeLabel = formatBlockResponse({
+  block_response: { block_id: 'approach', type: 'swipe', value: { 'plan-a': 'good', 'plan-b': 'bad', 'plan-c': 'good' } },
+});
+assert(swipeLabel === 'Chose: 👍 plan-a, plan-c  👎 plan-b', `swipe response should group verdicts, got: ${swipeLabel}`);
+assert(!swipeLabel!.includes('[object Object]'), 'swipe response must not stringify to [object Object]');
+
 console.log('room message contracts OK');
