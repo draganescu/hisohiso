@@ -108,21 +108,20 @@ body {
     radial-gradient(circle at 95% 5%, rgba(16, 185, 129, 0.10), transparent 28rem),
     var(--bg);
   overscroll-behavior: none;
-  /* Horizontal clip lives here, not on inner containers. Putting
-     `overflow-x: hidden` on any inner element makes that element a scroll
-     container (CSS spec: when one axis is non-visible, the other resolves
-     to auto), which captures touch input but has no overflow to consume —
-     iOS Safari then registers the gesture and refuses to scroll the
-     document. Clipping at the root keeps the inner tree free of
-     accidental scroll containers.
-     KNOWN ISSUES, to revisit:
-       - text-selection handles in the message detail view can't be dragged
-         on iOS (long-press selects a word; the handles appear but won't
-         extend the selection). Likely the same root cause — body
-         overflow-x:hidden interacts badly with WebKit selection.
-       - fast scroll-to-bottom can snap back to top once the cap shifts
-         windowStart and items drop off the rendered top. */
-  overflow-x: hidden;
+  /* Horizontal clip lives here, not on inner containers. It MUST be
+     `overflow-x: clip` — never `hidden`. `hidden` forces the cross axis to
+     compute to `auto` (CSS spec: when one axis is non-visible the other
+     resolves to auto), which turns the element into a scroll container.
+     Because body grows with its content it has no internal overflow to
+     consume, so the real scroll lands on the viewport — but the nearest
+     scroll container to a wheel/touch gesture is now this empty body, and
+     `overscroll-behavior: none` blocks the gesture from chaining up to the
+     viewport. Net effect: Firefox two-finger wheel and iOS touch drag do
+     nothing, while scrollbar drag / selection autoscroll (which drive the
+     viewport scroller directly) still work. `clip` clips identically but
+     does NOT establish a scroll container, so the cross axis stays
+     `visible` and gestures reach the viewport. */
+  overflow-x: clip;
 }
 
 .app-shell {
