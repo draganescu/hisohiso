@@ -90,5 +90,17 @@ function db(): PDO
 
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_presence_room ON presence(room_hash);');
 
+    // Per-IP fixed-window rate-limit counters (issue #103). One row per
+    // (route|ip) bucket; window_start + count are updated in place, so the
+    // table grows only with distinct client IPs, not request volume. Stale
+    // rows are pruned periodically by rate_limit_prune_stale(). Intentionally
+    // NOT foreign-keyed to rooms/participants — the limiter must work on
+    // unauthenticated endpoints that touch no room row.
+    $pdo->exec('CREATE TABLE IF NOT EXISTS rate_limits (
+        bucket_key TEXT PRIMARY KEY,
+        window_start INTEGER NOT NULL,
+        count INTEGER NOT NULL
+    );');
+
     return $pdo;
 }
