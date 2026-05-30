@@ -49,8 +49,18 @@ After decrypting a `chat` event, the plaintext is either raw text or a JSON enve
   "handle": "optional sender handle",
   "action": { "type": "join-room", "roomSecret": "...", "label": "...", "code": "optional", "roomName": "optional" },
   "blocks": [{ "type": "buttons" }],
-  "block_response": { "block_id": "id", "type": "buttons", "value": "selected" }
+  "block_response": { "block_id": "id", "type": "buttons", "value": "selected" },
+  "block_responses": [{ "block_id": "id", "type": "buttons", "value": "selected" }]
 }
 ```
+
+When one agent message carries several interactive blocks, the phone gathers
+every selection and sends them together in a single message via
+`block_responses`. This avoids the earlier behaviour where each block was posted
+as its own message — the first reply reached the agent while the rest queued
+behind it. A lone selection populates both `block_responses` (one entry) and
+`block_response`; a multi-block batch fills `block_responses` and leaves
+`block_response` null. The parser mirrors a single entry across both fields so
+consumers may read either.
 
 The parser in `src/lib/room-message.ts` is the compatibility boundary between protocol payloads and renderable `ChatMessage` records.

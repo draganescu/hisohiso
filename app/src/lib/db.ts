@@ -26,6 +26,7 @@ export type ChatMessage = {
   action?: MessageAction | null;
   blocks?: Block[] | null;
   block_response?: BlockResponse | null;
+  block_responses?: BlockResponse[] | null;
 };
 
 class ChatDatabase extends Dexie {

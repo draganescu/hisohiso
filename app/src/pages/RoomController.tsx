@@ -58,7 +58,7 @@ import {
   type OutboxMessage,
   type RoomLookupResponse,
 } from '../lib/room-session';
-import { BlockRenderer } from '../components/blocks/BlockRenderer';
+import { BlockRenderer, type BlockResponseInput } from '../components/blocks/BlockRenderer';
 import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
@@ -1055,20 +1055,34 @@ const RoomController = () => {
     }
   }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret, persistMessage]);
 
-  const sendBlockResponse = useCallback(
-    async (blockId: string, blockType: string, value: unknown) => {
-      if (!roomHash || !token || !cryptoKey) return;
-      const label =
+  // All selections from one agent message are sent together as a single
+  // encrypted message. Sending them one-at-a-time used to make the first reply
+  // win while the rest queued behind it, starving the agent of context.
+  const sendBlockResponses = useCallback(
+    async (responses: BlockResponseInput[]) => {
+      if (!roomHash || !token || !cryptoKey || responses.length === 0) return;
+      const toLabel = (value: unknown) =>
         typeof value === 'string'
           ? value
           : Array.isArray(value)
           ? (value as string[]).join(', ')
           : String(value);
+      const block_responses: BlockResponse[] = responses.map((r) => ({
+        block_id: r.blockId,
+        type: r.type,
+        value: r.value as BlockResponse['value']
+      }));
+      // One label line per selection so the agent reads them all at once.
+      const text = block_responses.map((br) => `[${br.type}] ${toLabel(br.value)}`).join('\n');
+      // Mirror the single case into block_response so the daemon control room
+      // and single-block rendering keep working unchanged.
+      const single = block_responses.length === 1 ? block_responses[0] : null;
       const msgId = base64UrlEncode(randomBytes(12));
       const payload = JSON.stringify({
-        text: `[${blockType}] ${label}`,
+        text,
         handle: handle || null,
-        block_response: { block_id: blockId, type: blockType, value }
+        block_responses,
+        ...(single ? { block_response: single } : {})
       });
       const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
       const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
@@ -1077,12 +1091,13 @@ const RoomController = () => {
           id: msgId,
           room_hash: roomHash,
           timestamp: Date.now(),
-          content: `[${blockType}] ${label}`,
+          content: text,
           type: 'chat',
           direction: 'out',
           from: tokenHash,
           handle: handle || null,
-          block_response: { block_id: blockId, type: blockType, value: value as BlockResponse['value'] }
+          block_response: single,
+          block_responses
         };
         persistMessage(messageRecord);
         setMessages((prev) => {
@@ -1790,7 +1805,7 @@ const RoomController = () => {
                   <div className="rounded-[14px] border border-rule bg-surface p-4">
                     <BlockRenderer
                       blocks={activeMessage.blocks}
-                      onRespond={sendBlockResponse}
+                      onRespond={sendBlockResponses}
                       progressOverrides={progressOverrides}
                     />
                   </div>
