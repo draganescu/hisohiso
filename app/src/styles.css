@@ -120,7 +120,17 @@ body {
      nothing, while scrollbar drag / selection autoscroll (which drive the
      viewport scroller directly) still work. `clip` clips identically but
      does NOT establish a scroll container, so the cross axis stays
-     `visible` and gestures reach the viewport. */
+     `visible` and gestures reach the viewport.
+     KNOWN ISSUES, to revisit:
+       - iOS message-detail selection handles wouldn't drag (long-press
+         selects a word, handles appear but won't extend). Suspected the
+         same body-as-scroll-container cause; switching to `clip` may have
+         resolved it, but it's unverified on a device — confirm before
+         claiming the win.
+       - Fast scroll-to-bottom can snap back to top once the cap shifts
+         windowStart and items drop off the rendered top. Unrelated to
+         overflow (it's a useMessageWindow anchoring bug); tracked here so
+         it isn't lost. */
   overflow-x: clip;
 }
 
