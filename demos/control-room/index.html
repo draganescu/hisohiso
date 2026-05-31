@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en" class="">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>hisohiso · control room — command bar demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --surface: rgba(255,255,255,0.78);
+    --surface-strong: #fffdf8;
+    --surface-glass: rgba(255,255,255,0.64);
+    --ink: #0b0d12;
+    --ink-soft: #555c6b;
+    --ink-dim: #8b92a1;
+    --ink-fade: #c8cdd6;
+    --rule: rgba(11,13,18,0.10);
+    --rule-soft: rgba(11,13,18,0.06);
+    --danger: #be123c;
+    --danger-soft: rgba(244,63,94,0.12);
+    --on-ink: #ffffff;
+    --filled: #11131a;
+    --accent: #7170ff;
+    --accent-strong: #5e6ad2;
+    --accent-soft: rgba(113,112,255,0.13);
+    --success: #10b981;
+    --overlay: rgba(11,13,18,0.48);
+  }
+  html.dark {
+    --bg: #07080b;
+    --surface: rgba(20,22,28,0.72);
+    --surface-strong: #11131a;
+    --surface-glass: rgba(20,22,28,0.6);
+    --ink: #f7f8f8;
+    --ink-soft: #c8ccd7;
+    --ink-dim: #8b92a1;
+    --ink-fade: #2a2e38;
+    --rule: rgba(255,255,255,0.12);
+    --rule-soft: rgba(255,255,255,0.06);
+    --danger: #fb7185;
+    --on-ink: #07080b;
+    --filled: #f7f8f8;
+    --accent: #828fff;
+    --accent-strong: #6d79ff;
+    --accent-soft: rgba(130,143,255,0.16);
+    --success: #34d399;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-feature-settings: "cv01","ss03";
+    background:
+      radial-gradient(900px 500px at 90% 110%, rgba(16,185,129,0.10), transparent 60%),
+      radial-gradient(900px 600px at 0% -10%, var(--accent-soft), transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    transition: background .3s;
+  }
+  .topbar {
+    width: 100%; max-width: 430px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .topbar h1 {
+    font-size: 13px; font-weight: 700; letter-spacing: -0.01em; margin: 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .topbar .sub { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .toggle {
+    border: 1px solid var(--rule); background: var(--surface-strong);
+    color: var(--ink); border-radius: 999px; padding: 7px 14px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    backdrop-filter: blur(16px);
+  }
+
+  /* Phone frame */
+  .phone {
+    width: 100%; max-width: 430px; height: 760px;
+    border-radius: 44px;
+    border: 1px solid var(--rule);
+    background: var(--bg);
+    box-shadow: 0 30px 90px -40px rgba(11,13,18,0.55), 0 0 0 10px rgba(11,13,18,0.04);
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  html.dark .phone { box-shadow: 0 30px 90px -40px #000, 0 0 0 10px rgba(255,255,255,0.03); }
+
+  /* Header pills */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 30;
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 14px 12px;
+    pointer-events: none;
+  }
+  .pill {
+    pointer-events: auto;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+    backdrop-filter: blur(16px) saturate(130%);
+    border-radius: 999px;
+    height: 38px; display: flex; align-items: center; gap: 8px;
+    padding: 0 14px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 8px 24px -18px rgba(11,13,18,0.6);
+  }
+  .dot { height: 13px; width: 13px; border-radius: 999px; box-shadow: 0 0 0 3px var(--accent-soft); }
+  .live { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--success); display:flex; align-items:center; gap:5px;}
+  .live::before { content:""; height:6px;width:6px;border-radius:999px;background:var(--success);box-shadow:0 0 0 3px rgba(16,185,129,.25);}
+  .icon-btn {
+    pointer-events: auto;
+    height: 38px; width: 38px; border-radius: 999px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+    backdrop-filter: blur(16px); color: var(--ink-soft);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+
+  /* Message scroll area */
+  .scroll {
+    flex: 1; overflow-y: auto; padding: 70px 16px 150px;
+    display: flex; flex-direction: column; gap: 14px;
+    scroll-behavior: smooth;
+  }
+  .scroll::-webkit-scrollbar { width: 0; }
+
+  .eyebrow { font-size: 10.5px; letter-spacing: .32em; text-transform: uppercase; color: var(--ink-dim); font-weight: 600; margin: 4px 2px; }
+
+  .msg { max-width: 86%; }
+  .msg.in .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 22px 22px 22px 7px; padding: 13px 16px;
+    font-size: 15px; line-height: 1.5;
+    box-shadow: 0 14px 40px -32px rgba(11,13,18,0.5);
+  }
+  .msg.out { align-self: flex-end; }
+  .msg.out .card {
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    color: #fff; border-radius: 22px 22px 7px 22px; padding: 13px 16px;
+    font-size: 15px; line-height: 1.5;
+    box-shadow: 0 20px 50px -28px rgba(113,112,255,0.9);
+  }
+  .sender { font-size: 11px; color: var(--ink-dim); margin: 0 6px 5px; font-weight: 600; }
+
+  /* Blocks */
+  .blk { margin-top: 12px; }
+  .blk .prompt { font-size: 13.5px; font-weight: 600; margin-bottom: 8px; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btnrow.stacked { flex-direction: column; }
+  .bbtn {
+    border: 1px solid var(--ink-fade); background: var(--surface-strong); color: var(--ink);
+    border-radius: 999px; padding: 9px 16px; font-size: 13.5px; font-weight: 500; cursor: pointer;
+    transition: .15s; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .bbtn:active { transform: scale(.97); }
+  .bbtn.filled { background: var(--filled); color: var(--on-ink); border-color: var(--filled); }
+  .bbtn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-soft); }
+
+  /* progress */
+  .prog .step { display: flex; gap: 12px; }
+  .prog .stepdot { display: flex; flex-direction: column; align-items: center; }
+  .prog .d { height: 11px; width: 11px; border-radius: 999px; margin-top: 4px; background: var(--ink-fade); }
+  .prog .d.done { background: var(--success); }
+  .prog .d.active { background: var(--ink); animation: pulse 1.1s infinite; }
+  .prog .conn { width: 2px; flex: 1; background: var(--ink-fade); margin: 3px 0; }
+  .prog .lbl { font-size: 13.5px; padding-bottom: 14px; color: var(--ink-dim); }
+  .prog .lbl.done { color: var(--ink); }
+  .prog .lbl.active { color: var(--ink); font-weight: 600; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  /* agent status chips inside a card */
+  .agentline { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--rule-soft); }
+  .agentline:last-child { border-bottom: 0; }
+  .agentmeta { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+  .agentmeta .adot { height: 9px; width: 9px; border-radius: 999px; }
+  .agentmeta .id { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-dim); }
+  .mini { display:flex; gap:6px; }
+  .mini button { font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--ink-fade); background: var(--surface-strong); color: var(--ink); cursor: pointer; }
+  .mini button.stop { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+
+  /* ===== THE STICKY COMMAND BAR ===== */
+  .cmdbar {
+    position: absolute; left: 12px; right: 12px; bottom: 14px; z-index: 40;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+    backdrop-filter: blur(22px) saturate(150%);
+    border-radius: 24px;
+    box-shadow: 0 24px 60px -30px rgba(11,13,18,0.7);
+    padding: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cmd-primary {
+    height: 46px; padding: 0 18px; border: none; cursor: pointer;
+    border-radius: 16px; font-weight: 600; font-size: 14px;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    color: #fff; display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 14px 34px -18px rgba(113,112,255,0.95);
+  }
+  .cmd-primary:active { transform: translateY(1px); }
+  .cmd-chip {
+    height: 46px; padding: 0 14px; border-radius: 16px; cursor: pointer;
+    border: 1px solid var(--rule); background: var(--surface);
+    color: var(--ink-soft); font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 7px; position: relative;
+  }
+  .cmd-chip .badge {
+    background: var(--accent); color: #fff; font-size: 11px; font-weight: 700;
+    border-radius: 999px; min-width: 18px; height: 18px; padding: 0 5px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cmd-input {
+    flex: 1; height: 46px; border: 1px solid var(--rule); border-radius: 16px;
+    background: var(--surface); color: var(--ink-dim); font-size: 14px;
+    padding: 0 16px; display: flex; align-items: center; cursor: text;
+    min-width: 0;
+  }
+
+  /* spawn sheet */
+  .sheet-backdrop {
+    position: absolute; inset: 0; z-index: 50; background: var(--overlay);
+    backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: .2s;
+  }
+  .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 51;
+    background: var(--surface-strong); border-top: 1px solid var(--rule);
+    border-radius: 28px 28px 0 0; padding: 18px 18px 26px;
+    transform: translateY(110%); transition: transform .26s cubic-bezier(.3,.9,.3,1);
+    box-shadow: 0 -20px 60px -30px rgba(11,13,18,0.6);
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet h3 { margin: 4px 0 4px; font-size: 16px; }
+  .sheet p { margin: 0 0 14px; font-size: 13px; color: var(--ink-dim); }
+  .grabber { width: 40px; height: 5px; border-radius: 999px; background: var(--ink-fade); margin: 0 auto 14px; }
+  .spawn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .spawn-card {
+    border: 1px solid var(--rule); background: var(--surface); border-radius: 18px;
+    padding: 14px; cursor: pointer; text-align: left; transition: .15s;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .spawn-card:active { transform: scale(.97); border-color: var(--accent); }
+  .spawn-card .nm { font-size: 14.5px; font-weight: 600; }
+  .spawn-card .ds { font-size: 11.5px; color: var(--ink-dim); }
+  .spawn-card .ic { font-size: 20px; margin-bottom: 4px; }
+
+  .callout {
+    width: 100%; max-width: 430px; margin-top: 22px;
+    font-size: 12.5px; color: var(--ink-soft); line-height: 1.6;
+  }
+  .callout b { color: var(--ink); }
+  .toast {
+    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--filled); color: var(--on-ink); font-size: 12.5px; font-weight: 600;
+    padding: 9px 16px; border-radius: 999px; opacity: 0; transition: .25s; z-index: 60; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1>hisohiso · control room</h1>
+      <div class="sub">Concept: <b>sticky command bar</b> — control actions never buried in chat</div>
+    </div>
+    <button class="toggle" id="themeToggle">◐ Theme</button>
+  </div>
+
+  <div class="phone">
+    <!-- header -->
+    <div class="header">
+      <div class="pill"><span class="dot" style="background:#b8a4e6"></span> Control Room <span class="live">live</span></div>
+      <div style="display:flex; gap:8px; pointer-events:none;">
+        <div class="icon-btn">?</div>
+        <div class="icon-btn">⋯</div>
+      </div>
+    </div>
+
+    <!-- messages -->
+    <div class="scroll" id="scroll">
+      <div class="eyebrow">Daemon · today</div>
+
+      <div class="msg in">
+        <div class="sender">control room</div>
+        <div class="card">
+          Control room online. 3 agents running. Use the command bar below — spawn, jump to an agent, or stop one without scrolling.
+        </div>
+      </div>
+
+      <div class="msg in">
+        <div class="card">
+          <div class="agentline">
+            <div class="agentmeta"><span class="adot" style="background:#7dd3a0"></span> Claude · refactor-auth <span class="id">a3f9</span></div>
+            <div class="mini"><button>Join</button><button class="stop">Stop</button></div>
+          </div>
+          <div class="agentline">
+            <div class="agentmeta"><span class="adot" style="background:#f0b878"></span> Codex · write-tests <span class="id">c1d2</span></div>
+            <div class="mini"><button>Join</button><button class="stop">Stop</button></div>
+          </div>
+          <div class="agentline">
+            <div class="agentmeta"><span class="adot" style="background:#9bbcf0"></span> Bash · deploy-stage <span class="id">b7e4</span></div>
+            <div class="mini"><button>Join</button><button class="stop">Stop</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="spawnAnchor"></div>
+    </div>
+
+    <!-- THE COMMAND BAR -->
+    <div class="cmdbar">
+      <button class="cmd-primary" id="spawnBtn">＋ Spawn</button>
+      <button class="cmd-chip" id="agentsBtn">Agents <span class="badge" id="agentCount">3</span></button>
+      <div class="cmd-input" id="msgInput">Message…</div>
+    </div>
+
+    <div class="toast" id="toast">Spawning Claude…</div>
+
+    <!-- spawn sheet -->
+    <div class="sheet-backdrop" id="backdrop"></div>
+    <div class="sheet" id="sheet">
+      <div class="grabber"></div>
+      <h3>Spawn an agent</h3>
+      <p>A fresh end-to-end encrypted room is minted and you're joined automatically.</p>
+      <div class="spawn-grid">
+        <button class="spawn-card" data-agent="Claude" data-color="#7dd3a0"><span class="ic">◆</span><span class="nm">Claude</span><span class="ds">Anthropic coding agent</span></button>
+        <button class="spawn-card" data-agent="Codex" data-color="#f0b878"><span class="ic">◇</span><span class="nm">Codex</span><span class="ds">OpenAI CLI agent</span></button>
+        <button class="spawn-card" data-agent="Gemini" data-color="#f09bb8"><span class="ic">✦</span><span class="nm">Gemini</span><span class="ds">Google agent</span></button>
+        <button class="spawn-card" data-agent="Bash" data-color="#9bbcf0"><span class="ic">$</span><span class="nm">Bash</span><span class="ds">Raw shell session</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>What changed:</b> the floating compose button is replaced by a persistent command bar. <b>Spawn</b> opens a bottom sheet of agent presets; <b>Agents</b> shows a live count and jumps to the running list; the message field stays for free-text control. Every control action is one tap, always on screen — the chat log stays a log, not a menu. Tap around: this is a live mock.
+  </div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const sheet = $('#sheet'), backdrop = $('#backdrop'), scroll = $('#scroll');
+  let agentCount = 3;
+
+  $('#themeToggle').onclick = () => document.documentElement.classList.toggle('dark');
+
+  function openSheet(){ sheet.classList.add('open'); backdrop.classList.add('open'); }
+  function closeSheet(){ sheet.classList.remove('open'); backdrop.classList.remove('open'); }
+  $('#spawnBtn').onclick = openSheet;
+  backdrop.onclick = closeSheet;
+
+  $('#agentsBtn').onclick = () => { scroll.scrollTo({top:0}); toast('Jumped to running agents'); };
+  $('#msgInput').onclick = () => toast('Compose opens here');
+
+  let toastT;
+  function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1600); }
+
+  document.querySelectorAll('.spawn-card').forEach(card => {
+    card.onclick = () => {
+      const name = card.dataset.agent, color = card.dataset.color;
+      closeSheet();
+      toast('Spawning ' + name + '…');
+      spawnProgress(name, color);
+    };
+  });
+
+  function spawnProgress(name, color){
+    const anchor = $('#spawnAnchor');
+    const wrap = document.createElement('div');
+    wrap.className = 'msg in';
+    wrap.innerHTML = `
+      <div class="card">
+        <div class="blk prog">
+          <div class="prompt">Spawning ${name}</div>
+          <div class="step"><div class="stepdot"><div class="d active" data-s="0"></div><div class="conn"></div></div><div class="lbl active" data-l="0">Mint room + derive keys</div></div>
+          <div class="step"><div class="stepdot"><div class="d" data-s="1"></div><div class="conn"></div></div><div class="lbl" data-l="1">Connect encrypted channel</div></div>
+          <div class="step"><div class="stepdot"><div class="d" data-s="2"></div></div><div class="lbl" data-l="2">Ready to join</div></div>
+        </div>
+      </div>`;
+    anchor.before(wrap);
+    scroll.scrollTo({top: scroll.scrollHeight});
+
+    const steps = [0,1,2];
+    let i = 0;
+    const tick = () => {
+      const d = wrap.querySelector(`.d[data-s="${i}"]`), l = wrap.querySelector(`.lbl[data-l="${i}"]`);
+      d.className = 'd done'; l.className = 'lbl done';
+      i++;
+      if (i < steps.length){
+        const nd = wrap.querySelector(`.d[data-s="${i}"]`), nl = wrap.querySelector(`.lbl[data-l="${i}"]`);
+        nd.className = 'd active'; nl.className = 'lbl active';
+        setTimeout(tick, 700);
+      } else {
+        finish(name, color, wrap);
+      }
+    };
+    setTimeout(tick, 700);
+  }
+
+  function finish(name, color, wrap){
+    agentCount++;
+    $('#agentCount').textContent = agentCount;
+    const done = document.createElement('div');
+    done.className = 'msg in';
+    const id = Math.random().toString(16).slice(2,6);
+    done.innerHTML = `
+      <div class="card">
+        <b>${name}</b> is ready.
+        <div class="blk">
+          <div class="btnrow">
+            <button class="bbtn filled">Join ${name}</button>
+            <button class="bbtn">Copy code ${id}</button>
+          </div>
+        </div>
+      </div>`;
+    $('#spawnAnchor').before(done);
+    scroll.scrollTo({top: scroll.scrollHeight});
+    toast(name + ' ready');
+  }
+</script>
+</body>
+</html>
