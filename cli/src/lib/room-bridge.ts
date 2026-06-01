@@ -62,6 +62,12 @@ export type SendOptions = {
   // gets no signal when an agent is killed server-side. Encrypted like the
   // rest of the envelope.
   agent_count?: number;
+  // Suggested display name for the room the message lives in. Phone uses
+  // this as the nickname ONLY if none is set yet — never overrides a user
+  // rename. Used by the daemon to auto-name the control room (the host
+  // machine's hostname) since the QR-pairing flow gives the phone no
+  // other channel to learn a name for it.
+  room_name?: string;
 };
 
 export const encryptAndSend = async (
@@ -85,6 +91,9 @@ export const encryptAndSend = async (
   }
   if (typeof options?.agent_count === 'number') {
     payloadObj.agent_count = options.agent_count;
+  }
+  if (typeof options?.room_name === 'string' && options.room_name !== '') {
+    payloadObj.room_name = options.room_name;
   }
   const payload = JSON.stringify(payloadObj);
   const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, payload);

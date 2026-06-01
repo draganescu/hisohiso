@@ -29,6 +29,12 @@ export type RoomEnvelope = {
   // badge — daemon truth, not a local guess. null when the sender didn't
   // stamp (e.g. peer chat messages, or pre-update daemons).
   agent_count?: number | null;
+  // Suggested display name for the room this message lives in. The daemon
+  // stamps the host machine's hostname on every control-room reply so the
+  // phone can auto-name the control room (which has no other naming
+  // channel — QR pairing carries no metadata). Applied only when no
+  // nickname is set; never overrides a user rename.
+  room_name?: string | null;
 };
 
 export type ChatMessageRecordInput = {
@@ -112,6 +118,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
   let messageBlockResponses: BlockResponse[] | null = null;
   let messageRoomKind: RoomKind | null = null;
   let messageAgentCount: number | null = null;
+  let messageRoomName: string | null = null;
 
   if (plaintext.trim().startsWith('{')) {
     try {
@@ -124,6 +131,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
         block_responses?: BlockResponse[];
         room_kind?: unknown;
         agent_count?: unknown;
+        room_name?: unknown;
       };
       if (typeof obj.text === 'string') messageText = obj.text;
       if (typeof obj.handle === 'string') messageHandle = obj.handle;
@@ -149,6 +157,10 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
       if (typeof obj.agent_count === 'number' && Number.isInteger(obj.agent_count) && obj.agent_count >= 0) {
         messageAgentCount = obj.agent_count;
       }
+      if (typeof obj.room_name === 'string') {
+        const trimmed = obj.room_name.trim();
+        if (trimmed !== '') messageRoomName = trimmed;
+      }
     } catch {
       messageText = plaintext;
     }
@@ -173,6 +185,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
     block_responses: messageBlockResponses,
     room_kind: messageRoomKind,
     agent_count: messageAgentCount,
+    room_name: messageRoomName,
   };
 };
 

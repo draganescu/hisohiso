@@ -27,6 +27,21 @@ import { deriveKnockKey } from '../lib/crypto.js';
 import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
+import { hostname } from 'node:os';
+
+// Suggested name the daemon stamps on every control-room envelope so the
+// phone can auto-name the room on first contact. Strip mDNS `.local` (macOS
+// gives us e.g. `Andreis-MacBook-Pro.local`). Empty or junk hostnames
+// (`localhost`, `unknown`, blank) → null, meaning "don't stamp anything";
+// the phone shows "Unnamed channel" until the user renames, which is the
+// pre-feature behaviour anyway.
+const suggestedControlRoomName = ((): string | null => {
+  const raw = hostname().trim().replace(/\.local$/i, '');
+  if (!raw) return null;
+  if (raw.toLowerCase() === 'localhost') return null;
+  if (raw.toLowerCase() === 'unknown') return null;
+  return raw;
+})();
 
 export const runDaemon = async (): Promise<void> => {
   const server = await getServer();
@@ -123,7 +138,7 @@ export const runDaemon = async (): Promise<void> => {
 
     const ownTokenHash = await sha256Hex(state.participantToken);
     currentPresence = startPresence(server, state.controlRoomHash, state.participantToken);
-    ctrl = new ControlRoom(server, state, messageKey, manager);
+    ctrl = new ControlRoom(server, state, messageKey, manager, suggestedControlRoomName);
 
     if (firstIteration) {
       if (restoreResult && restoreResult.restored > 0) {
@@ -388,7 +403,8 @@ class ControlRoom {
     private readonly server: string,
     private readonly state: DaemonState,
     private readonly messageKey: CryptoKey,
-    private readonly manager: AgentManager
+    private readonly manager: AgentManager,
+    private readonly suggestedName: string | null
   ) {}
 
   // Every reply goes into the control room, so stamp `room_kind: 'control'`
@@ -398,6 +414,11 @@ class ControlRoom {
   // spawn/kill both cause a control-room message, so the count moves in
   // lockstep with reality. listRunning() is cheap (O(active-agents) on an
   // in-memory map) — call per send to avoid stale-count races.
+  //
+  // `room_name` is the same shape: stamped on every reply (cheap), phone
+  // uses it only if no nickname is set, so once the user renames the
+  // suggestion is ignored — and a late-joining or re-pairing phone still
+  // gets the auto-name on its next message.
   async reply(
     text: string,
     blocks?: unknown[],
@@ -409,6 +430,7 @@ class ControlRoom {
       action,
       room_kind: 'control',
       agent_count: this.manager.listRunning().length,
+      ...(this.suggestedName ? { room_name: this.suggestedName } : {}),
     });
   }
 

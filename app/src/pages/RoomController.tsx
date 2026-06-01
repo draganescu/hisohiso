@@ -379,6 +379,14 @@ const RoomController = () => {
     if (envKind === 'control' && typeof envelope.agent_count === 'number') {
       setAgentCount(envelope.agent_count);
     }
+    // Auto-name the control room from the daemon's hostname stamp, but ONLY
+    // if no nickname is set yet — the user's kebab → Rename always wins,
+    // and once renamed every subsequent stamp is ignored. `getRoomNickname`
+    // reads localStorage, so this also no-ops after the first set per room.
+    if (envKind === 'control' && envelope.room_name && !getRoomNickname(roomHash)) {
+      updateRoomNickname(roomHash, envelope.room_name);
+      setRoomNickname(envelope.room_name);
+    }
     const messageRecord = toChatMessageRecord({
       msgId,
       roomHash,
