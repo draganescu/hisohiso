@@ -179,6 +179,11 @@ const RoomController = () => {
   // textarea's blur handler knows the dismissal was intentional — it then
   // skips the iOS Done = send branch. Cleared on the next blur.
   const suppressSendOnBlurRef = useRef(false);
+  // Guards against double-submit: a blur (iOS native keyboard "Done") and a tap
+  // on the Send button can both fire before the first send's network round-trip
+  // resolves and clears the draft, minting two msgIds for one message. Held for
+  // the duration of an in-flight send so concurrent triggers no-op.
+  const sendInFlightRef = useRef(false);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
   // Ephemeral keypair used to receive the wrapped participant token after a
@@ -311,8 +316,14 @@ const RoomController = () => {
     [roomHash]
   );
 
-  const persistMessage = useCallback((record: ChatMessage) => {
-    void saveMessage(record).catch(() => undefined);
+  const persistMessage = useCallback(async (record: ChatMessage): Promise<void> => {
+    try {
+      await saveMessage(record);
+    } catch (err) {
+      // A swallowed write means the message is only in memory and vanishes on
+      // the next reload/reconcile. Surface it instead of dropping it silently.
+      console.error('Failed to persist message', record.id, err);
+    }
   }, []);
 
   const ingestEncryptedChat = useCallback(async (
@@ -322,9 +333,18 @@ const RoomController = () => {
     rawPayload: unknown
   ) => {
     if (!cryptoKey || !roomHash || !msgId || !rawPayload) return;
-    const parsed: EncryptedPayload =
-      typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
-    const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
+    let plaintext: string;
+    try {
+      const parsed: EncryptedPayload =
+        typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
+      plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
+    } catch (err) {
+      // A decrypt/parse failure used to bubble to handleEvent's catch and get
+      // dropped with no trace — the message simply never appeared. Log it so a
+      // lost inbound message is diagnosable instead of silent.
+      console.error('Failed to decrypt inbound message', msgId, err);
+      return;
+    }
     const messageRecord = toChatMessageRecord({
       msgId,
       roomHash,
@@ -334,7 +354,9 @@ const RoomController = () => {
       ownTokenHash: tokenHash,
     });
     if (messageRecord.direction === 'in') setHasCompanion(true);
-    persistMessage(messageRecord);
+    // Persist before exposing to state so a write failure is logged rather than
+    // leaving a memory-only message that disappears on the next reconcile.
+    await persistMessage(messageRecord);
     setMessages((prev) => {
       if (prev.find((item) => item.id === msgId)) return prev;
       return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
@@ -494,7 +516,20 @@ const RoomController = () => {
         setRoomHash(hash);
         const localMessages = await loadMessages(hash);
         if (!active) return;
-        setMessages(localMessages);
+        // Merge persisted history with any in-memory messages for this room
+        // that arrived live but haven't been read back from IndexedDB yet.
+        // A blind replace here wiped a just-rendered message whose async
+        // persist hadn't landed — it appeared, then vanished on this reload.
+        // Other rooms' messages are dropped (room switch) since loadMessages
+        // is scoped to `hash`.
+        setMessages((prev) => {
+          const byId = new Map<string, ChatMessage>();
+          for (const m of localMessages) byId.set(m.id, m);
+          for (const m of prev) {
+            if (m.room_hash === hash && !byId.has(m.id)) byId.set(m.id, m);
+          }
+          return [...byId.values()].sort((a, b) => a.timestamp - b.timestamp);
+        });
         const savedHandle = getHandle(hash);
         const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
@@ -988,7 +1023,7 @@ const RoomController = () => {
         type: 'system',
         direction: 'in'
       };
-      persistMessage(record);
+      void persistMessage(record);
       setMessages((prev) => [...prev, record].sort((a, b) => a.timestamp - b.timestamp));
     },
     [roomHash, persistMessage]
@@ -998,6 +1033,11 @@ const RoomController = () => {
     if (!roomHash || !token || !cryptoKey || !chatInput.trim()) {
       return;
     }
+    // One send at a time. The draft is only cleared after the await below, so
+    // without this a second trigger would read the same draft and send again.
+    if (sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    try {
 
     const trimmed = chatInput.trim();
     if (trimmed.startsWith('/iam')) {
@@ -1041,7 +1081,7 @@ const RoomController = () => {
         from: tokenHash,
         handle: handle || null
       };
-      persistMessage(messageRecord);
+      void persistMessage(messageRecord);
       setMessages((prev) => {
         if (prev.find((item) => item.id === msgId)) {
           return prev;
@@ -1052,6 +1092,9 @@ const RoomController = () => {
       setShowComposer(false);
       setReplyToId(null);
       setSelectedId(null);
+    }
+    } finally {
+      sendInFlightRef.current = false;
     }
   }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret, persistMessage]);
 
@@ -1099,7 +1142,7 @@ const RoomController = () => {
           block_response: single,
           block_responses
         };
-        persistMessage(messageRecord);
+        void persistMessage(messageRecord);
         setMessages((prev) => {
           if (prev.find((item) => item.id === msgId)) return prev;
           return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
