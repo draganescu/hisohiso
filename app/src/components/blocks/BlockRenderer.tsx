@@ -26,7 +26,11 @@ import { ListBlockView } from './ListBlock';
 import { ProseBlockView } from './ProseBlock';
 import { LabelBlockView } from './LabelBlock';
 
-type RespondFn = (blockId: string, type: string, value: unknown) => void;
+/** One block's selection. The renderer always hands back an array so a single
+ *  agent message that carries several interactive blocks is answered with ONE
+ *  outgoing message instead of N racing ones. */
+export type BlockResponseInput = { blockId: string; type: string; value: unknown };
+type RespondFn = (responses: BlockResponseInput[]) => void;
 type PendingSelection = { type: string; value: unknown };
 
 interface Props {
@@ -53,7 +57,7 @@ export const BlockRenderer = ({ blocks, onRespond, progressOverrides }: Props) =
     // Auto-submit blocks with built-in safety (confirm-danger, dangerous run-command)
     const block = safeBlocks.find(b => b.id === blockId);
     if (block && isAutoSubmit(block)) {
-      onRespond(blockId, type, value);
+      onRespond([{ blockId, type, value }]);
       setSubmittedIds(prev => new Set([...prev, blockId]));
       return;
     }
@@ -72,9 +76,15 @@ export const BlockRenderer = ({ blocks, onRespond, progressOverrides }: Props) =
 
   const submitAll = useCallback(() => {
     if (pending.size === 0) return;
-    for (const [blockId, { type, value }] of pending) {
-      onRespond(blockId, type, value);
-    }
+    // Send every pending selection as ONE batch so the agent receives a single
+    // message. Looping onRespond() here used to emit N separate messages that
+    // raced — the first won and the rest queued behind it.
+    const responses: BlockResponseInput[] = Array.from(pending, ([blockId, { type, value }]) => ({
+      blockId,
+      type,
+      value,
+    }));
+    onRespond(responses);
     setSubmittedIds(prev => {
       const next = new Set(prev);
       for (const blockId of pending.keys()) next.add(blockId);

@@ -218,23 +218,37 @@ export const runDaemon = async (): Promise<void> => {
               : event.body.encrypted_payload as EncryptedPayload;
             const msgId = (event.body.msg_id as string) || '';
             const decrypted = await decryptText(iterKey, iterState.controlRoomHash, 'chat', msgId, encPayload);
+            type ControlBlockResponse = {
+              block_id: string;
+              type: string;
+              value: string | number | boolean | string[];
+            };
             const parsed = JSON.parse(decrypted) as {
               text: string;
-              block_response?: {
-                block_id: string;
-                type: string;
-                value: string | number | boolean | string[];
-              };
+              block_response?: ControlBlockResponse;
+              block_responses?: ControlBlockResponse[];
             };
             const text = (parsed.text ?? '').trim();
+            // The phone batches multi-block answers into block_responses; a lone
+            // selection still arrives as block_response. Route each one.
+            const responses: ControlBlockResponse[] =
+              parsed.block_responses && parsed.block_responses.length > 0
+                ? parsed.block_responses
+                : parsed.block_response
+                ? [parsed.block_response]
+                : [];
 
-            if (parsed.block_response) {
-              console.log(`Control [block ${parsed.block_response.block_id}]: ${JSON.stringify(parsed.block_response.value)}`);
+            if (responses.length > 0) {
+              for (const br of responses) {
+                console.log(`Control [block ${br.block_id}]: ${JSON.stringify(br.value)}`);
+              }
+              for (const br of responses) {
+                await iterCtrl.handleControl(br, text);
+              }
             } else {
               console.log(`Control: ${text}`);
+              await iterCtrl.handleControl(undefined, text);
             }
-
-            await iterCtrl.handleControl(parsed.block_response, text);
           } catch (err) {
             console.error('Failed to process message:', err);
           }
