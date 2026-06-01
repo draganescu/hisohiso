@@ -1592,7 +1592,7 @@ const RoomController = () => {
                       }`}
                     >
                       <p className="whitespace-pre-line break-words text-[0.9375rem]">
-                        {msg.block_response ? (
+                        {msg.block_response || (msg.block_responses && msg.block_responses.length > 0) ? (
                           <span className="flex items-center gap-2">
                             <span
                               className={`inline-block h-1.5 w-1.5 rounded-full ${
@@ -1901,7 +1901,7 @@ const RoomController = () => {
                   }`}
                 >
                   <p className="whitespace-pre-wrap break-words text-[0.9375rem]">
-                    {activeMessage.block_response
+                    {activeMessage.block_response || (activeMessage.block_responses && activeMessage.block_responses.length > 0)
                       ? formatBlockResponse(activeMessage) || activeMessage.content
                       : activeMessage.content || 'Empty message'}
                   </p>

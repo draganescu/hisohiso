@@ -60,7 +60,7 @@ export const getMessagePreview = (content: string): string => {
 
 // Render any block_response value as a readable string. Objects (e.g. the
 // swipe verdict map) would otherwise stringify to "[object Object]".
-const formatBlockValue = (val: BlockResponse['value']): string => {
+export const formatBlockValue = (val: BlockResponse['value']): string => {
   if (Array.isArray(val)) return val.join(', ');
   if (val && typeof val === 'object') {
     return Object.entries(val)
