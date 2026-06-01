@@ -111,9 +111,6 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
           {badge.label}
         </span>
       )}
-      {isCurrent && (
-        <span className="shrink-0 text-[0.625rem] uppercase tracking-[0.2em] text-ink-fade">current</span>
-      )}
     </>
   );
 

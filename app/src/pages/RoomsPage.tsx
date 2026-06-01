@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
-import { getToken, listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
 import { navigateTo } from '../lib/navigation';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
@@ -137,7 +137,6 @@ const RoomsPage = () => {
       key={room.roomHash}
       room={room}
       href={`/room#${room.roomSecret}`}
-      joinedLabel={getToken(room.roomHash) ? 'Joined' : 'Link saved'}
       onRename={(next) => {
         updateRoomNickname(room.roomHash, next);
         setRooms(listRooms());
