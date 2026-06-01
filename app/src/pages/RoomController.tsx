@@ -1173,12 +1173,14 @@ const RoomController = () => {
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
-    // Control rooms have no FAB and no per-message Reply (both gated below),
-    // so the only path to this function in a control room is the command
-    // bar's Message… button, which is the intentional escape hatch. Hence
-    // no isControlRoom gate here — gating the *callers* is what enforces
-    // "control rooms are tap-only" without breaking the one allowed entry.
-    //
+    // Control rooms have no free-text affordance — every verb the daemon
+    // accepts is reachable via the command bar's Spawn/Agents buttons and
+    // their downstream blocks. The FAB and per-message Reply are hidden
+    // (see render below), and there's no other caller of this function in
+    // a control room. The early-return is defense-in-depth so a future code
+    // path (a new block type, a new keyboard shortcut, etc.) can't silently
+    // re-open the composer here.
+    if (isControlRoom) return;
     // Focus a hidden proxy textarea synchronously so Safari counts the
     // subsequent focus jump (to the real composer textarea, after React
     // commits showComposer=true) as user-gesture-trusted and opens the
@@ -1188,7 +1190,7 @@ const RoomController = () => {
     setReplyToId(messageId ?? null);
     setSelectedId(null);
     setShowComposer(true);
-  }, []);
+  }, [isControlRoom]);
 
   const closeComposer = useCallback(() => {
     setShowComposer(false);
@@ -1645,12 +1647,11 @@ const RoomController = () => {
 
         {/* ---- Bottom-anchored chrome ----
             Non-control rooms get the floating Compose trigger (FAB). Control
-            rooms swap in the command bar — Spawn, Agents (N), Message… —
-            so the operator always has the three primary affordances visible
-            without scrolling, and never sees a generic compose button that
-            would just emit text the daemon would parse as an agent name.
-            The modal composer is shared: in control rooms it opens only via
-            the bar's Message… button, never via FAB or per-message Reply. */}
+            rooms swap in the command bar — Spawn + Agents (N) — and that's
+            the whole control surface: no free-text affordance because the
+            daemon takes no arbitrary instructions there. Every verb it
+            accepts is reachable through these two buttons and their
+            downstream blocks (launcher / list with per-row Join/Kill). */}
         {!isControlRoom && (
           <button
             className="floating-action px-5 py-3.5 text-sm font-semibold"
@@ -1665,7 +1666,6 @@ const RoomController = () => {
             agentCount={allRooms.filter((r) => r.kind === 'agent').length}
             onSpawn={() => void sendBlockResponse('control-cmd-spawn', 'buttons', 'show-launcher')}
             onAgents={() => void sendBlockResponse('control-cmd-list', 'buttons', 'show-list')}
-            onMessage={() => openComposer()}
           />
         )}
 

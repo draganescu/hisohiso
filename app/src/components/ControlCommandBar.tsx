@@ -1,29 +1,29 @@
-// Sticky bottom command bar shown only in control rooms. Replaces the FAB +
-// per-message Reply (both gated out for control rooms by RoomController) with
-// the three operator actions the daemon actually accepts on its control-room
-// surface:
+// Sticky bottom command bar shown only in control rooms. Replaces the FAB
+// and per-message Reply (both gated out for control rooms by RoomController)
+// with the two operator actions the daemon actually accepts on its control-
+// room surface:
 //
-//   - Spawn → block_response value `show-launcher`. Daemon replies with the
-//     agent picker (the same one the welcome message shows).
+//   - Spawn  → block_response value `show-launcher`. Daemon replies with the
+//              agent picker (same one the welcome message shows).
 //   - Agents → block_response value `show-list`. Daemon replies with the
-//     running-agents list. The N badge is a local count from listRooms()
-//     filtered to kind === 'agent' — instant, no round-trip.
-//   - Message… → opens the existing full-screen modal composer. Deliberately
-//     NOT a real inline <input>: an at-bottom focusable control fights the
-//     iOS soft keyboard, which is exactly why the modal composer exists.
+//              running-agents list (each row carries Join/Kill buttons that
+//              the daemon also handles via block_response).
 //
-// Block IDs are stable strings so the same response payload re-emits cleanly
-// if the user re-taps; the daemon doesn't dedupe on block_id anyway.
+// The N badge on Agents is a local count from listRooms().filter(kind ===
+// 'agent') — instant, no daemon round-trip. Spawn is flush-left as primary
+// (the more frequent action); Agents is flush-right as a chip (glanceable
+// status with a live count). No third "message" button because the daemon
+// takes no arbitrary instructions on the control room — every verb it
+// accepts is reachable through these two and their downstream blocks.
 import type { FC } from 'react';
 
 type Props = {
   agentCount: number;
   onSpawn: () => void;
   onAgents: () => void;
-  onMessage: () => void;
 };
 
-export const ControlCommandBar: FC<Props> = ({ agentCount, onSpawn, onAgents, onMessage }) => {
+export const ControlCommandBar: FC<Props> = ({ agentCount, onSpawn, onAgents }) => {
   return (
     <div className="command-bar" role="toolbar" aria-label="Control room actions">
       <button
@@ -43,14 +43,6 @@ export const ControlCommandBar: FC<Props> = ({ agentCount, onSpawn, onAgents, on
       >
         <span>Agents</span>
         <span className="command-bar-chip-badge">{agentCount}</span>
-      </button>
-      <button
-        type="button"
-        className="command-bar-input"
-        onClick={onMessage}
-        aria-label="Open message composer"
-      >
-        Message…
       </button>
     </div>
   );

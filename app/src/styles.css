@@ -280,6 +280,7 @@ body {
   z-index: 30;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.5rem;
   border-radius: 1.5rem;
@@ -343,26 +344,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.command-bar-input {
-  flex: 1;
-  min-width: 0;
-  height: 2.875rem;
-  padding: 0 1rem;
-  border-radius: 1rem;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--rule);
-  background: var(--surface);
-  color: var(--ink-dim);
-  text-align: left;
-  cursor: text;
-}
-
-.command-bar-input:hover {
-  color: var(--ink-soft);
 }
 
 .modal-shell {
