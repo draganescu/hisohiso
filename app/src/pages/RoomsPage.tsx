@@ -5,6 +5,7 @@ import { getToken, listRooms, removeRoom, updateRoomNickname, type StoredRoom } 
 import { navigateTo } from '../lib/navigation';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
+import { RoomRow } from '../components/RoomRow';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -36,8 +37,6 @@ const RoomsPage = () => {
   const [joinError, setJoinError] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState('');
-  const [editingHash, setEditingHash] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -133,107 +132,19 @@ const RoomsPage = () => {
     };
   }, []);
 
-  const kindMeta: Record<StoredRoom['kind'], { label: string; tone: string }> = {
-    control: { label: 'Control', tone: 'border-accent/40 bg-accent-soft text-accent-strong' },
-    agent: { label: 'Agent', tone: 'border-rule bg-surface text-ink-soft' },
-    chat: { label: 'Chat', tone: 'border-rule bg-surface text-ink-soft' },
-  };
-
-  const renderRoomCard = (room: StoredRoom) => {
-    const hasToken = !!getToken(room.roomHash);
-    const isEditing = editingHash === room.roomHash;
-    const displayName = room.nickname || 'Unnamed channel';
-    const badge = kindMeta[room.kind] ?? kindMeta.chat;
-    const relativeTime = (() => {
-      const seconds = Math.floor(Date.now() / 1000) - room.lastSeen;
-      if (seconds < 60) return 'just now';
-      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-      if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-      return new Date(room.lastSeen * 1000).toLocaleDateString();
-    })();
-    return (
-      <div
-        key={room.roomHash}
-        className="glass-panel flex overflow-hidden rounded-[28px] transition hover:border-ink"
-      >
-        <div className="w-1 shrink-0" style={{ backgroundColor: room.color || 'var(--ink-fade)' }} />
-        <div className="flex-1 p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: room.color || 'var(--ink-fade)' }} />
-                {isEditing ? (
-                  <input
-                    className="input-field min-w-0 flex-1 rounded-lg px-2 py-1 text-lg font-semibold"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => {
-                      updateRoomNickname(room.roomHash, editValue.trim());
-                      setEditingHash(null);
-                      setRooms(listRooms());
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        updateRoomNickname(room.roomHash, editValue.trim());
-                        setEditingHash(null);
-                        setRooms(listRooms());
-                      }
-                      if (e.key === 'Escape') {
-                        setEditingHash(null);
-                      }
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="min-w-0 truncate text-lg font-semibold tracking-[-0.015em] hover:underline"
-                    onClick={() => {
-                      setEditingHash(room.roomHash);
-                      setEditValue(room.nickname || '');
-                    }}
-                    title="Click to rename"
-                  >
-                    {displayName}
-                  </button>
-                )}
-                <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.12em] ${badge.tone}`}>
-                  {badge.label}
-                </span>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-dim">
-                <span>{hasToken ? 'Joined' : 'Link saved'}</span>
-                {room.handle && (
-                  <>
-                    <span className="text-ink-fade">·</span>
-                    <span>{room.handle}</span>
-                  </>
-                )}
-                <span className="text-ink-fade">·</span>
-                <span>{relativeTime}</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <a
-                className="rounded-full border border-ink bg-filled px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
-                href={`/room#${room.roomSecret}`}
-              >
-                Open
-              </a>
-              <button
-                className="rounded-full border border-rule bg-surface px-4 py-1.5 text-xs font-medium text-ink transition hover:border-ink"
-                onClick={() => handleForget(room.roomHash)}
-                type="button"
-              >
-                Forget
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderRoomRow = (room: StoredRoom) => (
+    <RoomRow
+      key={room.roomHash}
+      room={room}
+      href={`/room#${room.roomSecret}`}
+      joinedLabel={getToken(room.roomHash) ? 'Joined' : 'Link saved'}
+      onRename={(next) => {
+        updateRoomNickname(room.roomHash, next);
+        setRooms(listRooms());
+      }}
+      onForget={() => handleForget(room.roomHash)}
+    />
+  );
 
   // Open channels = the live operator surface (the daemon control room and the
   // agent rooms it spawned). Plain peer conversations list separately below.
@@ -332,7 +243,7 @@ const RoomsPage = () => {
             <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
               Open channels
             </h2>
-            {openChannels.map(renderRoomCard)}
+            {openChannels.map(renderRoomRow)}
           </section>
         )}
 
@@ -343,7 +254,7 @@ const RoomsPage = () => {
                 Conversations
               </h2>
             )}
-            {conversations.map(renderRoomCard)}
+            {conversations.map(renderRoomRow)}
           </section>
         )}
 

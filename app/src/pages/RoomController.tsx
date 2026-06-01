@@ -66,6 +66,7 @@ import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
 import { ControlCommandBar } from '../components/ControlCommandBar';
+import { RoomRow } from '../components/RoomRow';
 
 const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
 
@@ -2257,46 +2258,18 @@ const RoomController = () => {
                     {allRooms.map((r) => {
                       const isCurrent = r.roomHash === roomHash;
                       return (
-                        <button
+                        <RoomRow
                           key={r.roomHash}
-                          type="button"
-                          onClick={() => {
+                          room={r}
+                          isCurrent={isCurrent}
+                          onSelect={() => {
                             if (isCurrent) {
                               setShowSwitcher(false);
                               return;
                             }
                             navigateToRoom(r.roomSecret);
                           }}
-                          className={`flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors ${
-                            isCurrent
-                              ? 'bg-filled text-on-ink'
-                              : 'text-ink hover:bg-bg'
-                          }`}
-                        >
-                          <div
-                            className="h-3 w-3 shrink-0 rounded-full"
-                            style={{ backgroundColor: r.color || 'var(--ink-fade)' }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">
-                              {r.nickname || 'Unnamed channel'}
-                            </p>
-                            {r.handle && (
-                              <p
-                                className={`truncate text-xs ${
-                                  isCurrent ? 'text-ink-fade' : 'text-ink-dim'
-                                }`}
-                              >
-                                {r.handle}
-                              </p>
-                            )}
-                          </div>
-                          {isCurrent && (
-                            <span className="text-[0.625rem] uppercase tracking-[0.2em] text-ink-fade">
-                              current
-                            </span>
-                          )}
-                        </button>
+                        />
                       );
                     })}
                   </div>
