@@ -46,14 +46,39 @@ export const getMessagePreview = (content: string): string => {
   return compact.length > 160 ? `${compact.slice(0, 157)}...` : compact;
 };
 
+// Render any block_response value as a readable string. Objects (e.g. the
+// swipe verdict map) would otherwise stringify to "[object Object]".
+const formatBlockValue = (val: BlockResponse['value']): string => {
+  if (Array.isArray(val)) return val.join(', ');
+  if (val && typeof val === 'object') {
+    return Object.entries(val)
+      .map(([key, v]) => `${key}: ${v}`)
+      .join(', ');
+  }
+  return String(val);
+};
+
+// Swipe responses are a { cardValue: 'good' | 'bad' } map. Group them into
+// liked / disliked lists instead of dumping the raw object.
+const formatSwipeVerdicts = (val: BlockResponse['value']): string | null => {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return null;
+  const entries = Object.entries(val);
+  const liked = entries.filter(([, v]) => v === 'good').map(([k]) => k);
+  const disliked = entries.filter(([, v]) => v === 'bad').map(([k]) => k);
+  const parts: string[] = [];
+  if (liked.length) parts.push(`👍 ${liked.join(', ')}`);
+  if (disliked.length) parts.push(`👎 ${disliked.join(', ')}`);
+  return parts.length ? parts.join('  ') : 'nothing';
+};
+
 export const formatBlockResponse = (msg: Pick<ChatMessage, 'block_response'>): string | null => {
   const br = msg.block_response;
   if (!br) return null;
   const val = br.value;
-  const label = Array.isArray(val) ? val.join(', ') : String(val);
+  const label = formatBlockValue(val);
   switch (br.type) {
     case 'buttons': return `Selected: ${label}`;
-    case 'swipe': return `Chose: ${label}`;
+    case 'swipe': return `Chose: ${formatSwipeVerdicts(val) ?? label}`;
     case 'slider': return `Set to: ${label}`;
     case 'checklist': return `Checked: ${label}`;
     case 'sortable': return `Order: ${label}`;

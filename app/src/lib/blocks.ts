@@ -329,7 +329,7 @@ export type Block =
 export interface BlockResponse {
   block_id: string;
   type: string;
-  value: string | number | boolean | string[];
+  value: string | number | boolean | string[] | Record<string, string>;
 }
 
 // ─── Interactive block type guard ─────────────────────────────────────────
