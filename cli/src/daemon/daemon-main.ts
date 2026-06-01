@@ -274,30 +274,16 @@ type BuiltinAgentName = string;
 const buildBlock = <T extends Record<string, unknown>>(b: T): T => b;
 
 const launcherBlock = (agentNames: BuiltinAgentName[]): unknown => {
-  // Show up to 3 first-class agents inline; the rest go behind a "More…"
-  // expansion via show-launcher:all. Keeps the welcome compact.
-  const PRIMARY = ['claude', 'codex', 'bash'];
-  const primary = PRIMARY.filter((n) => agentNames.includes(n));
-  const others = agentNames.filter((n) => !primary.includes(n));
-  const options = primary.map((name) => ({ label: titleCase(name), value: `spawn:${name}` }));
-  if (others.length > 0) {
-    options.push({ label: `More… (${others.length})`, value: 'show-launcher:all' });
-  }
+  // Show every available agent — built-ins + registry — in one stacked
+  // list. Stacked (not inline) because >3 buttons inline wrap awkwardly on
+  // narrow viewports, and the picker is short-lived so vertical real estate
+  // is cheap. The previous Top-3 + "More…" two-step exists only as historical
+  // optimization for the welcome message; tapping Spawn now goes straight
+  // to the full list.
   return buildBlock({
     type: 'buttons',
     id: 'launcher',
     prompt: 'Start a session',
-    style: 'inline',
-    multi: false,
-    options,
-  });
-};
-
-const allAgentsBlock = (agentNames: BuiltinAgentName[]): unknown => {
-  return buildBlock({
-    type: 'buttons',
-    id: 'launcher-all',
-    prompt: 'All agents',
     style: 'stacked',
     multi: false,
     options: agentNames.map((name) => ({ label: titleCase(name), value: `spawn:${name}` })),
@@ -527,10 +513,6 @@ class ControlRoom {
         if (typeof value === 'string') {
           if (value === 'show-launcher') {
             await this.reply('Pick an agent.', [launcherBlock(await getAllAgentNames())]);
-            return;
-          }
-          if (value === 'show-launcher:all') {
-            await this.reply('All agents.', [allAgentsBlock(await getAllAgentNames())]);
             return;
           }
           if (value === 'show-list') {
