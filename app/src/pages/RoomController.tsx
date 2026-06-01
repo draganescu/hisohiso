@@ -250,8 +250,11 @@ const RoomController = () => {
     // 'agent'); upsertRoom only ever sharpens away from the 'chat' default.
     upsertRoom(nextHash, nextSecret, null, action.room_kind);
 
+    // Daemon-supplied name applies only when no nickname is set — mirrors the
+    // control-room hostname stamp. So a `join:` rebroadcast (operator taps the
+    // re-shown agent row) doesn't clobber a user rename of the agent room.
     const roomName = action.roomName?.trim();
-    if (roomName) {
+    if (roomName && !getRoomNickname(nextHash)) {
       updateRoomNickname(nextHash, roomName);
     }
 

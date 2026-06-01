@@ -386,6 +386,26 @@ const spawnProgressBlock = (agentName: string, atStep: 'create' | 'sse' | 'ready
 
 const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
+// Short list of evocative adjectives the daemon pairs with the agent name when
+// labelling a freshly-spawned room ("Claude Velvet" instead of "Claude ·
+// a3f9"). The choice is deterministic per agentId so re-broadcasting the join
+// action for the same room (the daemon's `join:` rebroadcast path) reproduces
+// the same name — and so the operator can develop muscle memory ("the Velvet
+// session crashed"). 30 adjectives is plenty given typical session counts;
+// collisions read as a feature, not a bug.
+const AGENT_ADJECTIVES = [
+  'Velvet', 'Neon', 'Chrome', 'Electric', 'Midnight', 'Ghost', 'Riot', 'Disco',
+  'Sunset', 'Ember', 'Frost', 'Glitter', 'Static', 'Hollow', 'Lunar', 'Viper',
+  'Mango', 'Plasma', 'Scarlet', 'Savage', 'Glitch', 'Paper', 'Cosmic', 'Atomic',
+  'Phantom', 'Rebel', 'Vintage', 'Sapphire', 'Bionic', 'Quartz',
+];
+const pickAgentAdjective = (seed: string): string => {
+  // djb2-ish — agentId is only ~4 chars so any reasonable mixer is fine.
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return AGENT_ADJECTIVES[Math.abs(h) % AGENT_ADJECTIVES.length];
+};
+
 const getAllAgentNames = async (): Promise<string[]> => {
   const builtIn = Object.keys(listAgents());
   const registry = await loadRegistry();
@@ -485,7 +505,7 @@ class ControlRoom {
     // join-room flow in RoomController (room navigation + local metadata
     // seed); the code block is a tap-to-copy chip for the operator to read
     // off-screen.
-    const roomName = `${titleCase(agentName)} · ${result.agentId}`;
+    const roomName = `${titleCase(agentName)} ${pickAgentAdjective(result.agentId)}`;
     await this.reply(
       `${agentName} session ready.`,
       [pairingCodeBlock(result.roomPassword)],
@@ -585,7 +605,7 @@ class ControlRoom {
                 roomSecret: info.roomSecret,
                 label: `Join ${info.name}`,
                 code: info.roomPassword,
-                roomName: `${titleCase(info.name)} · ${agentId}`,
+                roomName: `${titleCase(info.name)} ${pickAgentAdjective(agentId)}`,
                 room_kind: 'agent',
               }
             );
