@@ -6,6 +6,7 @@
 // pill (switcher only).
 import { useEffect, useRef, useState } from 'react';
 import type { StoredRoom } from '../lib/storage';
+import { generateRoomName } from '../lib/room-names';
 
 // Kind-badge styling lives here so both consumers stay in sync. 'control' uses
 // the accent palette so the operator's command surface reads as distinct;
@@ -41,7 +42,14 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
 
   const hasMenu = !!(onRename || onForget);
   const badge = KIND_META[room.kind] ?? KIND_META.chat;
-  const displayName = room.nickname || 'Unnamed channel';
+  // Chat rooms get a deterministic punk-pseudo fallback derived from the
+  // room hash (see room-names.ts). Same room hash → same display name on
+  // every device, never written to storage so the user's Rename always
+  // beats it and renaming to empty restores it. Non-chat kinds keep the
+  // bland "Unnamed channel" since control gets the daemon hostname and
+  // agent rooms are named explicitly by the daemon on spawn.
+  const fallbackName = room.kind === 'chat' ? generateRoomName(room.roomHash) : 'Unnamed channel';
+  const displayName = room.nickname || fallbackName;
 
   // Close the kebab popover on any outside tap. Captured at document level so
   // tapping another row's kebab closes ours first (the natural mental model:
@@ -92,7 +100,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
             value={draft}
             autoFocus
             className="input-field w-full rounded-md px-2 py-1 text-sm font-medium"
-            placeholder="Channel name"
+            placeholder={displayName}
           />
         ) : (
           <p className={`truncate text-sm font-medium ${isCurrent ? '' : ''}`}>{displayName}</p>

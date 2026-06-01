@@ -43,7 +43,8 @@ import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import type { BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
-import { formatBlockResponse, getMessagePreview, parseRoomEnvelope, toChatMessageRecord } from '../lib/room-message';
+import { formatBlockResponse, formatBlockValue, getMessagePreview, parseRoomEnvelope, toChatMessageRecord } from '../lib/room-message';
+import { generateRoomName } from '../lib/room-names';
 import {
   fetchOutbox,
   fetchRoomStatus,
@@ -1147,19 +1148,15 @@ const RoomController = () => {
   const sendBlockResponses = useCallback(
     async (responses: BlockResponseInput[]) => {
       if (!roomHash || !token || !cryptoKey || responses.length === 0) return;
-      const toLabel = (value: unknown) =>
-        typeof value === 'string'
-          ? value
-          : Array.isArray(value)
-          ? (value as string[]).join(', ')
-          : String(value);
       const block_responses: BlockResponse[] = responses.map((r) => ({
         block_id: r.blockId,
         type: r.type,
         value: r.value as BlockResponse['value']
       }));
       // One label line per selection so the agent reads them all at once.
-      const text = block_responses.map((br) => `[${br.type}] ${toLabel(br.value)}`).join('\n');
+      // formatBlockValue renders object values (e.g. the swipe verdict map)
+      // instead of letting them stringify to "[object Object]".
+      const text = block_responses.map((br) => `[${br.type}] ${formatBlockValue(br.value)}`).join('\n');
       // Mirror the single case into block_response so the daemon control room
       // and single-block rendering keep working unchanged.
       const single = block_responses.length === 1 ? block_responses[0] : null;
@@ -1438,7 +1435,7 @@ const RoomController = () => {
             </button>
             <div className="pointer-events-auto pill-control flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5">
               <h1 className="truncate text-sm font-semibold tracking-[-0.015em]">
-                {roomNickname || 'Channel'}
+                {roomNickname || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'Channel')}
               </h1>
             </div>
             <div
@@ -2054,7 +2051,7 @@ const RoomController = () => {
                   <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Channel name</p>
                   <input
                     className="mt-2 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
-                    placeholder="Give this channel a name"
+                    placeholder={roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'Give this channel a name'}
                     value={roomNickname}
                     onChange={(e) => {
                       setRoomNickname(e.target.value);
