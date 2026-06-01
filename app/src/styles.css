@@ -228,6 +228,21 @@ body {
   box-shadow: 0 12px 35px -30px rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(18px) saturate(132%);
   -webkit-backdrop-filter: blur(18px) saturate(132%);
+  /* Cap the bubble: nothing inside is allowed to push the page wider than
+     the chat column. `min-width: 0` lets the bubble shrink below the
+     intrinsic width of its content (otherwise an unbreakable URL/path
+     would force the flex chain wider). `overflow: hidden` clips anything
+     that still tries to escape — typically inside the inner scroll panes
+     of blocks like diff/code/terminal/carousel, which keep their own
+     overflow-x: auto for legitimate inner horizontal scroll. The
+     `overflow-wrap: anywhere` inherits into text children (`<p>`, `<li>`,
+     `<a>`, `<span>`) and breaks unbreakable strings at any character;
+     `<pre>` with `white-space: pre` ignores the rule, so code/diff/
+     terminal content keeps its preserved layout. Result: the PWA itself
+     never scrolls horizontally; specific blocks may, within their bounds. */
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .message-card-in {
