@@ -27,6 +27,21 @@ import { deriveKnockKey } from '../lib/crypto.js';
 import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
+import { hostname } from 'node:os';
+
+// Suggested name the daemon stamps on every control-room envelope so the
+// phone can auto-name the room on first contact. Strip mDNS `.local` (macOS
+// gives us e.g. `Andreis-MacBook-Pro.local`). Empty or junk hostnames
+// (`localhost`, `unknown`, blank) → null, meaning "don't stamp anything";
+// the phone shows "Unnamed channel" until the user renames, which is the
+// pre-feature behaviour anyway.
+const suggestedControlRoomName = ((): string | null => {
+  const raw = hostname().trim().replace(/\.local$/i, '');
+  if (!raw) return null;
+  if (raw.toLowerCase() === 'localhost') return null;
+  if (raw.toLowerCase() === 'unknown') return null;
+  return raw;
+})();
 
 export const runDaemon = async (): Promise<void> => {
   const server = await getServer();
@@ -61,6 +76,11 @@ export const runDaemon = async (): Promise<void> => {
   let currentSse: SSESubscription | null = null;
   let currentPresence: PresenceHandle | null = null;
   let shuttingDown = false;
+  // Same mutable-ref pattern for the per-iteration ControlRoom: each re-pair
+  // rotates the room identity, so we recreate the wrapper but keep a stable
+  // outer binding so shutdown (set up before the first iteration) can call
+  // ctrl?.reply('Daemon stopped.') against whichever iteration is current.
+  let ctrl: ControlRoom | null = null;
 
   // Periodic reconciliation against the server. Catches silent SSE death,
   // missed destroy events, and any other failure mode where local in-memory
@@ -86,11 +106,7 @@ export const runDaemon = async (): Promise<void> => {
     currentPresence?.stop();
     manager.detachAll();
     await removePid();
-    await encryptAndSend(
-      server, state.controlRoomHash, state.participantToken, messageKey,
-      'Daemon stopped.',
-      { handle: 'hisohiso-daemon' }
-    ).catch(() => {});
+    await ctrl?.reply('Daemon stopped.').catch(() => {});
     process.exit(0);
   };
 
@@ -122,34 +138,25 @@ export const runDaemon = async (): Promise<void> => {
 
     const ownTokenHash = await sha256Hex(state.participantToken);
     currentPresence = startPresence(server, state.controlRoomHash, state.participantToken);
+    ctrl = new ControlRoom(server, state, messageKey, manager, suggestedControlRoomName);
 
     if (firstIteration) {
       if (restoreResult && restoreResult.restored > 0) {
-        await encryptAndSend(
-          server, state.controlRoomHash, state.participantToken, messageKey,
-          `Daemon back. ${restoreResult.restored} room(s) restored — keep going.`,
-          { handle: 'hisohiso-daemon' }
-        );
+        await ctrl.reply(`Daemon back. ${restoreResult.restored} room(s) restored — keep going.`);
       }
       if (restoreResult && restoreResult.dropped > 0) {
-        await encryptAndSend(
-          server, state.controlRoomHash, state.participantToken, messageKey,
-          `${restoreResult.dropped} previous room(s) could not be restored:\n${restoreResult.details.join('\n')}`,
-          { handle: 'hisohiso-daemon' }
-        );
+        await ctrl.reply(`${restoreResult.dropped} previous room(s) could not be restored:\n${restoreResult.details.join('\n')}`);
       }
     } else {
       const active = manager.listRunning().length;
-      await encryptAndSend(
-        server, state.controlRoomHash, state.participantToken, messageKey,
+      await ctrl.reply(
         active > 0
           ? `Control room re-paired. ${active} agent room(s) still active.`
-          : 'Control room re-paired.',
-        { handle: 'hisohiso-daemon' }
+          : 'Control room re-paired.'
       );
     }
 
-    await sendWelcome(server, state.controlRoomHash, state.participantToken, messageKey);
+    await ctrl.sendWelcome();
 
     console.log('Daemon running. Listening on control room...');
 
@@ -164,9 +171,10 @@ export const runDaemon = async (): Promise<void> => {
     });
 
     // Freeze the values the SSE handlers close over so a later re-pair (which reassigns
-    // `state` / `messageKey`) can't redirect in-flight chat decryption to the wrong room.
+    // `state` / `messageKey` / `ctrl`) can't redirect in-flight chat decryption to the wrong room.
     const iterState = state;
     const iterKey = messageKey;
+    const iterCtrl = ctrl;
     // Same k_knock the pairing flow used in setupControlRoom — re-derived here so
     // additional phones can knock and be admitted after the initial pair. Without
     // this the main loop subscribed to the room but had no knock handler, and the
@@ -225,23 +233,37 @@ export const runDaemon = async (): Promise<void> => {
               : event.body.encrypted_payload as EncryptedPayload;
             const msgId = (event.body.msg_id as string) || '';
             const decrypted = await decryptText(iterKey, iterState.controlRoomHash, 'chat', msgId, encPayload);
+            type ControlBlockResponse = {
+              block_id: string;
+              type: string;
+              value: string | number | boolean | string[];
+            };
             const parsed = JSON.parse(decrypted) as {
               text: string;
-              block_response?: {
-                block_id: string;
-                type: string;
-                value: string | number | boolean | string[];
-              };
+              block_response?: ControlBlockResponse;
+              block_responses?: ControlBlockResponse[];
             };
             const text = (parsed.text ?? '').trim();
+            // The phone batches multi-block answers into block_responses; a lone
+            // selection still arrives as block_response. Route each one.
+            const responses: ControlBlockResponse[] =
+              parsed.block_responses && parsed.block_responses.length > 0
+                ? parsed.block_responses
+                : parsed.block_response
+                ? [parsed.block_response]
+                : [];
 
-            if (parsed.block_response) {
-              console.log(`Control [block ${parsed.block_response.block_id}]: ${JSON.stringify(parsed.block_response.value)}`);
+            if (responses.length > 0) {
+              for (const br of responses) {
+                console.log(`Control [block ${br.block_id}]: ${JSON.stringify(br.value)}`);
+              }
+              for (const br of responses) {
+                await iterCtrl.handleControl(br, text);
+              }
             } else {
               console.log(`Control: ${text}`);
+              await iterCtrl.handleControl(undefined, text);
             }
-
-            await handleControl(parsed.block_response, text, manager, server, iterState.controlRoomHash, iterState.participantToken, iterKey);
           } catch (err) {
             console.error('Failed to process message:', err);
           }
@@ -280,47 +302,17 @@ type BuiltinAgentName = string;
 
 const buildBlock = <T extends Record<string, unknown>>(b: T): T => b;
 
-const replyBlocks = async (
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey,
-  text: string,
-  blocks?: unknown[],
-  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string }
-): Promise<void> => {
-  await encryptAndSend(server, controlRoomHash, token, messageKey, text, {
-    handle: 'hisohiso-daemon',
-    blocks,
-    action,
-  });
-};
-
 const launcherBlock = (agentNames: BuiltinAgentName[]): unknown => {
-  // Show up to 3 first-class agents inline; the rest go behind a "More…"
-  // expansion via show-launcher:all. Keeps the welcome compact.
-  const PRIMARY = ['claude', 'codex', 'bash'];
-  const primary = PRIMARY.filter((n) => agentNames.includes(n));
-  const others = agentNames.filter((n) => !primary.includes(n));
-  const options = primary.map((name) => ({ label: titleCase(name), value: `spawn:${name}` }));
-  if (others.length > 0) {
-    options.push({ label: `More… (${others.length})`, value: 'show-launcher:all' });
-  }
+  // Show every available agent — built-ins + registry — in one stacked
+  // list. Stacked (not inline) because >3 buttons inline wrap awkwardly on
+  // narrow viewports, and the picker is short-lived so vertical real estate
+  // is cheap. The previous Top-3 + "More…" two-step exists only as historical
+  // optimization for the welcome message; tapping Spawn now goes straight
+  // to the full list.
   return buildBlock({
     type: 'buttons',
     id: 'launcher',
     prompt: 'Start a session',
-    style: 'inline',
-    multi: false,
-    options,
-  });
-};
-
-const allAgentsBlock = (agentNames: BuiltinAgentName[]): unknown => {
-  return buildBlock({
-    type: 'buttons',
-    id: 'launcher-all',
-    prompt: 'All agents',
     style: 'stacked',
     multi: false,
     options: agentNames.map((name) => ({ label: titleCase(name), value: `spawn:${name}` })),
@@ -394,18 +386,24 @@ const spawnProgressBlock = (agentName: string, atStep: 'create' | 'sse' | 'ready
 
 const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
-const sendWelcome = async (
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  const agentNames = await getAllAgentNames();
-  await replyBlocks(
-    server, controlRoomHash, token, messageKey,
-    'Daemon online.',
-    [launcherBlock(agentNames), helpButtonsBlock()]
-  );
+// Short list of evocative adjectives the daemon pairs with the agent name when
+// labelling a freshly-spawned room ("Claude Velvet" instead of "Claude ·
+// a3f9"). The choice is deterministic per agentId so re-broadcasting the join
+// action for the same room (the daemon's `join:` rebroadcast path) reproduces
+// the same name — and so the operator can develop muscle memory ("the Velvet
+// session crashed"). 30 adjectives is plenty given typical session counts;
+// collisions read as a feature, not a bug.
+const AGENT_ADJECTIVES = [
+  'Velvet', 'Neon', 'Chrome', 'Electric', 'Midnight', 'Ghost', 'Riot', 'Disco',
+  'Sunset', 'Ember', 'Frost', 'Glitter', 'Static', 'Hollow', 'Lunar', 'Viper',
+  'Mango', 'Plasma', 'Scarlet', 'Savage', 'Glitch', 'Paper', 'Cosmic', 'Atomic',
+  'Phantom', 'Rebel', 'Vintage', 'Sapphire', 'Bionic', 'Quartz',
+];
+const pickAgentAdjective = (seed: string): string => {
+  // djb2-ish — agentId is only ~4 chars so any reasonable mixer is fine.
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return AGENT_ADJECTIVES[Math.abs(h) % AGENT_ADJECTIVES.length];
 };
 
 const getAllAgentNames = async (): Promise<string[]> => {
@@ -415,261 +413,235 @@ const getAllAgentNames = async (): Promise<string[]> => {
   return [...new Set([...builtIn, ...registered])];
 };
 
-const sendList = async (
-  manager: AgentManager,
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  // Reconcile before reading so the user-facing list is never stale. The
-  // SSE-delivered destroy path is best-effort; the only authoritative
-  // truth for "is this room still alive" is the server. Cheap on the
-  // common path (handful of HEAD-equivalent GETs in parallel).
-  await manager.reconcileAll();
-  const agents = manager.listRunning();
-  if (agents.length === 0) {
-    await replyBlocks(
-      server, controlRoomHash, token, messageKey,
-      'No agents running.',
-      [launcherBlock(await getAllAgentNames())]
-    );
-    return;
-  }
-  const blocks = agents.map((a) => agentRowBlock(a.agentId, a.name));
-  await replyBlocks(
-    server, controlRoomHash, token, messageKey,
-    `Running agents (${agents.length})`,
-    blocks
-  );
-};
+// Bundles the per-iteration control-room context (server, room identity,
+// message key, manager) so every send/handle stops threading five positional
+// parameters by hand. Recreated each main-loop iteration because the room
+// identity rotates on re-pair; the AgentManager is stable across iterations
+// but its current count rides on every reply via listRunning().length.
+class ControlRoom {
+  constructor(
+    private readonly server: string,
+    private readonly state: DaemonState,
+    private readonly messageKey: CryptoKey,
+    private readonly manager: AgentManager,
+    private readonly suggestedName: string | null
+  ) {}
 
-const sendHelp = async (
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  const agentNames = await getAllAgentNames();
-  await replyBlocks(
-    server, controlRoomHash, token, messageKey,
-    'Tap to act — or type a command (claude / list / kill <id> / help).',
-    [helpButtonsBlock(), launcherBlock(agentNames)]
-  );
-};
-
-const spawnAndAnnounce = async (
-  agentName: string,
-  manager: AgentManager,
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  // First ping: progress block at step 'create'. Spawn fully resolves when SSE
-  // is ready, so we can't render a per-step animation without instrumenting
-  // AgentManager — but two messages (spawning → ready) is enough to confirm
-  // the daemon is alive while the user waits.
-  await replyBlocks(
-    server, controlRoomHash, token, messageKey,
-    `Spawning ${agentName}…`,
-    [spawnProgressBlock(agentName, 'create')]
-  );
-
-  let result: { agentId: string; roomSecret: string; roomPassword: string };
-  try {
-    result = await manager.spawn(agentName);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await replyBlocks(
-      server, controlRoomHash, token, messageKey,
-      `Could not start ${agentName}: ${msg}`,
-      [launcherBlock(await getAllAgentNames())]
-    );
-    return;
+  // Every reply goes into the control room, so stamp `room_kind: 'control'`
+  // — the phone QR-pairs the control room (no join-room action) so this
+  // envelope field is the only way it learns the room's kind. `agent_count`
+  // rides every reply too so the command-bar badge tracks daemon truth;
+  // spawn/kill both cause a control-room message, so the count moves in
+  // lockstep with reality. listRunning() is cheap (O(active-agents) on an
+  // in-memory map) — call per send to avoid stale-count races.
+  //
+  // `room_name` is the same shape: stamped on every reply (cheap), phone
+  // uses it only if no nickname is set, so once the user renames the
+  // suggestion is ignored — and a late-joining or re-pairing phone still
+  // gets the auto-name on its next message.
+  async reply(
+    text: string,
+    blocks?: unknown[],
+    action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: 'chat' | 'control' | 'agent' }
+  ): Promise<void> {
+    await encryptAndSend(this.server, this.state.controlRoomHash, this.state.participantToken, this.messageKey, text, {
+      handle: 'hisohiso-daemon',
+      blocks,
+      action,
+      room_kind: 'control',
+      agent_count: this.manager.listRunning().length,
+      ...(this.suggestedName ? { room_name: this.suggestedName } : {}),
+    });
   }
 
-  // Ready: pairing-code chip + Join action. The action drives the existing
-  // join-room flow in RoomController (room navigation + local metadata seed);
-  // the code block is a tap-to-copy chip for the operator to read off-screen.
-  const roomName = `${titleCase(agentName)} · ${result.agentId}`;
-  await replyBlocks(
-    server, controlRoomHash, token, messageKey,
-    `${agentName} session ready.`,
-    [pairingCodeBlock(result.roomPassword)],
-    {
-      type: 'join-room',
-      roomSecret: result.roomSecret,
-      label: `Join ${agentName}`,
-      code: result.roomPassword,
-      roomName,
+  async sendWelcome(): Promise<void> {
+    const agentNames = await getAllAgentNames();
+    await this.reply('Daemon online.', [launcherBlock(agentNames), helpButtonsBlock()]);
+  }
+
+  async sendList(): Promise<void> {
+    // Reconcile before reading so the user-facing list is never stale. The
+    // SSE-delivered destroy path is best-effort; the only authoritative
+    // truth for "is this room still alive" is the server. Cheap on the
+    // common path (handful of HEAD-equivalent GETs in parallel).
+    await this.manager.reconcileAll();
+    const agents = this.manager.listRunning();
+    if (agents.length === 0) {
+      await this.reply('No agents running.', [launcherBlock(await getAllAgentNames())]);
+      return;
     }
-  );
-};
-
-const handleKillRequest = async (
-  agentId: string,
-  manager: AgentManager,
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  const agent = manager.listRunning().find((a) => a.agentId === agentId);
-  if (!agent) {
-    await replyBlocks(
-      server, controlRoomHash, token, messageKey,
-      `No agent with ID ${agentId}.`
-    );
-    return;
+    const blocks = agents.map((a) => agentRowBlock(a.agentId, a.name));
+    await this.reply(`Running agents (${agents.length})`, blocks);
   }
-  await replyBlocks(
-    server, controlRoomHash, token, messageKey,
-    `Confirm stopping ${agent.name}.`,
-    [killConfirmBlock(agentId, agent.name)]
-  );
-};
 
-const handleKillConfirmed = async (
-  agentId: string,
-  manager: AgentManager,
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  const agent = manager.listRunning().find((a) => a.agentId === agentId);
-  const name = agent?.name ?? 'agent';
-  try {
-    await manager.kill(agentId);
-    await replyBlocks(
-      server, controlRoomHash, token, messageKey,
-      `${name} (${agentId}) stopped.`
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await replyBlocks(
-      server, controlRoomHash, token, messageKey,
-      `Could not stop ${agentId}: ${msg}`
+  async sendHelp(): Promise<void> {
+    const agentNames = await getAllAgentNames();
+    await this.reply(
+      'Tap to act — or type a command (claude / list / kill <id> / help).',
+      [helpButtonsBlock(), launcherBlock(agentNames)]
     );
   }
-};
 
-const handleControl = async (
-  blockResponse: {
-    block_id: string;
-    type: string;
-    value: string | number | boolean | string[];
-  } | undefined,
-  text: string,
-  manager: AgentManager,
-  server: string,
-  controlRoomHash: string,
-  token: string,
-  messageKey: CryptoKey
-): Promise<void> => {
-  try {
-    // Route block responses first — these come from button/confirm taps and
-    // carry a structured value. Text path below stays for power users typing
-    // raw commands; that's also what the original protocol was.
-    if (blockResponse) {
-      const { block_id, type, value } = blockResponse;
+  async spawnAndAnnounce(agentName: string): Promise<void> {
+    // First ping: progress block at step 'create'. Spawn fully resolves when
+    // SSE is ready, so we can't render a per-step animation without
+    // instrumenting AgentManager — but two messages (spawning → ready) is
+    // enough to confirm the daemon is alive while the user waits.
+    await this.reply(`Spawning ${agentName}…`, [spawnProgressBlock(agentName, 'create')]);
 
-      if (type === 'confirm-danger' && block_id.startsWith('kill-confirm:')) {
-        const agentId = block_id.slice('kill-confirm:'.length);
-        if (value === true) {
-          await handleKillConfirmed(agentId, manager, server, controlRoomHash, token, messageKey);
-        } else {
-          await replyBlocks(server, controlRoomHash, token, messageKey, 'Cancelled.');
+    let result: { agentId: string; roomSecret: string; roomPassword: string };
+    try {
+      result = await this.manager.spawn(agentName);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.reply(
+        `Could not start ${agentName}: ${msg}`,
+        [launcherBlock(await getAllAgentNames())]
+      );
+      return;
+    }
+
+    // Ready: pairing-code chip + Join action. The action drives the existing
+    // join-room flow in RoomController (room navigation + local metadata
+    // seed); the code block is a tap-to-copy chip for the operator to read
+    // off-screen.
+    const roomName = `${titleCase(agentName)} ${pickAgentAdjective(result.agentId)}`;
+    await this.reply(
+      `${agentName} session ready.`,
+      [pairingCodeBlock(result.roomPassword)],
+      {
+        type: 'join-room',
+        roomSecret: result.roomSecret,
+        label: `Join ${agentName}`,
+        code: result.roomPassword,
+        roomName,
+        room_kind: 'agent',
+      }
+    );
+  }
+
+  async handleKillRequest(agentId: string): Promise<void> {
+    const agent = this.manager.listRunning().find((a) => a.agentId === agentId);
+    if (!agent) {
+      await this.reply(`No agent with ID ${agentId}.`);
+      return;
+    }
+    await this.reply(`Confirm stopping ${agent.name}.`, [killConfirmBlock(agentId, agent.name)]);
+  }
+
+  async handleKillConfirmed(agentId: string): Promise<void> {
+    const agent = this.manager.listRunning().find((a) => a.agentId === agentId);
+    const name = agent?.name ?? 'agent';
+    try {
+      await this.manager.kill(agentId);
+      await this.reply(`${name} (${agentId}) stopped.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.reply(`Could not stop ${agentId}: ${msg}`);
+    }
+  }
+
+  async handleControl(
+    blockResponse: {
+      block_id: string;
+      type: string;
+      value: string | number | boolean | string[];
+    } | undefined,
+    text: string
+  ): Promise<void> {
+    try {
+      // Route block responses first — these come from button/confirm taps
+      // and carry a structured value. Text path below stays for power users
+      // typing raw commands; that's also what the original protocol was.
+      if (blockResponse) {
+        const { block_id, type, value } = blockResponse;
+
+        if (type === 'confirm-danger' && block_id.startsWith('kill-confirm:')) {
+          const agentId = block_id.slice('kill-confirm:'.length);
+          if (value === true) {
+            await this.handleKillConfirmed(agentId);
+          } else {
+            await this.reply('Cancelled.');
+          }
+          return;
         }
+
+        if (typeof value === 'string') {
+          if (value === 'show-launcher') {
+            await this.reply('Pick an agent.', [launcherBlock(await getAllAgentNames())]);
+            return;
+          }
+          if (value === 'show-list') {
+            await this.sendList();
+            return;
+          }
+          if (value === 'show-help') {
+            await this.sendHelp();
+            return;
+          }
+          if (value.startsWith('spawn:')) {
+            await this.spawnAndAnnounce(value.slice('spawn:'.length));
+            return;
+          }
+          if (value.startsWith('kill:')) {
+            await this.handleKillRequest(value.slice('kill:'.length));
+            return;
+          }
+          if (value.startsWith('join:')) {
+            // Re-post the ready bundle so the operator can rejoin without
+            // scrolling back to the original 'session ready' message. The
+            // join-room action carries the password as the pairing code chip.
+            const agentId = value.slice('join:'.length);
+            const info = this.manager.getRoomInfo(agentId);
+            if (!info) {
+              await this.reply(`No agent with ID ${agentId}.`);
+              return;
+            }
+            await this.reply(
+              `${info.name} session ready.`,
+              [pairingCodeBlock(info.roomPassword)],
+              {
+                type: 'join-room',
+                roomSecret: info.roomSecret,
+                label: `Join ${info.name}`,
+                code: info.roomPassword,
+                roomName: `${titleCase(info.name)} ${pickAgentAdjective(agentId)}`,
+                room_kind: 'agent',
+              }
+            );
+            return;
+          }
+        }
+      }
+
+      // Text fallback path — keeps the original CLI grammar working for
+      // users who would rather type. Lower-case match is intentional; the
+      // welcome blocks include the same shortcuts as button values.
+      const lower = text.toLowerCase();
+      if (lower === '' && !blockResponse) return;
+
+      if (lower === 'list') {
+        await this.sendList();
+        return;
+      }
+      if (lower.startsWith('kill ')) {
+        await this.handleKillRequest(lower.slice(5).trim());
+        return;
+      }
+      if (lower === 'help') {
+        await this.sendHelp();
         return;
       }
 
-      if (typeof value === 'string') {
-        if (value === 'show-launcher') {
-          const names = await getAllAgentNames();
-          await replyBlocks(server, controlRoomHash, token, messageKey, 'Pick an agent.', [launcherBlock(names)]);
-          return;
-        }
-        if (value === 'show-launcher:all') {
-          const names = await getAllAgentNames();
-          await replyBlocks(server, controlRoomHash, token, messageKey, 'All agents.', [allAgentsBlock(names)]);
-          return;
-        }
-        if (value === 'show-list') {
-          await sendList(manager, server, controlRoomHash, token, messageKey);
-          return;
-        }
-        if (value === 'show-help') {
-          await sendHelp(server, controlRoomHash, token, messageKey);
-          return;
-        }
-        if (value.startsWith('spawn:')) {
-          const agentName = value.slice('spawn:'.length);
-          await spawnAndAnnounce(agentName, manager, server, controlRoomHash, token, messageKey);
-          return;
-        }
-        if (value.startsWith('kill:')) {
-          const agentId = value.slice('kill:'.length);
-          await handleKillRequest(agentId, manager, server, controlRoomHash, token, messageKey);
-          return;
-        }
-        if (value.startsWith('join:')) {
-          // Re-post the ready bundle so the operator can rejoin without
-          // scrolling back to the original 'session ready' message. The
-          // join-room action carries the password as the pairing code chip.
-          const agentId = value.slice('join:'.length);
-          const info = manager.getRoomInfo(agentId);
-          if (!info) {
-            await replyBlocks(server, controlRoomHash, token, messageKey, `No agent with ID ${agentId}.`);
-            return;
-          }
-          await replyBlocks(
-            server, controlRoomHash, token, messageKey,
-            `${info.name} session ready.`,
-            [pairingCodeBlock(info.roomPassword)],
-            {
-              type: 'join-room',
-              roomSecret: info.roomSecret,
-              label: `Join ${info.name}`,
-              code: info.roomPassword,
-              roomName: `${titleCase(info.name)} · ${agentId}`,
-            }
-          );
-          return;
-        }
-      }
+      // Anything else — treat as agent name to spawn ("spawn claude" or just "claude")
+      await this.spawnAndAnnounce(lower.replace(/^spawn\s+/, ''));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Control error: ${message}`);
+      await this.reply(`Error: ${message}`);
     }
-
-    // Text fallback path — keeps the original CLI grammar working for users
-    // who would rather type. Note: lower-case match is intentional, the
-    // welcome blocks include the same shortcuts as button values.
-    const lower = text.toLowerCase();
-    if (lower === '' && !blockResponse) return;
-
-    if (lower === 'list') {
-      await sendList(manager, server, controlRoomHash, token, messageKey);
-      return;
-    }
-    if (lower.startsWith('kill ')) {
-      const id = lower.slice(5).trim();
-      await handleKillRequest(id, manager, server, controlRoomHash, token, messageKey);
-      return;
-    }
-    if (lower === 'help') {
-      await sendHelp(server, controlRoomHash, token, messageKey);
-      return;
-    }
-
-    // Anything else — treat as agent name to spawn (allow "spawn claude" or just "claude")
-    const agentName = lower.replace(/^spawn\s+/, '');
-    await spawnAndAnnounce(agentName, manager, server, controlRoomHash, token, messageKey);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`Control error: ${message}`);
-    await replyBlocks(server, controlRoomHash, token, messageKey, `Error: ${message}`);
   }
-};
+}
 
 const setupControlRoom = async (
   server: string,

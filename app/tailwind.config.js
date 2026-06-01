@@ -18,7 +18,10 @@ export default {
         'on-ink': 'var(--on-ink)',
         filled: 'var(--filled)',
         overlay: 'var(--overlay)',
-        'overlay-soft': 'var(--overlay-soft)'
+        'overlay-soft': 'var(--overlay-soft)',
+        accent: 'var(--accent)',
+        'accent-strong': 'var(--accent-strong)',
+        'accent-soft': 'var(--accent-soft)'
       },
       fontFamily: {
         display: ['"Inter"', 'sans-serif'],

@@ -53,4 +53,41 @@ assert(ownRecord.content === 'plain text', 'plain text should be preserved');
 assert(getMessagePreview(' hello\nworld '.repeat(20)).length <= 163, 'message preview should be compact and bounded');
 assert(formatBlockResponse(record) === 'Selected: yes, ship', 'block response labels should be stable');
 
+// Swipe responses carry a { cardValue: 'good' | 'bad' } map — it must render as
+// readable text, never "[object Object]".
+const swipeLabel = formatBlockResponse({
+  block_response: { block_id: 'approach', type: 'swipe', value: { 'plan-a': 'good', 'plan-b': 'bad', 'plan-c': 'good' } },
+});
+assert(swipeLabel === 'Chose: 👍 plan-a, plan-c  👎 plan-b', `swipe response should group verdicts, got: ${swipeLabel}`);
+assert(!swipeLabel!.includes('[object Object]'), 'swipe response must not stringify to [object Object]');
+
+// A single selection mirrors into block_responses so consumers can read either.
+assert(envelope.block_responses?.length === 1, 'single block_response should mirror into block_responses');
+assert(envelope.block_responses?.[0]?.block_id === 'choice', 'mirrored batch should preserve the response');
+
+// A multi-block batch round-trips through block_responses and leaves the
+// singular field null; formatBlockResponse joins one label per selection.
+const batchEnvelope = parseRoomEnvelope(JSON.stringify({
+  text: '[buttons] ship\n[slider] 30',
+  handle: 'operator',
+  block_responses: [
+    { block_id: 'deploy', type: 'buttons', value: 'ship' },
+    { block_id: 'scope', type: 'slider', value: 30 },
+  ],
+})) as RoomEnvelope;
+
+assert(batchEnvelope.block_responses?.length === 2, 'batch should carry every selection');
+assert(batchEnvelope.block_response === null, 'multi-block batch should leave singular block_response null');
+
+const batchRecord = toChatMessageRecord({
+  msgId: 'msg-3',
+  roomHash: 'room-hash',
+  timestamp: 12347,
+  from: 'own-token-hash',
+  plaintext: JSON.stringify(batchEnvelope),
+  ownTokenHash: 'own-token-hash',
+});
+assert(batchRecord.block_responses?.length === 2, 'record should carry the batched responses');
+assert(formatBlockResponse(batchRecord) === 'Selected: ship\nSet to: 30', 'batch labels should join one per line');
+
 console.log('room message contracts OK');

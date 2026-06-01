@@ -40,13 +40,34 @@ export const createRoomAndJoin = async (
   };
 };
 
+export type RoomKind = 'chat' | 'control' | 'agent';
+
 export type SendOptions = {
   handle?: string;
   // `code` carries the per-agent-room pairing code so the phone's join button
   // can display 'Pairing code: 4827' next to it. The phone must type it as the
   // room password during the join flow — that's what gates k_msg/k_knock.
-  action?: { type: string; roomSecret: string; label: string; code?: string };
+  // `room_kind` on the action lets the phone stamp the joined room's kind.
+  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: RoomKind };
   blocks?: unknown[];
+  // Room-kind discriminator carried inside the encrypted envelope. The phone
+  // reads it to learn what a QR-paired room is (e.g. the control room, which
+  // has no join-room action). Encrypted like everything else — the relay never
+  // sees it.
+  room_kind?: RoomKind;
+  // Number of agents the daemon currently has running. Stamped on every
+  // control-room reply (alongside `room_kind: 'control'`) so the phone's
+  // command-bar badge reflects daemon-side truth instead of guessing from
+  // local state — which can't tell whether the user has tapped Join, and
+  // gets no signal when an agent is killed server-side. Encrypted like the
+  // rest of the envelope.
+  agent_count?: number;
+  // Suggested display name for the room the message lives in. Phone uses
+  // this as the nickname ONLY if none is set yet — never overrides a user
+  // rename. Used by the daemon to auto-name the control room (the host
+  // machine's hostname) since the QR-pairing flow gives the phone no
+  // other channel to learn a name for it.
+  room_name?: string;
 };
 
 export const encryptAndSend = async (
@@ -64,6 +85,15 @@ export const encryptAndSend = async (
   }
   if (options?.blocks && options.blocks.length > 0) {
     payloadObj.blocks = options.blocks;
+  }
+  if (options?.room_kind) {
+    payloadObj.room_kind = options.room_kind;
+  }
+  if (typeof options?.agent_count === 'number') {
+    payloadObj.agent_count = options.agent_count;
+  }
+  if (typeof options?.room_name === 'string' && options.room_name !== '') {
+    payloadObj.room_name = options.room_name;
   }
   const payload = JSON.stringify(payloadObj);
   const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, payload);

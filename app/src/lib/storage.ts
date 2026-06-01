@@ -160,10 +160,21 @@ export const clearInAppNavigation = (): void => {
   }
 };
 
+// Every room is exactly one kind, assigned at creation by whoever mints it:
+// the PWA stamps plain peer rooms as 'chat'; the daemon stamps its own room
+// 'control' and spawned agent rooms 'agent'. The discriminator rides inside the
+// encrypted message envelope, so the relay never learns it. Required — there is
+// no unset state once readRooms() has run its backfill.
+export type RoomKind = 'chat' | 'control' | 'agent';
+
+export const isRoomKind = (value: unknown): value is RoomKind =>
+  value === 'chat' || value === 'control' || value === 'agent';
+
 export type StoredRoom = {
   roomHash: string;
   roomSecret: string;
   lastSeen: number;
+  kind: RoomKind;
   handle?: string | null;
   nickname?: string | null;
   color?: string;
@@ -202,7 +213,14 @@ const readRooms = (): StoredRoom[] => {
   }
   try {
     const parsed = JSON.parse(raw) as StoredRoom[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // One-time backfill: rooms persisted before `kind` existed default to
+    // 'chat' so the field is never absent downstream. Writes back lazily via
+    // the callers that already persist (upsert/list), so a read alone is pure.
+    for (const room of parsed) {
+      if (!isRoomKind(room.kind)) room.kind = 'chat';
+    }
+    return parsed;
   } catch {
     return [];
   }
@@ -212,7 +230,12 @@ const writeRooms = (rooms: StoredRoom[]): void => {
   localStorage.setItem(roomsKey, JSON.stringify(rooms));
 };
 
-export const upsertRoom = (roomHash: string, roomSecret: string, handle?: string | null): void => {
+export const upsertRoom = (
+  roomHash: string,
+  roomSecret: string,
+  handle?: string | null,
+  kind?: RoomKind
+): void => {
   const rooms = readRooms();
   const now = Math.floor(Date.now() / 1000);
   const existing = rooms.find((room) => room.roomHash === roomHash);
@@ -222,11 +245,18 @@ export const upsertRoom = (roomHash: string, roomSecret: string, handle?: string
     if (typeof handle === 'string') {
       existing.handle = handle;
     }
+    // A room's kind is learned once and only ever sharpened away from the
+    // 'chat' default — a daemon stamp ('control'/'agent') wins, but we never
+    // downgrade a known kind back to 'chat' on a later plain upsert.
+    if (kind && kind !== 'chat') {
+      existing.kind = kind;
+    }
   } else {
     rooms.push({
       roomHash,
       roomSecret,
       lastSeen: now,
+      kind: kind ?? 'chat',
       handle: typeof handle === 'string' ? handle : null,
       color: generatePastelColor()
     });
@@ -291,4 +321,22 @@ export const getRoomNickname = (roomHash: string): string | null => {
   const rooms = readRooms();
   const existing = rooms.find((room) => room.roomHash === roomHash);
   return existing?.nickname ?? null;
+};
+
+export const getRoomKind = (roomHash: string): RoomKind => {
+  const rooms = readRooms();
+  const existing = rooms.find((room) => room.roomHash === roomHash);
+  return existing?.kind ?? 'chat';
+};
+
+// Persist a kind learned from a daemon message envelope. Mirrors upsertRoom's
+// rule: only sharpens away from 'chat', never downgrades a known kind.
+export const setRoomKind = (roomHash: string, kind: RoomKind): void => {
+  if (kind === 'chat') return;
+  const rooms = readRooms();
+  const existing = rooms.find((room) => room.roomHash === roomHash);
+  if (existing && existing.kind !== kind) {
+    existing.kind = kind;
+    writeRooms(rooms);
+  }
 };

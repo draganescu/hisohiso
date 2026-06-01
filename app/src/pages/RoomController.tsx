@@ -22,11 +22,13 @@ import {
   getHandle,
   getRoomPassword,
   getRoomColor,
+  getRoomKind,
   getRoomNickname,
   getSubscriberJwt,
   getToken,
   listRooms,
   setHandle,
+  setRoomKind,
   setRoomPassword,
   setSubscriberJwt,
   setToken,
@@ -34,13 +36,15 @@ import {
   removeRoom,
   updateRoomHandle,
   updateRoomNickname,
+  type RoomKind,
   type StoredRoom
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import type { BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
-import { formatBlockResponse, getMessagePreview, toChatMessageRecord } from '../lib/room-message';
+import { formatBlockResponse, formatBlockValue, getMessagePreview, parseRoomEnvelope, toChatMessageRecord } from '../lib/room-message';
+import { generateRoomName } from '../lib/room-names';
 import {
   fetchOutbox,
   fetchRoomStatus,
@@ -58,10 +62,12 @@ import {
   type OutboxMessage,
   type RoomLookupResponse,
 } from '../lib/room-session';
-import { BlockRenderer } from '../components/blocks/BlockRenderer';
+import { BlockRenderer, type BlockResponseInput } from '../components/blocks/BlockRenderer';
 import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
+import { ControlCommandBar } from '../components/ControlCommandBar';
+import { RoomRow } from '../components/RoomRow';
 
 const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
 
@@ -146,6 +152,17 @@ const RoomController = () => {
   const [headerCondensed, setHeaderCondensed] = useState(false);
   const [roomNickname, setRoomNickname] = useState<string>(() => initialContext?.roomNickname ?? '');
   const [roomColor, setRoomColor] = useState<string>(() => initialContext?.roomColor ?? '#ccc');
+  // What kind of room this is. Drives chrome: a 'control' room is a tap-only
+  // command surface — no free-text message affordances. Seeded from storage,
+  // then sharpened when a daemon message envelope carries `room_kind`.
+  const [roomKind, setRoomKindState] = useState<RoomKind>('chat');
+  const isControlRoom = roomKind === 'control';
+  // Daemon-reported running-agent count. null = unknown (no daemon envelope
+  // with this field has arrived yet). The command-bar badge hides while
+  // null rather than render a misleading zero. Hydrated by every incoming
+  // control-room message (spawn/kill/welcome/list/etc all stamp it), so it
+  // stays accurate without any local guessing.
+  const [agentCount, setAgentCount] = useState<number | null>(null);
   const [allRooms, setAllRooms] = useState<StoredRoom[]>([]);
   const keyboardVisible = useKeyboardViewport(showComposer);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
@@ -179,6 +196,11 @@ const RoomController = () => {
   // textarea's blur handler knows the dismissal was intentional — it then
   // skips the iOS Done = send branch. Cleared on the next blur.
   const suppressSendOnBlurRef = useRef(false);
+  // Guards against double-submit: a blur (iOS native keyboard "Done") and a tap
+  // on the Send button can both fire before the first send's network round-trip
+  // resolves and clears the draft, minting two msgIds for one message. Held for
+  // the duration of an in-flight send so concurrent triggers no-op.
+  const sendInFlightRef = useRef(false);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
   // Ephemeral keypair used to receive the wrapped participant token after a
@@ -224,10 +246,15 @@ const RoomController = () => {
     if (!nextSecret) return;
 
     const nextHash = await deriveRoomHash(nextSecret);
-    upsertRoom(nextHash, nextSecret, null);
+    // Stamp the kind the daemon declared on the action (agent rooms carry
+    // 'agent'); upsertRoom only ever sharpens away from the 'chat' default.
+    upsertRoom(nextHash, nextSecret, null, action.room_kind);
 
+    // Daemon-supplied name applies only when no nickname is set — mirrors the
+    // control-room hostname stamp. So a `join:` rebroadcast (operator taps the
+    // re-shown agent row) doesn't clobber a user rename of the agent room.
     const roomName = action.roomName?.trim();
-    if (roomName) {
+    if (roomName && !getRoomNickname(nextHash)) {
       updateRoomNickname(nextHash, roomName);
     }
 
@@ -311,8 +338,14 @@ const RoomController = () => {
     [roomHash]
   );
 
-  const persistMessage = useCallback((record: ChatMessage) => {
-    void saveMessage(record).catch(() => undefined);
+  const persistMessage = useCallback(async (record: ChatMessage): Promise<void> => {
+    try {
+      await saveMessage(record);
+    } catch (err) {
+      // A swallowed write means the message is only in memory and vanishes on
+      // the next reload/reconcile. Surface it instead of dropping it silently.
+      console.error('Failed to persist message', record.id, err);
+    }
   }, []);
 
   const ingestEncryptedChat = useCallback(async (
@@ -322,9 +355,42 @@ const RoomController = () => {
     rawPayload: unknown
   ) => {
     if (!cryptoKey || !roomHash || !msgId || !rawPayload) return;
-    const parsed: EncryptedPayload =
-      typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
-    const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
+    let plaintext: string;
+    try {
+      const parsed: EncryptedPayload =
+        typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
+      plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
+    } catch (err) {
+      // A decrypt/parse failure used to bubble to handleEvent's catch and get
+      // dropped with no trace — the message simply never appeared. Log it so a
+      // lost inbound message is diagnosable instead of silent.
+      console.error('Failed to decrypt inbound message', msgId, err);
+      return;
+    }
+    // Learn the room's kind from the daemon's envelope stamp. The control room
+    // is QR-paired (no join-room action), so this is how the phone discovers it
+    // is a command surface. setRoomKind only sharpens away from 'chat'.
+    const envelope = parseRoomEnvelope(plaintext);
+    const envKind = envelope.room_kind;
+    if (envKind && envKind !== 'chat') {
+      setRoomKind(roomHash, envKind);
+      setRoomKindState((prev) => (prev === envKind ? prev : envKind));
+    }
+    // Pick up the daemon-reported agent count off any control-room envelope.
+    // Gated on room_kind === 'control' so a peer chat message that happens
+    // to carry an `agent_count` field can't pollute the badge. Updates the
+    // command-bar in real time as spawn/kill events flow through.
+    if (envKind === 'control' && typeof envelope.agent_count === 'number') {
+      setAgentCount(envelope.agent_count);
+    }
+    // Auto-name the control room from the daemon's hostname stamp, but ONLY
+    // if no nickname is set yet — the user's kebab → Rename always wins,
+    // and once renamed every subsequent stamp is ignored. `getRoomNickname`
+    // reads localStorage, so this also no-ops after the first set per room.
+    if (envKind === 'control' && envelope.room_name && !getRoomNickname(roomHash)) {
+      updateRoomNickname(roomHash, envelope.room_name);
+      setRoomNickname(envelope.room_name);
+    }
     const messageRecord = toChatMessageRecord({
       msgId,
       roomHash,
@@ -334,7 +400,9 @@ const RoomController = () => {
       ownTokenHash: tokenHash,
     });
     if (messageRecord.direction === 'in') setHasCompanion(true);
-    persistMessage(messageRecord);
+    // Persist before exposing to state so a write failure is logged rather than
+    // leaving a memory-only message that disappears on the next reconcile.
+    await persistMessage(messageRecord);
     setMessages((prev) => {
       if (prev.find((item) => item.id === msgId)) return prev;
       return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
@@ -494,13 +562,27 @@ const RoomController = () => {
         setRoomHash(hash);
         const localMessages = await loadMessages(hash);
         if (!active) return;
-        setMessages(localMessages);
+        // Merge persisted history with any in-memory messages for this room
+        // that arrived live but haven't been read back from IndexedDB yet.
+        // A blind replace here wiped a just-rendered message whose async
+        // persist hadn't landed — it appeared, then vanished on this reload.
+        // Other rooms' messages are dropped (room switch) since loadMessages
+        // is scoped to `hash`.
+        setMessages((prev) => {
+          const byId = new Map<string, ChatMessage>();
+          for (const m of localMessages) byId.set(m.id, m);
+          for (const m of prev) {
+            if (m.room_hash === hash && !byId.has(m.id)) byId.set(m.id, m);
+          }
+          return [...byId.values()].sort((a, b) => a.timestamp - b.timestamp);
+        });
         const savedHandle = getHandle(hash);
         const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
         setRoomPasswordState(savedRoomPassword ?? '');
         setRoomColor(getRoomColor(hash));
         setRoomNickname(getRoomNickname(hash) ?? '');
+        setRoomKindState(getRoomKind(hash));
 
         const existingToken = getToken(hash);
         if (existingToken) {
@@ -988,7 +1070,7 @@ const RoomController = () => {
         type: 'system',
         direction: 'in'
       };
-      persistMessage(record);
+      void persistMessage(record);
       setMessages((prev) => [...prev, record].sort((a, b) => a.timestamp - b.timestamp));
     },
     [roomHash, persistMessage]
@@ -998,6 +1080,11 @@ const RoomController = () => {
     if (!roomHash || !token || !cryptoKey || !chatInput.trim()) {
       return;
     }
+    // One send at a time. The draft is only cleared after the await below, so
+    // without this a second trigger would read the same draft and send again.
+    if (sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    try {
 
     const trimmed = chatInput.trim();
     if (trimmed.startsWith('/iam')) {
@@ -1041,7 +1128,7 @@ const RoomController = () => {
         from: tokenHash,
         handle: handle || null
       };
-      persistMessage(messageRecord);
+      void persistMessage(messageRecord);
       setMessages((prev) => {
         if (prev.find((item) => item.id === msgId)) {
           return prev;
@@ -1053,22 +1140,35 @@ const RoomController = () => {
       setReplyToId(null);
       setSelectedId(null);
     }
+    } finally {
+      sendInFlightRef.current = false;
+    }
   }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret, persistMessage]);
 
-  const sendBlockResponse = useCallback(
-    async (blockId: string, blockType: string, value: unknown) => {
-      if (!roomHash || !token || !cryptoKey) return;
-      const label =
-        typeof value === 'string'
-          ? value
-          : Array.isArray(value)
-          ? (value as string[]).join(', ')
-          : String(value);
+  // All selections from one agent message are sent together as a single
+  // encrypted message. Sending them one-at-a-time used to make the first reply
+  // win while the rest queued behind it, starving the agent of context.
+  const sendBlockResponses = useCallback(
+    async (responses: BlockResponseInput[]) => {
+      if (!roomHash || !token || !cryptoKey || responses.length === 0) return;
+      const block_responses: BlockResponse[] = responses.map((r) => ({
+        block_id: r.blockId,
+        type: r.type,
+        value: r.value as BlockResponse['value']
+      }));
+      // One label line per selection so the agent reads them all at once.
+      // formatBlockValue renders object values (e.g. the swipe verdict map)
+      // instead of letting them stringify to "[object Object]".
+      const text = block_responses.map((br) => `[${br.type}] ${formatBlockValue(br.value)}`).join('\n');
+      // Mirror the single case into block_response so the daemon control room
+      // and single-block rendering keep working unchanged.
+      const single = block_responses.length === 1 ? block_responses[0] : null;
       const msgId = base64UrlEncode(randomBytes(12));
       const payload = JSON.stringify({
-        text: `[${blockType}] ${label}`,
+        text,
         handle: handle || null,
-        block_response: { block_id: blockId, type: blockType, value }
+        block_responses,
+        ...(single ? { block_response: single } : {})
       });
       const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
       const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
@@ -1077,14 +1177,15 @@ const RoomController = () => {
           id: msgId,
           room_hash: roomHash,
           timestamp: Date.now(),
-          content: `[${blockType}] ${label}`,
+          content: text,
           type: 'chat',
           direction: 'out',
           from: tokenHash,
           handle: handle || null,
-          block_response: { block_id: blockId, type: blockType, value: value as BlockResponse['value'] }
+          block_response: single,
+          block_responses
         };
-        persistMessage(messageRecord);
+        void persistMessage(messageRecord);
         setMessages((prev) => {
           if (prev.find((item) => item.id === msgId)) return prev;
           return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
@@ -1153,6 +1254,14 @@ const RoomController = () => {
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
+    // Control rooms have no free-text affordance — every verb the daemon
+    // accepts is reachable via the command bar's Spawn/Agents buttons and
+    // their downstream blocks. The FAB and per-message Reply are hidden
+    // (see render below), and there's no other caller of this function in
+    // a control room. The early-return is defense-in-depth so a future code
+    // path (a new block type, a new keyboard shortcut, etc.) can't silently
+    // re-open the composer here.
+    if (isControlRoom) return;
     // Focus a hidden proxy textarea synchronously so Safari counts the
     // subsequent focus jump (to the real composer textarea, after React
     // commits showComposer=true) as user-gesture-trusted and opens the
@@ -1162,7 +1271,7 @@ const RoomController = () => {
     setReplyToId(messageId ?? null);
     setSelectedId(null);
     setShowComposer(true);
-  }, []);
+  }, [isControlRoom]);
 
   const closeComposer = useCallback(() => {
     setShowComposer(false);
@@ -1329,7 +1438,7 @@ const RoomController = () => {
             </button>
             <div className="pointer-events-auto pill-control flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5">
               <h1 className="truncate text-sm font-semibold tracking-[-0.015em]">
-                {roomNickname || 'Channel'}
+                {roomNickname || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'Channel')}
               </h1>
             </div>
             <div
@@ -1486,7 +1595,7 @@ const RoomController = () => {
                       }`}
                     >
                       <p className="whitespace-pre-line break-words text-[0.9375rem]">
-                        {msg.block_response ? (
+                        {msg.block_response || (msg.block_responses && msg.block_responses.length > 0) ? (
                           <span className="flex items-center gap-2">
                             <span
                               className={`inline-block h-1.5 w-1.5 rounded-full ${
@@ -1558,14 +1667,18 @@ const RoomController = () => {
                       }`}
                     >
                       <span>{formatMailStamp(msg.timestamp)}</span>
-                      <span aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        className="hover:text-ink"
-                        onClick={() => openComposer(msg.id)}
-                      >
-                        Reply
-                      </button>
+                      {!isControlRoom && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <button
+                            type="button"
+                            className="hover:text-ink"
+                            onClick={() => openComposer(msg.id)}
+                          >
+                            Reply
+                          </button>
+                        </>
+                      )}
                       <span aria-hidden="true">·</span>
                       <button
                         type="button"
@@ -1613,18 +1726,29 @@ const RoomController = () => {
           </button>
         )}
 
-        {/* ---- Floating Compose trigger ----
-            Opens the full-screen composer below. We can't pin a normal
-            inline composer to the top of the soft keyboard on iOS/Android
-            PWAs (no API anchors anything to the keyboard); the modal
-            sidesteps that by being the viewport while the keyboard is up. */}
-        <button
-          className="floating-action px-5 py-3.5 text-sm font-semibold"
-          onClick={() => openComposer()}
-          type="button"
-        >
-          {replyTarget ? 'Continue reply' : 'Compose'}
-        </button>
+        {/* ---- Bottom-anchored chrome ----
+            Non-control rooms get the floating Compose trigger (FAB). Control
+            rooms swap in the command bar — Spawn + Agents (N) — and that's
+            the whole control surface: no free-text affordance because the
+            daemon takes no arbitrary instructions there. Every verb it
+            accepts is reachable through these two buttons and their
+            downstream blocks (launcher / list with per-row Join/Kill). */}
+        {!isControlRoom && (
+          <button
+            className="floating-action px-5 py-3.5 text-sm font-semibold"
+            onClick={() => openComposer()}
+            type="button"
+          >
+            {replyTarget ? 'Continue reply' : 'Compose'}
+          </button>
+        )}
+        {isControlRoom && (
+          <ControlCommandBar
+            agentCount={agentCount}
+            onSpawn={() => void sendBlockResponses([{ blockId: 'control-cmd-spawn', type: 'buttons', value: 'show-launcher' }])}
+            onAgents={() => void sendBlockResponses([{ blockId: 'control-cmd-list', type: 'buttons', value: 'show-list' }])}
+          />
+        )}
 
         {/* ---- Full-screen modal composer ----
             Layout is a vertical flex column: optional reply preview, then a
@@ -1780,7 +1904,7 @@ const RoomController = () => {
                   }`}
                 >
                   <p className="whitespace-pre-wrap break-words text-[0.9375rem]">
-                    {activeMessage.block_response
+                    {activeMessage.block_response || (activeMessage.block_responses && activeMessage.block_responses.length > 0)
                       ? formatBlockResponse(activeMessage) || activeMessage.content
                       : activeMessage.content || 'Empty message'}
                   </p>
@@ -1790,7 +1914,7 @@ const RoomController = () => {
                   <div className="rounded-[14px] border border-rule bg-surface p-4">
                     <BlockRenderer
                       blocks={activeMessage.blocks}
-                      onRespond={sendBlockResponse}
+                      onRespond={sendBlockResponses}
                       progressOverrides={progressOverrides}
                     />
                   </div>
@@ -1930,7 +2054,7 @@ const RoomController = () => {
                   <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Channel name</p>
                   <input
                     className="mt-2 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
-                    placeholder="Give this channel a name"
+                    placeholder={roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'Give this channel a name'}
                     value={roomNickname}
                     onChange={(e) => {
                       setRoomNickname(e.target.value);
@@ -2142,46 +2266,18 @@ const RoomController = () => {
                     {allRooms.map((r) => {
                       const isCurrent = r.roomHash === roomHash;
                       return (
-                        <button
+                        <RoomRow
                           key={r.roomHash}
-                          type="button"
-                          onClick={() => {
+                          room={r}
+                          isCurrent={isCurrent}
+                          onSelect={() => {
                             if (isCurrent) {
                               setShowSwitcher(false);
                               return;
                             }
                             navigateToRoom(r.roomSecret);
                           }}
-                          className={`flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors ${
-                            isCurrent
-                              ? 'bg-filled text-on-ink'
-                              : 'text-ink hover:bg-bg'
-                          }`}
-                        >
-                          <div
-                            className="h-3 w-3 shrink-0 rounded-full"
-                            style={{ backgroundColor: r.color || 'var(--ink-fade)' }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">
-                              {r.nickname || 'Unnamed channel'}
-                            </p>
-                            {r.handle && (
-                              <p
-                                className={`truncate text-xs ${
-                                  isCurrent ? 'text-ink-fade' : 'text-ink-dim'
-                                }`}
-                              >
-                                {r.handle}
-                              </p>
-                            )}
-                          </div>
-                          {isCurrent && (
-                            <span className="text-[0.625rem] uppercase tracking-[0.2em] text-ink-fade">
-                              current
-                            </span>
-                          )}
-                        </button>
+                        />
                       );
                     })}
                   </div>
