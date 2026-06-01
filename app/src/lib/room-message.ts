@@ -1,5 +1,12 @@
 import type { Block, BlockResponse } from './blocks';
 import type { ChatMessage, MessageAction } from './db';
+import type { RoomKind } from './storage';
+
+// Local guard (kept here rather than imported as a value from storage) so this
+// module has no runtime dependency on storage — storage touches localStorage,
+// and the room-message contract test compiles this file in isolation.
+const isRoomKindValue = (value: unknown): value is RoomKind =>
+  value === 'chat' || value === 'control' || value === 'agent';
 
 export type RoomEnvelope = {
   text: string;
@@ -7,6 +14,10 @@ export type RoomEnvelope = {
   action?: MessageAction | null;
   blocks?: Block[] | null;
   block_response?: BlockResponse | null;
+  // Room-kind discriminator stamped by the daemon on its control-room
+  // messages. Lets the phone learn that a QR-paired room is the control room
+  // (there is no join-room action for it). null when the sender didn't stamp.
+  room_kind?: RoomKind | null;
 };
 
 export type ChatMessageRecordInput = {
@@ -54,6 +65,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
   let messageAction: MessageAction | null = null;
   let messageBlocks: Block[] | null = null;
   let messageBlockResponse: BlockResponse | null = null;
+  let messageRoomKind: RoomKind | null = null;
 
   if (plaintext.trim().startsWith('{')) {
     try {
@@ -63,6 +75,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
         action?: MessageAction;
         blocks?: Block[];
         block_response?: BlockResponse;
+        room_kind?: unknown;
       };
       if (typeof obj.text === 'string') messageText = obj.text;
       if (typeof obj.handle === 'string') messageHandle = obj.handle;
@@ -73,6 +86,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
       if (obj.block_response && typeof obj.block_response === 'object' && obj.block_response.block_id) {
         messageBlockResponse = obj.block_response;
       }
+      if (isRoomKindValue(obj.room_kind)) messageRoomKind = obj.room_kind;
     } catch {
       messageText = plaintext;
     }
@@ -84,6 +98,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
     action: messageAction,
     blocks: messageBlocks,
     block_response: messageBlockResponse,
+    room_kind: messageRoomKind,
   };
 };
 

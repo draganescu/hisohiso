@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { Block, BlockResponse } from './blocks';
+import type { RoomKind } from './storage';
 
 export type MessageAction = {
   type: 'join-room';
@@ -12,6 +13,9 @@ export type MessageAction = {
   // Optional local-only room name suggested by the sender. Used by the
   // daemon control room to name freshly spawned agent rooms on the phone.
   roomName?: string;
+  // Kind of the room being joined, so the phone stamps it correctly on join.
+  // Daemon-spawned agent rooms carry 'agent'.
+  room_kind?: RoomKind;
 };
 
 export type ChatMessage = {

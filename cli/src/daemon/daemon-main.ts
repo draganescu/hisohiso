@@ -287,12 +287,17 @@ const replyBlocks = async (
   messageKey: CryptoKey,
   text: string,
   blocks?: unknown[],
-  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string }
+  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: 'chat' | 'control' | 'agent' }
 ): Promise<void> => {
+  // Every reply goes into the control room, so stamp it 'control'. The phone
+  // pairs the control room via QR (no join-room action), so this envelope field
+  // is the only way it learns the room's kind. Stamping every message — not
+  // just the welcome — means a phone that joined mid-session still finds out.
   await encryptAndSend(server, controlRoomHash, token, messageKey, text, {
     handle: 'hisohiso-daemon',
     blocks,
     action,
+    room_kind: 'control',
   });
 };
 
@@ -503,6 +508,7 @@ const spawnAndAnnounce = async (
       label: `Join ${agentName}`,
       code: result.roomPassword,
       roomName,
+      room_kind: 'agent',
     }
   );
 };
@@ -634,6 +640,7 @@ const handleControl = async (
               label: `Join ${info.name}`,
               code: info.roomPassword,
               roomName: `${titleCase(info.name)} · ${agentId}`,
+              room_kind: 'agent',
             }
           );
           return;

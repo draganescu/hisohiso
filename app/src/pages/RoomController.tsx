@@ -22,11 +22,13 @@ import {
   getHandle,
   getRoomPassword,
   getRoomColor,
+  getRoomKind,
   getRoomNickname,
   getSubscriberJwt,
   getToken,
   listRooms,
   setHandle,
+  setRoomKind,
   setRoomPassword,
   setSubscriberJwt,
   setToken,
@@ -34,13 +36,14 @@ import {
   removeRoom,
   updateRoomHandle,
   updateRoomNickname,
+  type RoomKind,
   type StoredRoom
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import type { BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
-import { formatBlockResponse, getMessagePreview, toChatMessageRecord } from '../lib/room-message';
+import { formatBlockResponse, getMessagePreview, parseRoomEnvelope, toChatMessageRecord } from '../lib/room-message';
 import {
   fetchOutbox,
   fetchRoomStatus,
@@ -146,6 +149,11 @@ const RoomController = () => {
   const [headerCondensed, setHeaderCondensed] = useState(false);
   const [roomNickname, setRoomNickname] = useState<string>(() => initialContext?.roomNickname ?? '');
   const [roomColor, setRoomColor] = useState<string>(() => initialContext?.roomColor ?? '#ccc');
+  // What kind of room this is. Drives chrome: a 'control' room is a tap-only
+  // command surface — no free-text message affordances. Seeded from storage,
+  // then sharpened when a daemon message envelope carries `room_kind`.
+  const [roomKind, setRoomKindState] = useState<RoomKind>('chat');
+  const isControlRoom = roomKind === 'control';
   const [allRooms, setAllRooms] = useState<StoredRoom[]>([]);
   const keyboardVisible = useKeyboardViewport(showComposer);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
@@ -224,7 +232,9 @@ const RoomController = () => {
     if (!nextSecret) return;
 
     const nextHash = await deriveRoomHash(nextSecret);
-    upsertRoom(nextHash, nextSecret, null);
+    // Stamp the kind the daemon declared on the action (agent rooms carry
+    // 'agent'); upsertRoom only ever sharpens away from the 'chat' default.
+    upsertRoom(nextHash, nextSecret, null, action.room_kind);
 
     const roomName = action.roomName?.trim();
     if (roomName) {
@@ -325,6 +335,14 @@ const RoomController = () => {
     const parsed: EncryptedPayload =
       typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
     const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
+    // Learn the room's kind from the daemon's envelope stamp. The control room
+    // is QR-paired (no join-room action), so this is how the phone discovers it
+    // is a command surface. setRoomKind only sharpens away from 'chat'.
+    const envKind = parseRoomEnvelope(plaintext).room_kind;
+    if (envKind && envKind !== 'chat') {
+      setRoomKind(roomHash, envKind);
+      setRoomKindState((prev) => (prev === envKind ? prev : envKind));
+    }
     const messageRecord = toChatMessageRecord({
       msgId,
       roomHash,
@@ -501,6 +519,7 @@ const RoomController = () => {
         setRoomPasswordState(savedRoomPassword ?? '');
         setRoomColor(getRoomColor(hash));
         setRoomNickname(getRoomNickname(hash) ?? '');
+        setRoomKindState(getRoomKind(hash));
 
         const existingToken = getToken(hash);
         if (existingToken) {
@@ -1153,6 +1172,9 @@ const RoomController = () => {
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
+    // Control rooms have no free-text message affordance — every action is a
+    // tappable block. Swallow any path that would open the composer there.
+    if (isControlRoom) return;
     // Focus a hidden proxy textarea synchronously so Safari counts the
     // subsequent focus jump (to the real composer textarea, after React
     // commits showComposer=true) as user-gesture-trusted and opens the
@@ -1162,7 +1184,7 @@ const RoomController = () => {
     setReplyToId(messageId ?? null);
     setSelectedId(null);
     setShowComposer(true);
-  }, []);
+  }, [isControlRoom]);
 
   const closeComposer = useCallback(() => {
     setShowComposer(false);
@@ -1558,14 +1580,18 @@ const RoomController = () => {
                       }`}
                     >
                       <span>{formatMailStamp(msg.timestamp)}</span>
-                      <span aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        className="hover:text-ink"
-                        onClick={() => openComposer(msg.id)}
-                      >
-                        Reply
-                      </button>
+                      {!isControlRoom && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <button
+                            type="button"
+                            className="hover:text-ink"
+                            onClick={() => openComposer(msg.id)}
+                          >
+                            Reply
+                          </button>
+                        </>
+                      )}
                       <span aria-hidden="true">·</span>
                       <button
                         type="button"
@@ -1618,13 +1644,15 @@ const RoomController = () => {
             inline composer to the top of the soft keyboard on iOS/Android
             PWAs (no API anchors anything to the keyboard); the modal
             sidesteps that by being the viewport while the keyboard is up. */}
-        <button
-          className="floating-action px-5 py-3.5 text-sm font-semibold"
-          onClick={() => openComposer()}
-          type="button"
-        >
-          {replyTarget ? 'Continue reply' : 'Compose'}
-        </button>
+        {!isControlRoom && (
+          <button
+            className="floating-action px-5 py-3.5 text-sm font-semibold"
+            onClick={() => openComposer()}
+            type="button"
+          >
+            {replyTarget ? 'Continue reply' : 'Compose'}
+          </button>
+        )}
 
         {/* ---- Full-screen modal composer ----
             Layout is a vertical flex column: optional reply preview, then a
