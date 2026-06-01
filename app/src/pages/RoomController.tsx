@@ -404,7 +404,20 @@ const RoomController = () => {
     // leaving a memory-only message that disappears on the next reconcile.
     await persistMessage(messageRecord);
     setMessages((prev) => {
-      if (prev.find((item) => item.id === msgId)) return prev;
+      const existing = prev.find((item) => item.id === msgId);
+      if (existing) {
+        // This is the echo of a message we already hold — almost always our own
+        // optimistic send, which was stamped with the client's local Date.now().
+        // The daemon's replies are stamped with the server clock (payload.ts), so
+        // a client clock that runs ahead of the server makes our command sort
+        // AFTER the reply it triggered — the launcher rendering above the "spawn"
+        // bubble. Re-stamp the existing record onto the server's clock so command
+        // and reply share one monotonic ordering and causal order is preserved.
+        if (existing.timestamp === ts) return prev;
+        return prev
+          .map((item) => (item.id === msgId ? { ...item, timestamp: ts } : item))
+          .sort((a, b) => a.timestamp - b.timestamp);
+      }
       return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
     });
   }, [cryptoKey, roomHash, tokenHash, persistMessage]);
