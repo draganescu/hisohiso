@@ -55,6 +55,13 @@ export type SendOptions = {
   // has no join-room action). Encrypted like everything else — the relay never
   // sees it.
   room_kind?: RoomKind;
+  // Number of agents the daemon currently has running. Stamped on every
+  // control-room reply (alongside `room_kind: 'control'`) so the phone's
+  // command-bar badge reflects daemon-side truth instead of guessing from
+  // local state — which can't tell whether the user has tapped Join, and
+  // gets no signal when an agent is killed server-side. Encrypted like the
+  // rest of the envelope.
+  agent_count?: number;
 };
 
 export const encryptAndSend = async (
@@ -75,6 +82,9 @@ export const encryptAndSend = async (
   }
   if (options?.room_kind) {
     payloadObj.room_kind = options.room_kind;
+  }
+  if (typeof options?.agent_count === 'number') {
+    payloadObj.agent_count = options.agent_count;
   }
   const payload = JSON.stringify(payloadObj);
   const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, payload);

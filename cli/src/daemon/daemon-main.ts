@@ -89,7 +89,7 @@ export const runDaemon = async (): Promise<void> => {
     await encryptAndSend(
       server, state.controlRoomHash, state.participantToken, messageKey,
       'Daemon stopped.',
-      { handle: 'hisohiso-daemon' }
+      { handle: 'hisohiso-daemon', room_kind: 'control', agent_count: manager.listRunning().length }
     ).catch(() => {});
     process.exit(0);
   };
@@ -128,14 +128,14 @@ export const runDaemon = async (): Promise<void> => {
         await encryptAndSend(
           server, state.controlRoomHash, state.participantToken, messageKey,
           `Daemon back. ${restoreResult.restored} room(s) restored — keep going.`,
-          { handle: 'hisohiso-daemon' }
+          { handle: 'hisohiso-daemon', room_kind: 'control', agent_count: manager.listRunning().length }
         );
       }
       if (restoreResult && restoreResult.dropped > 0) {
         await encryptAndSend(
           server, state.controlRoomHash, state.participantToken, messageKey,
           `${restoreResult.dropped} previous room(s) could not be restored:\n${restoreResult.details.join('\n')}`,
-          { handle: 'hisohiso-daemon' }
+          { handle: 'hisohiso-daemon', room_kind: 'control', agent_count: manager.listRunning().length }
         );
       }
     } else {
@@ -145,11 +145,11 @@ export const runDaemon = async (): Promise<void> => {
         active > 0
           ? `Control room re-paired. ${active} agent room(s) still active.`
           : 'Control room re-paired.',
-        { handle: 'hisohiso-daemon' }
+        { handle: 'hisohiso-daemon', room_kind: 'control', agent_count: active }
       );
     }
 
-    await sendWelcome(server, state.controlRoomHash, state.participantToken, messageKey);
+    await sendWelcome(server, state.controlRoomHash, state.participantToken, messageKey, manager);
 
     console.log('Daemon running. Listening on control room...');
 
@@ -285,6 +285,7 @@ const replyBlocks = async (
   controlRoomHash: string,
   token: string,
   messageKey: CryptoKey,
+  manager: AgentManager,
   text: string,
   blocks?: unknown[],
   action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: 'chat' | 'control' | 'agent' }
@@ -293,11 +294,18 @@ const replyBlocks = async (
   // pairs the control room via QR (no join-room action), so this envelope field
   // is the only way it learns the room's kind. Stamping every message — not
   // just the welcome — means a phone that joined mid-session still finds out.
+  //
+  // `agent_count` rides on every reply too so the phone's command-bar badge
+  // reflects daemon truth — spawn/kill events both cause a control-room
+  // message, so the count moves in lockstep with reality. listRunning() is
+  // an O(active-agents) read on an in-memory map; cheap enough to call per
+  // send and avoids stale-count races between reply and underlying state.
   await encryptAndSend(server, controlRoomHash, token, messageKey, text, {
     handle: 'hisohiso-daemon',
     blocks,
     action,
     room_kind: 'control',
+    agent_count: manager.listRunning().length,
   });
 };
 
@@ -403,11 +411,12 @@ const sendWelcome = async (
   server: string,
   controlRoomHash: string,
   token: string,
-  messageKey: CryptoKey
+  messageKey: CryptoKey,
+  manager: AgentManager
 ): Promise<void> => {
   const agentNames = await getAllAgentNames();
   await replyBlocks(
-    server, controlRoomHash, token, messageKey,
+    server, controlRoomHash, token, messageKey, manager,
     'Daemon online.',
     [launcherBlock(agentNames), helpButtonsBlock()]
   );
@@ -435,7 +444,7 @@ const sendList = async (
   const agents = manager.listRunning();
   if (agents.length === 0) {
     await replyBlocks(
-      server, controlRoomHash, token, messageKey,
+      server, controlRoomHash, token, messageKey, manager,
       'No agents running.',
       [launcherBlock(await getAllAgentNames())]
     );
@@ -443,7 +452,7 @@ const sendList = async (
   }
   const blocks = agents.map((a) => agentRowBlock(a.agentId, a.name));
   await replyBlocks(
-    server, controlRoomHash, token, messageKey,
+    server, controlRoomHash, token, messageKey, manager,
     `Running agents (${agents.length})`,
     blocks
   );
@@ -453,11 +462,12 @@ const sendHelp = async (
   server: string,
   controlRoomHash: string,
   token: string,
-  messageKey: CryptoKey
+  messageKey: CryptoKey,
+  manager: AgentManager
 ): Promise<void> => {
   const agentNames = await getAllAgentNames();
   await replyBlocks(
-    server, controlRoomHash, token, messageKey,
+    server, controlRoomHash, token, messageKey, manager,
     'Tap to act — or type a command (claude / list / kill <id> / help).',
     [helpButtonsBlock(), launcherBlock(agentNames)]
   );
@@ -476,7 +486,7 @@ const spawnAndAnnounce = async (
   // AgentManager — but two messages (spawning → ready) is enough to confirm
   // the daemon is alive while the user waits.
   await replyBlocks(
-    server, controlRoomHash, token, messageKey,
+    server, controlRoomHash, token, messageKey, manager,
     `Spawning ${agentName}…`,
     [spawnProgressBlock(agentName, 'create')]
   );
@@ -487,7 +497,7 @@ const spawnAndAnnounce = async (
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await replyBlocks(
-      server, controlRoomHash, token, messageKey,
+      server, controlRoomHash, token, messageKey, manager,
       `Could not start ${agentName}: ${msg}`,
       [launcherBlock(await getAllAgentNames())]
     );
@@ -499,7 +509,7 @@ const spawnAndAnnounce = async (
   // the code block is a tap-to-copy chip for the operator to read off-screen.
   const roomName = `${titleCase(agentName)} · ${result.agentId}`;
   await replyBlocks(
-    server, controlRoomHash, token, messageKey,
+    server, controlRoomHash, token, messageKey, manager,
     `${agentName} session ready.`,
     [pairingCodeBlock(result.roomPassword)],
     {
@@ -524,13 +534,13 @@ const handleKillRequest = async (
   const agent = manager.listRunning().find((a) => a.agentId === agentId);
   if (!agent) {
     await replyBlocks(
-      server, controlRoomHash, token, messageKey,
+      server, controlRoomHash, token, messageKey, manager,
       `No agent with ID ${agentId}.`
     );
     return;
   }
   await replyBlocks(
-    server, controlRoomHash, token, messageKey,
+    server, controlRoomHash, token, messageKey, manager,
     `Confirm stopping ${agent.name}.`,
     [killConfirmBlock(agentId, agent.name)]
   );
@@ -549,13 +559,13 @@ const handleKillConfirmed = async (
   try {
     await manager.kill(agentId);
     await replyBlocks(
-      server, controlRoomHash, token, messageKey,
+      server, controlRoomHash, token, messageKey, manager,
       `${name} (${agentId}) stopped.`
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await replyBlocks(
-      server, controlRoomHash, token, messageKey,
+      server, controlRoomHash, token, messageKey, manager,
       `Could not stop ${agentId}: ${msg}`
     );
   }
@@ -586,7 +596,7 @@ const handleControl = async (
         if (value === true) {
           await handleKillConfirmed(agentId, manager, server, controlRoomHash, token, messageKey);
         } else {
-          await replyBlocks(server, controlRoomHash, token, messageKey, 'Cancelled.');
+          await replyBlocks(server, controlRoomHash, token, messageKey, manager, 'Cancelled.');
         }
         return;
       }
@@ -594,12 +604,12 @@ const handleControl = async (
       if (typeof value === 'string') {
         if (value === 'show-launcher') {
           const names = await getAllAgentNames();
-          await replyBlocks(server, controlRoomHash, token, messageKey, 'Pick an agent.', [launcherBlock(names)]);
+          await replyBlocks(server, controlRoomHash, token, messageKey, manager, 'Pick an agent.', [launcherBlock(names)]);
           return;
         }
         if (value === 'show-launcher:all') {
           const names = await getAllAgentNames();
-          await replyBlocks(server, controlRoomHash, token, messageKey, 'All agents.', [allAgentsBlock(names)]);
+          await replyBlocks(server, controlRoomHash, token, messageKey, manager, 'All agents.', [allAgentsBlock(names)]);
           return;
         }
         if (value === 'show-list') {
@@ -607,7 +617,7 @@ const handleControl = async (
           return;
         }
         if (value === 'show-help') {
-          await sendHelp(server, controlRoomHash, token, messageKey);
+          await sendHelp(server, controlRoomHash, token, messageKey, manager);
           return;
         }
         if (value.startsWith('spawn:')) {
@@ -627,11 +637,11 @@ const handleControl = async (
           const agentId = value.slice('join:'.length);
           const info = manager.getRoomInfo(agentId);
           if (!info) {
-            await replyBlocks(server, controlRoomHash, token, messageKey, `No agent with ID ${agentId}.`);
+            await replyBlocks(server, controlRoomHash, token, messageKey, manager, `No agent with ID ${agentId}.`);
             return;
           }
           await replyBlocks(
-            server, controlRoomHash, token, messageKey,
+            server, controlRoomHash, token, messageKey, manager,
             `${info.name} session ready.`,
             [pairingCodeBlock(info.roomPassword)],
             {
@@ -664,7 +674,7 @@ const handleControl = async (
       return;
     }
     if (lower === 'help') {
-      await sendHelp(server, controlRoomHash, token, messageKey);
+      await sendHelp(server, controlRoomHash, token, messageKey, manager);
       return;
     }
 
@@ -674,7 +684,7 @@ const handleControl = async (
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Control error: ${message}`);
-    await replyBlocks(server, controlRoomHash, token, messageKey, `Error: ${message}`);
+    await replyBlocks(server, controlRoomHash, token, messageKey, manager, `Error: ${message}`);
   }
 };
 

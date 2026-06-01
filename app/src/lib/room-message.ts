@@ -18,6 +18,11 @@ export type RoomEnvelope = {
   // messages. Lets the phone learn that a QR-paired room is the control room
   // (there is no join-room action for it). null when the sender didn't stamp.
   room_kind?: RoomKind | null;
+  // Number of agents the daemon currently has running. Stamped on every
+  // control-room reply. The phone reads it to power the command-bar Agents
+  // badge — daemon truth, not a local guess. null when the sender didn't
+  // stamp (e.g. peer chat messages, or pre-update daemons).
+  agent_count?: number | null;
 };
 
 export type ChatMessageRecordInput = {
@@ -66,6 +71,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
   let messageBlocks: Block[] | null = null;
   let messageBlockResponse: BlockResponse | null = null;
   let messageRoomKind: RoomKind | null = null;
+  let messageAgentCount: number | null = null;
 
   if (plaintext.trim().startsWith('{')) {
     try {
@@ -76,6 +82,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
         blocks?: Block[];
         block_response?: BlockResponse;
         room_kind?: unknown;
+        agent_count?: unknown;
       };
       if (typeof obj.text === 'string') messageText = obj.text;
       if (typeof obj.handle === 'string') messageHandle = obj.handle;
@@ -87,6 +94,14 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
         messageBlockResponse = obj.block_response;
       }
       if (isRoomKindValue(obj.room_kind)) messageRoomKind = obj.room_kind;
+      // Accept non-negative finite integers only — anything else is malformed
+      // input we'd rather ignore than render. A peer chat message could
+      // plausibly carry an unrelated `agent_count` field; the value-shape
+      // guard plus the room-kind === 'control' check at the call site keep
+      // that from leaking into the control-room badge.
+      if (typeof obj.agent_count === 'number' && Number.isInteger(obj.agent_count) && obj.agent_count >= 0) {
+        messageAgentCount = obj.agent_count;
+      }
     } catch {
       messageText = plaintext;
     }
@@ -99,6 +114,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
     blocks: messageBlocks,
     block_response: messageBlockResponse,
     room_kind: messageRoomKind,
+    agent_count: messageAgentCount,
   };
 };
 

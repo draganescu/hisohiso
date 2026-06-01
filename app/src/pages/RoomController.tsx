@@ -155,6 +155,12 @@ const RoomController = () => {
   // then sharpened when a daemon message envelope carries `room_kind`.
   const [roomKind, setRoomKindState] = useState<RoomKind>('chat');
   const isControlRoom = roomKind === 'control';
+  // Daemon-reported running-agent count. null = unknown (no daemon envelope
+  // with this field has arrived yet). The command-bar badge hides while
+  // null rather than render a misleading zero. Hydrated by every incoming
+  // control-room message (spawn/kill/welcome/list/etc all stamp it), so it
+  // stays accurate without any local guessing.
+  const [agentCount, setAgentCount] = useState<number | null>(null);
   const [allRooms, setAllRooms] = useState<StoredRoom[]>([]);
   const keyboardVisible = useKeyboardViewport(showComposer);
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
@@ -339,10 +345,18 @@ const RoomController = () => {
     // Learn the room's kind from the daemon's envelope stamp. The control room
     // is QR-paired (no join-room action), so this is how the phone discovers it
     // is a command surface. setRoomKind only sharpens away from 'chat'.
-    const envKind = parseRoomEnvelope(plaintext).room_kind;
+    const envelope = parseRoomEnvelope(plaintext);
+    const envKind = envelope.room_kind;
     if (envKind && envKind !== 'chat') {
       setRoomKind(roomHash, envKind);
       setRoomKindState((prev) => (prev === envKind ? prev : envKind));
+    }
+    // Pick up the daemon-reported agent count off any control-room envelope.
+    // Gated on room_kind === 'control' so a peer chat message that happens
+    // to carry an `agent_count` field can't pollute the badge. Updates the
+    // command-bar in real time as spawn/kill events flow through.
+    if (envKind === 'control' && typeof envelope.agent_count === 'number') {
+      setAgentCount(envelope.agent_count);
     }
     const messageRecord = toChatMessageRecord({
       msgId,
@@ -1663,7 +1677,7 @@ const RoomController = () => {
         )}
         {isControlRoom && (
           <ControlCommandBar
-            agentCount={allRooms.filter((r) => r.kind === 'agent').length}
+            agentCount={agentCount}
             onSpawn={() => void sendBlockResponse('control-cmd-spawn', 'buttons', 'show-launcher')}
             onAgents={() => void sendBlockResponse('control-cmd-list', 'buttons', 'show-list')}
           />
