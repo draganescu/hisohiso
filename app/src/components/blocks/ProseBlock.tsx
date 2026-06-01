@@ -65,7 +65,7 @@ const renderInline = (text: string): React.ReactNode[] => {
     if (tok.startsWith('**')) {
       out.push(<strong key={key++} className="font-semibold">{tok.slice(2, -2)}</strong>);
     } else if (tok.startsWith('`')) {
-      out.push(<code key={key++} className="rounded bg-[#efe7d4] px-1 font-mono text-[0.8125rem]">{tok.slice(1, -1)}</code>);
+      out.push(<code key={key++} className="rounded bg-rule-soft px-1 font-mono text-[0.8125rem]">{tok.slice(1, -1)}</code>);
     } else {
       out.push(<em key={key++} className="italic">{tok.slice(1, -1)}</em>);
     }
@@ -78,16 +78,16 @@ const renderInline = (text: string): React.ReactNode[] => {
 export const ProseBlockView = ({ block }: Props) => {
   const tokens = useMemo(() => tokenize(block.content), [block.content]);
   return (
-    <div className="mt-3 space-y-3 text-[0.9375rem] leading-7 text-[#3f3529]">
+    <div className="mt-3 space-y-3 text-[0.9375rem] leading-7 text-ink-soft">
       {tokens.map((tok, i) => {
-        if (tok.kind === 'h1') return <h2 key={i} className="text-xl font-semibold text-[#171613]">{renderInline(tok.text)}</h2>;
-        if (tok.kind === 'h2') return <h3 key={i} className="text-lg font-semibold text-[#171613]">{renderInline(tok.text)}</h3>;
-        if (tok.kind === 'h3') return <h4 key={i} className="text-base font-semibold text-[#171613]">{renderInline(tok.text)}</h4>;
+        if (tok.kind === 'h1') return <h2 key={i} className="text-xl font-semibold text-ink">{renderInline(tok.text)}</h2>;
+        if (tok.kind === 'h2') return <h3 key={i} className="text-lg font-semibold text-ink">{renderInline(tok.text)}</h3>;
+        if (tok.kind === 'h3') return <h4 key={i} className="text-base font-semibold text-ink">{renderInline(tok.text)}</h4>;
         if (tok.kind === 'ul') return (
           <ul key={i} className="space-y-1.5 pl-1">
             {tok.items.map((item, j) => (
               <li key={j} className="flex gap-2">
-                <span className="shrink-0 select-none text-[#8d816c]">{'•'}</span>
+                <span className="shrink-0 select-none text-ink-dim">{'•'}</span>
                 <span>{renderInline(item)}</span>
               </li>
             ))}
