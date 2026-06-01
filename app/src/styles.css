@@ -266,6 +266,105 @@ body {
   transform: translateY(1px) scale(0.99);
 }
 
+/* Sticky command bar shown only in control rooms (replaces .floating-action
+   there). Three children: a primary Spawn button, an Agents chip with a
+   count badge, and a tap-target styled like an input that opens the modal
+   composer. The "input" is deliberately NOT a real <input> — an inline
+   focusable control at the bottom fights the iOS soft keyboard, which is
+   precisely why the full-screen composer exists. */
+.command-bar {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 1.5rem;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: var(--shadow-float);
+}
+
+.command-bar-primary {
+  height: 2.875rem;
+  padding: 0 1.125rem;
+  border-radius: 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: var(--on-ink);
+  box-shadow: var(--glow-accent);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.command-bar-primary:active {
+  transform: translateY(1px);
+  filter: brightness(1.04);
+}
+
+.command-bar-chip {
+  height: 2.875rem;
+  padding: 0 0.875rem;
+  border-radius: 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-soft);
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.command-bar-chip:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 35%, var(--rule));
+}
+
+.command-bar-chip-badge {
+  background: var(--accent);
+  color: var(--on-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  border-radius: 999px;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.3125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.command-bar-input {
+  flex: 1;
+  min-width: 0;
+  height: 2.875rem;
+  padding: 0 1rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-dim);
+  text-align: left;
+  cursor: text;
+}
+
+.command-bar-input:hover {
+  color: var(--ink-soft);
+}
+
 .modal-shell {
   border: 1px solid var(--rule);
   background: var(--surface-strong);

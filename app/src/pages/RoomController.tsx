@@ -65,6 +65,7 @@ import { BlockRenderer } from '../components/blocks/BlockRenderer';
 import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
+import { ControlCommandBar } from '../components/ControlCommandBar';
 
 const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
 
@@ -1172,9 +1173,12 @@ const RoomController = () => {
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
-    // Control rooms have no free-text message affordance — every action is a
-    // tappable block. Swallow any path that would open the composer there.
-    if (isControlRoom) return;
+    // Control rooms have no FAB and no per-message Reply (both gated below),
+    // so the only path to this function in a control room is the command
+    // bar's Message… button, which is the intentional escape hatch. Hence
+    // no isControlRoom gate here — gating the *callers* is what enforces
+    // "control rooms are tap-only" without breaking the one allowed entry.
+    //
     // Focus a hidden proxy textarea synchronously so Safari counts the
     // subsequent focus jump (to the real composer textarea, after React
     // commits showComposer=true) as user-gesture-trusted and opens the
@@ -1184,7 +1188,7 @@ const RoomController = () => {
     setReplyToId(messageId ?? null);
     setSelectedId(null);
     setShowComposer(true);
-  }, [isControlRoom]);
+  }, []);
 
   const closeComposer = useCallback(() => {
     setShowComposer(false);
@@ -1639,11 +1643,14 @@ const RoomController = () => {
           </button>
         )}
 
-        {/* ---- Floating Compose trigger ----
-            Opens the full-screen composer below. We can't pin a normal
-            inline composer to the top of the soft keyboard on iOS/Android
-            PWAs (no API anchors anything to the keyboard); the modal
-            sidesteps that by being the viewport while the keyboard is up. */}
+        {/* ---- Bottom-anchored chrome ----
+            Non-control rooms get the floating Compose trigger (FAB). Control
+            rooms swap in the command bar — Spawn, Agents (N), Message… —
+            so the operator always has the three primary affordances visible
+            without scrolling, and never sees a generic compose button that
+            would just emit text the daemon would parse as an agent name.
+            The modal composer is shared: in control rooms it opens only via
+            the bar's Message… button, never via FAB or per-message Reply. */}
         {!isControlRoom && (
           <button
             className="floating-action px-5 py-3.5 text-sm font-semibold"
@@ -1652,6 +1659,14 @@ const RoomController = () => {
           >
             {replyTarget ? 'Continue reply' : 'Compose'}
           </button>
+        )}
+        {isControlRoom && (
+          <ControlCommandBar
+            agentCount={allRooms.filter((r) => r.kind === 'agent').length}
+            onSpawn={() => void sendBlockResponse('control-cmd-spawn', 'buttons', 'show-launcher')}
+            onAgents={() => void sendBlockResponse('control-cmd-list', 'buttons', 'show-list')}
+            onMessage={() => openComposer()}
+          />
         )}
 
         {/* ---- Full-screen modal composer ----
