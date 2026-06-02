@@ -39,16 +39,15 @@ Expected room metadata exported by the hisohiso CLI:
 
 ```text
 HISOHISO_ROOM_HASH
-HISOHISO_ROOM_SECRET
 HISOHISO_AGENT_ID
 HISOHISO_AGENT_NAME
 ```
 
-`HISOHISO_ROOM_HASH` / `HISOHISO_AGENT_ID` / `HISOHISO_AGENT_NAME` are always
-exported. `HISOHISO_ROOM_SECRET` is **opt-in** — the daemon only exports it to
-agents registered with `--needs-room-secret` (see step 5). Without that flag the
-daemon withholds the room secret so a spawned command can't exfiltrate it via
-its environment.
+`HISOHISO_ROOM_SECRET` is **not** exported to Hermes. The daemon withholds the
+room secret by default (finding #97) so a spawned command can't exfiltrate it
+via its environment, and the Hermes wrapper only needs `HISOHISO_ROOM_HASH` (to
+key sessions). If some future agent genuinely re-derives keys and needs the
+secret, register it with `--needs-room-secret`.
 
 The session id for each room is stored at:
 
@@ -433,7 +432,7 @@ Keep the wrapper generic. Use `$HOME` and `command -v hermes`; do not hardcode a
 
 ```sh
 $HOME/.local/bin/hisohiso daemon unregister hermes >/dev/null 2>&1 || true
-printf 'y\n' | $HOME/.local/bin/hisohiso daemon register hermes --command "$HOME/.local/bin/hisohiso-hermes" --needs-room-secret
+printf 'y\n' | $HOME/.local/bin/hisohiso daemon register hermes --command "$HOME/.local/bin/hisohiso-hermes"
 $HOME/.local/bin/hisohiso daemon list
 ```
 
