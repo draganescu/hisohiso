@@ -32,6 +32,11 @@ export type DaemonState = {
   // re-execs don't lose it. Cleared by `daemon start --fresh`. The threat model
   // assumes this string is unguessable to anyone outside the operator's head.
   sessionKnockMessage: string;
+  // KDF generation this control room was paired under (finding #93). Absent /
+  // !== 1 means the room predates the PBKDF2 + high-entropy-code upgrade and was
+  // paired with a weak 4-digit code; such state is NOT reused — the daemon
+  // re-pairs to mint a fresh high-entropy code. Fresh pairs write 1.
+  kdfVersion?: number;
 };
 
 export type RegisteredAgent = {
