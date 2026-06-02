@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, access, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access, unlink, rename } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,12 +32,27 @@ export type DaemonState = {
   // re-execs don't lose it. Cleared by `daemon start --fresh`. The threat model
   // assumes this string is unguessable to anyone outside the operator's head.
   sessionKnockMessage: string;
+  // First-device-wins binding flag for the control room. Set true once the
+  // first device is auto-admitted; thereafter any additional knock is routed
+  // to an explicit operator confirm instead of being auto-approved. Optional /
+  // missing => false on disk so a daemon restarting on state written before
+  // this field never crashes (tolerant reload) — legacy single-device pairings
+  // stay unbound until their next additional knock flips the flag. Cleared by
+  // `daemon start --fresh` (which deletes daemon-state.json). NOTE: this is a
+  // pairing-window TOCTOU defense — a party already holding room_secret +
+  // pairing-code + sessionKnockMessage can win the first-device race; this is
+  // the ceiling without a stable phone-side device key.
+  controlBound?: boolean;
 };
 
 export type RegisteredAgent = {
   name: string;
   command: string;
   mode: string;
+  // Opt-in (finding #97): when true the daemon exports HISOHISO_ROOM_SECRET into
+  // this agent's process env. Default/absent => withheld. Set via
+  // `daemon register --needs-room-secret`.
+  needsRoomSecret?: boolean;
 };
 
 export type ActiveRoom = {
@@ -61,6 +76,19 @@ export type ActiveRoom = {
   // a restarted daemon can continue the conversation via --resume / exec resume.
   // null until the first turn completes for session-mode agents; always null for oneshot.
   sessionId: string | null;
+  // First-device-wins binding flag for this agent room. Set true once the first
+  // device's knock is auto-admitted; an additional knock thereafter is routed to
+  // a control-room confirm instead of being auto-approved. Optional / missing =>
+  // false on disk so restore() never crashes on a pre-#94 rooms.json (legacy
+  // rooms stay unbound until their next knock flips it). Cleared by
+  // `daemon start --fresh` (which deletes rooms.json).
+  bound?: boolean;
+  // Per-room replay ledger: msg_id -> local Date.now() first-seen ms. Persisted
+  // so a daemon restart (or 6h auto-update re-exec) can't be made to re-execute
+  // an outbox-retained turn the server re-publishes. Pruned to a 24h TTL on load
+  // and save (mirroring server OUTBOX_TTL_MS). Optional / missing => empty ledger
+  // so restore() never crashes on an old rooms.json.
+  seenMsgIds?: Record<string, number>;
   pid: number;
 };
 
@@ -121,7 +149,13 @@ export const loadActiveRooms = async (): Promise<ActiveRoom[]> => {
 
 export const saveActiveRooms = async (rooms: ActiveRoom[]): Promise<void> => {
   await ensureConfigDir();
-  await writeFile(ROOMS_FILE, JSON.stringify(rooms, null, 2) + '\n', 'utf-8');
+  // Atomic write: persistRooms now fires on every inbound chat (the seenMsgIds
+  // replay ledger), so a bare writeFile could truncate rooms.json mid-write and
+  // lose ALL restorable rooms on a crash. Write to a sibling temp file then
+  // rename() over the target — rename is atomic on the same filesystem.
+  const tmp = ROOMS_FILE + '.tmp';
+  await writeFile(tmp, JSON.stringify(rooms, null, 2) + '\n', 'utf-8');
+  await rename(tmp, ROOMS_FILE);
 };
 
 // Best-effort delete of the persisted daemon state + rooms files. Used by

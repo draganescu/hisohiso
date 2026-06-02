@@ -14,6 +14,13 @@ export type AgentProfile = {
   // Build args for a resume turn. If undefined, default behavior is `[...args, '--resume', id]`
   // (Claude). Codex needs `exec resume <id> ...` which can't be expressed as a flag append.
   buildResumeArgs?: (sessionId: string) => string[];
+  // Opt-in: when true, the daemon/wrap exports HISOHISO_ROOM_SECRET into the
+  // spawned agent's environment. Default (undefined/false) withholds it —
+  // the built-in profiles don't need it, and exposing the room secret to e.g.
+  // `bash` makes `env | nc …` a one-line exfiltration (finding #97). Custom
+  // registered agents that genuinely re-derive keys opt in via
+  // `daemon register --needs-room-secret`.
+  needsRoomSecret?: boolean;
 };
 
 import { BLOCK_PROMPT } from './preamble.js';

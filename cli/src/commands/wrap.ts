@@ -63,7 +63,10 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
   const presence = startPresence(server, room.roomHash, room.participantToken);
 
-  // Wait for phone to knock and auto-approve
+  // Wait for phone to knock and auto-approve. Intentionally first-device-by-
+  // construction: sse.close()+resolve() fire after the first successful approval
+  // (below), so this onKnock site can never admit a second device and needs no
+  // bound flag — unlike the daemon's long-lived control/agent rooms (finding #94).
   await new Promise<void>((resolve, reject) => {
     const sse = subscribeToRoom(server, room.roomHash, room.subscriberJwt, {
       onKnock: async (knockEvent: RoomEvent) => {
@@ -183,7 +186,11 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
         HISOHISO_AGENT_ID: room.roomHash.slice(0, 12),
         HISOHISO_AGENT_NAME: agentName,
         HISOHISO_ROOM_HASH: room.roomHash,
-        HISOHISO_ROOM_SECRET: room.roomSecret,
+        // Opt-in per profile (finding #97): withheld by default so the wrapped
+        // command can't trivially exfiltrate the room secret via its env. The
+        // built-in profiles don't set needsRoomSecret; ad-hoc `wrap -- <cmd>`
+        // commands likewise don't receive it.
+        ...(profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: room.roomSecret } : {}),
       },
     });
 

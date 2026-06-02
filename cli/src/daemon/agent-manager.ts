@@ -8,6 +8,45 @@ import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/ss
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
 import * as api from '../lib/api-client.js';
 
+// event.from is server-stamped as sha256_hex(token) = 64 lowercase hex chars
+// (server/utils.php sha256_hex = hash('sha256',...); CLI bufferToHex is also
+// lowercase). The relay is untrusted, so treat any other shape as forged and
+// refuse to echo it into the untrusted-peer envelope, where a crafted handle
+// could otherwise break out of the attribute/tag. A non-conforming handle
+// collapses to a fixed safe label; the message body is unaffected.
+const HEX64 = /^[0-9a-f]{64}$/;
+function safePeerHandle(from: string | null | undefined): string {
+  return typeof from === 'string' && HEX64.test(from) ? from : 'unknown';
+}
+
+// 24h TTL for the per-room replay ledger (seenMsgIds), mirroring server
+// OUTBOX_TTL_MS in server/outbox.php. This bounds replay protection to the
+// server's outbox-retention window: it closes the restart/auto-update re-exec
+// replay-from-outbox threat (finding #95), but does NOT make replay impossible
+// against an arbitrarily-logging relay — a relay that retains ciphertext beyond
+// its outbox can still replay a captured turn after the TTL prunes its msg_id.
+// This is a bounded-storage tradeoff, not total closure.
+const SEEN_MSG_TTL_MS = 24 * 60 * 60 * 1000;
+// Count cap mirroring server OUTBOX_MAX_ROWS so a msg_id flood within the TTL
+// window can't bloat rooms.json — keep the newest N by first-seen timestamp.
+const SEEN_MSG_MAX = 500;
+// Stale pending-knock confirms expire with the lobby JWT (~10 min,
+// server/index.php LOBBY_JWT_TTL=600s) so a never-answered knock is never
+// resolved later and the in-memory pending map can't grow unbounded.
+const PENDING_KNOCK_TTL_MS = 10 * 60 * 1000;
+
+// Prune a msg_id ledger to the TTL window and the count cap. Returns a fresh
+// object so callers can use it for both the in-memory Map seed and the
+// persisted record without aliasing.
+function pruneSeenMsgIds(entries: Record<string, number>): Record<string, number> {
+  const cutoff = Date.now() - SEEN_MSG_TTL_MS;
+  let kept = Object.entries(entries).filter(([, ts]) => ts >= cutoff);
+  if (kept.length > SEEN_MSG_MAX) {
+    kept = kept.sort((a, b) => b[1] - a[1]).slice(0, SEEN_MSG_MAX);
+  }
+  return Object.fromEntries(kept);
+}
+
 type AgentSession = {
   agentId: string;
   name: string;
@@ -21,6 +60,11 @@ type AgentSession = {
   knockKey: CryptoKey;
   sessionId: string | null;
   running: boolean;
+  // First-device-wins binding flag. False until the first knock is auto-admitted;
+  // once true, an additional knock is routed to a control-room confirm instead of
+  // being silently auto-approved or silently dropped. Persisted to
+  // ActiveRoom.bound so it survives a daemon restart.
+  bound: boolean;
   // Messages that arrived while `running` was true. Instead of bouncing them
   // with "still running", we buffer here and the in-flight turn drains the
   // whole batch into ONE coalesced follow-up turn when it finishes. `from`
@@ -28,12 +72,13 @@ type AgentSession = {
   pending: Array<{ text: string; from: string }>;
   sse: SSESubscription;
   presence: PresenceHandle;
-  // Per-session msg_id dedup — drops any chat we've already dispatched to the
+  // Per-room msg_id dedup — drops any chat we've already dispatched to the
   // agent. The server can re-publish identical ciphertexts (it has the
   // publisher JWT, AAD is deterministic for the same msg_id); without this
-  // the agent would re-execute a captured turn. In-memory only — replay
-  // window is the session lifetime, which is what we care about.
-  seenMsgIds: Set<string>;
+  // the agent would re-execute a captured turn. msg_id -> local first-seen ms.
+  // Persisted to ActiveRoom.seenMsgIds (pruned to a 24h TTL) so a daemon
+  // restart / auto-update re-exec can't be replayed from the server outbox.
+  seenMsgIds: Map<string, number>;
   // Wall-clock ms of the most recently delivered SSE event on this session.
   // Bumped by onAnyEvent in sse-client. Initialized at attach time. Stale
   // values mean either the room is genuinely idle OR the SSE silently died —
@@ -57,6 +102,14 @@ type AttachArgs = {
   messageKey: CryptoKey;
   knockKey: CryptoKey;
   sessionId: string | null;
+  // Persisted replay ledger from rooms.json (msg_id -> first-seen ms). Undefined
+  // on a fresh spawn() and on pre-#95 rooms; loaded + pruned into the session's
+  // in-memory Map by attachToRoom.
+  seenMsgIds?: Record<string, number>;
+  // First-device-wins binding flag from rooms.json. Undefined on a fresh spawn()
+  // and on pre-#94 rooms => treated as false (unbound) so the first knock is
+  // still auto-admitted.
+  bound?: boolean;
 };
 
 export type RestoreResult = {
@@ -65,9 +118,24 @@ export type RestoreResult = {
   details: string[];
 };
 
+// A knock against an already-bound agent room, parked until the operator taps
+// confirm in the control room. Keyed by `${agentId}:${knockMsgId}`; expires with
+// the lobby JWT so a never-answered knock is never resolved later.
+type PendingAgentKnock = {
+  agentId: string;
+  knockPubkey: string;
+  knockMsgId: string;
+  expiresAt: number;
+};
+
 export class AgentManager {
   private sessions = new Map<string, AgentSession>();
   private server: string;
+  // Pending additional-device knocks against bound agent rooms, awaiting an
+  // operator confirm tap delivered as a confirm-danger block_response in the
+  // CONTROL room. Bounded by PENDING_KNOCK_TTL_MS (entries are rejected and
+  // dropped once expired) so it can't grow unbounded.
+  private pendingAgentKnocks = new Map<string, PendingAgentKnock>();
 
   // Used by the auto-updater to decide when it's safe to swap the binary and
   // re-exec — every session that's mid-turn has `running = true`, so idle =
@@ -140,7 +208,7 @@ export class AgentManager {
       const registry = await loadRegistry();
       const entry = registry.find((a) => a.name === agentName);
       if (entry) {
-        profile = { command: entry.command, args: [], description: entry.name, mode: 'oneshot' };
+        profile = { command: entry.command, args: [], description: entry.name, mode: 'oneshot', needsRoomSecret: entry.needsRoomSecret };
       }
     }
     if (!profile) {
@@ -216,7 +284,7 @@ export class AgentManager {
         if (!profile) {
           const entry = registry.find((a) => a.name === r.name);
           if (entry) {
-            profile = { command: entry.command, args: [], description: entry.name, mode: 'oneshot' };
+            profile = { command: entry.command, args: [], description: entry.name, mode: 'oneshot', needsRoomSecret: entry.needsRoomSecret };
           }
         }
         if (!profile) {
@@ -256,6 +324,8 @@ export class AgentManager {
           messageKey,
           knockKey,
           sessionId: r.sessionId,
+          seenMsgIds: r.seenMsgIds,
+          bound: r.bound,
         });
 
         restored.push(r.agentId);
@@ -287,6 +357,11 @@ export class AgentManager {
     const presence = startPresence(this.server, roomHash, participantToken);
     const ownTokenHash = await sha256Hex(participantToken);
 
+    // Seed the in-memory replay ledger from the persisted (pre-#95: absent)
+    // record, pruned to the TTL window so a long-dead daemon's old ids don't
+    // linger. Missing => empty ledger (tolerant reload, never crashes).
+    const seenSeed = pruneSeenMsgIds(args.seenMsgIds ?? {});
+
     const session: AgentSession = {
       agentId,
       name: agentName,
@@ -300,10 +375,11 @@ export class AgentManager {
       knockKey,
       sessionId,
       running: false,
+      bound: args.bound ?? false,
       pending: [],
       sse: null!,
       presence,
-      seenMsgIds: new Set<string>(),
+      seenMsgIds: new Map<string, number>(Object.entries(seenSeed)),
       lastEventAt: Date.now(),
     };
 
@@ -325,7 +401,7 @@ export class AgentManager {
         // alone, so we label everything as peer-authored. The agent's system prompt
         // instructs it to treat the envelope body as data, not instructions, which is the
         // defense against "respond with this exact JSON link-preview block" injection.
-        const wrappedText = `<untrusted-peer-message from="${peerHandle.replace(/"/g, '')}">\n${text}\n</untrusted-peer-message>`;
+        const wrappedText = `<untrusted-peer-message from="${safePeerHandle(peerHandle)}">\n${text}\n</untrusted-peer-message>`;
 
         let messageToSend = wrappedText;
         if (session.profile.appendSystemPrompt) {
@@ -354,7 +430,11 @@ export class AgentManager {
             HISOHISO_AGENT_ID: session.agentId,
             HISOHISO_AGENT_NAME: session.name,
             HISOHISO_ROOM_HASH: session.roomHash,
-            HISOHISO_ROOM_SECRET: session.roomSecret,
+            // HISOHISO_ROOM_SECRET is opt-in per profile (finding #97): withheld
+            // by default so a spawned `bash`/`python`/etc. can't `env | nc` the
+            // room secret out. Only agents registered with --needs-room-secret
+            // (or a built-in profile that sets needsRoomSecret) receive it.
+            ...(session.profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: session.roomSecret } : {}),
           },
         });
 
@@ -458,18 +538,50 @@ export class AgentManager {
           console.error(`[${agentName}:${agentId}] knock message mismatch — ignoring`);
           return;
         }
-        try {
-          const binding = await beginApprove(knockPubkey, knockMsgId);
-          const approveRes = await api.approveKnock(this.server, roomHash, participantToken, binding.claimTagHash);
-          const bundle = JSON.stringify({
-            token: approveRes.new_participant_token,
-            subscriber_jwt: approveRes.subscriber_jwt,
+        // First-device-wins: the first authenticated knock binds the room and is
+        // auto-admitted. A later knock (a second/unknown device that learned all
+        // three secrets) is NOT silently admitted — and NOT silently dropped,
+        // which would strand the legitimate operator. Instead park it and post a
+        // confirm-danger block into the CONTROL room so the operator taps to
+        // approve/deny. Recovery for a single-device operator who lost their
+        // token: re-pair from the terminal with `daemon start --fresh`.
+        if (session.bound) {
+          // Evict any already-expired parked knocks before adding this one so a
+          // flood of never-answered knocks can't grow the map without bound
+          // (no timer needed — the next knock prunes the stale entries).
+          const nowMs = Date.now();
+          for (const [k, v] of this.pendingAgentKnocks) {
+            if (nowMs > v.expiresAt) this.pendingAgentKnocks.delete(k);
+          }
+          const key = `${agentId}:${knockMsgId}`;
+          this.pendingAgentKnocks.set(key, {
+            agentId,
+            knockPubkey,
+            knockMsgId,
+            expiresAt: nowMs + PENDING_KNOCK_TTL_MS,
           });
-          const wrapped = await binding.wrap(bundle);
-          await api.sendWrappedToken(this.server, roomHash, participantToken, knockMsgId, wrapped);
-          console.log(`[${agentName}:${agentId}] Phone joined agent room.`);
-        } catch (err) {
-          console.error(`[${agentName}:${agentId}] Failed to approve knock:`, err);
+          console.warn(`[${agentName}:${agentId}] Additional device knocked on a bound agent room — awaiting operator confirm in the control room.`);
+          void this.sendControlMessage(
+            `A new device is requesting access to the ${agentName} (${agentId}) agent room. Approve only if this is you.`,
+            {
+              blocks: [
+                {
+                  type: 'confirm-danger',
+                  id: `approve-agent-knock:${agentId}:${knockMsgId}`,
+                  title: `Admit a new device to ${agentName} (${agentId})?`,
+                  description: 'Approve only if this is you. If you lost your only device, you cannot approve from here — re-pair from the terminal with `hisohiso daemon start --fresh`.',
+                  confirm_label: 'Admit device',
+                },
+              ],
+            }
+          );
+          return;
+        }
+        const ok = await this.approveAgentKnock(agentId, knockPubkey, knockMsgId);
+        if (ok) {
+          session.bound = true;
+          void this.persistRooms();
+          console.log(`[${agentName}:${agentId}] Phone joined agent room (room bound to first device).`);
         }
       },
       onDestroy: () => {
@@ -481,9 +593,11 @@ export class AgentManager {
         if (event.from === ownTokenHash) return;
 
         // Replay protection: drop any chat we've already dispatched to the
-        // agent in this session. AAD includes msg_id but doesn't prevent the
-        // SAME ciphertext arriving twice (server can re-publish; offline-sync
-        // can re-deliver). Without this, the agent re-executes captured turns.
+        // agent. AAD includes msg_id but doesn't prevent the SAME ciphertext
+        // arriving twice (server can re-publish; offline-sync can re-deliver).
+        // The ledger is persisted (pruned to SEEN_MSG_TTL_MS), so it survives a
+        // daemon restart / auto-update re-exec and the agent never re-executes a
+        // captured turn that the server replays from its outbox.
         const incomingMsgId = (event.body.msg_id as string) || '';
         if (incomingMsgId === '') {
           console.error(`[${agentName}:${agentId}] chat without msg_id — dropping`);
@@ -493,7 +607,10 @@ export class AgentManager {
           console.error(`[${agentName}:${agentId}] replay of msg_id ${incomingMsgId} — dropping`);
           return;
         }
-        session.seenMsgIds.add(incomingMsgId);
+        session.seenMsgIds.set(incomingMsgId, Date.now());
+        // Persist the ledger now (atomic write in saveActiveRooms) so a crash
+        // before turn-end can't lose this msg_id and reopen the replay window.
+        void this.persistRooms();
 
         // Decrypt inbound message
         let text: string;
@@ -566,6 +683,59 @@ export class AgentManager {
     this.controlRoomSecret = secret;
     this.controlPassword = password;
     this.controlKey = null;
+  }
+
+  // Run the actual admit handshake for an agent-room knock:
+  // beginApprove -> approveKnock -> sendWrappedToken. Shared by the first-device
+  // auto-approve path and the operator-confirm path so both routes mint the same
+  // bundle. Returns false (rather than throwing) on failure so callers can keep
+  // the room unbound and let the device retry.
+  private async approveAgentKnock(agentId: string, knockPubkey: string, knockMsgId: string): Promise<boolean> {
+    const session = this.sessions.get(agentId);
+    if (!session) return false;
+    try {
+      const binding = await beginApprove(knockPubkey, knockMsgId);
+      const approveRes = await api.approveKnock(this.server, session.roomHash, session.participantToken, binding.claimTagHash);
+      const bundle = JSON.stringify({
+        token: approveRes.new_participant_token,
+        subscriber_jwt: approveRes.subscriber_jwt,
+      });
+      const wrapped = await binding.wrap(bundle);
+      await api.sendWrappedToken(this.server, session.roomHash, session.participantToken, knockMsgId, wrapped);
+      return true;
+    } catch (err) {
+      console.error(`[${session.name}:${agentId}] Failed to approve agent-room knock:`, err);
+      return false;
+    }
+  }
+
+  // Operator tapped the confirm-danger block in the control room for an
+  // additional-device knock against a bound agent room. `approve` carries the
+  // boolean from the confirm block. Stale knocks (older than the lobby JWT TTL)
+  // are rejected with an in-band notice so the device knows to knock again.
+  // Called from daemon-main's handleControl on the `approve-agent-knock:` block.
+  async resolveAgentKnock(agentId: string, knockMsgId: string, approve: boolean): Promise<void> {
+    const key = `${agentId}:${knockMsgId}`;
+    const pending = this.pendingAgentKnocks.get(key);
+    if (!pending) {
+      await this.sendControlMessage('That join request is no longer pending — ask the device to knock again.');
+      return;
+    }
+    this.pendingAgentKnocks.delete(key);
+    if (Date.now() > pending.expiresAt) {
+      await this.sendControlMessage('That join request expired — ask the device to knock again.');
+      return;
+    }
+    if (!approve) {
+      await this.sendControlMessage(`Denied the new device for agent room ${agentId}.`);
+      return;
+    }
+    const ok = await this.approveAgentKnock(agentId, pending.knockPubkey, pending.knockMsgId);
+    if (ok) {
+      await this.sendControlMessage(`Admitted the new device to agent room ${agentId}.`);
+    } else {
+      await this.sendControlMessage(`Could not admit the new device to agent room ${agentId} — ask it to knock again.`);
+    }
   }
 
   async kill(agentId: string): Promise<void> {
@@ -667,6 +837,10 @@ export class AgentManager {
       participantToken: s.participantToken,
       subscriberJwt: s.subscriberJwt,
       sessionId: s.sessionId,
+      bound: s.bound,
+      // Prune the replay ledger to the TTL window + count cap before serializing
+      // so rooms.json can't grow unbounded across restarts.
+      seenMsgIds: pruneSeenMsgIds(Object.fromEntries(s.seenMsgIds)),
       pid: 0,
     }));
     await saveActiveRooms(rooms);
