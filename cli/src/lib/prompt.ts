@@ -19,11 +19,15 @@ const CODE_LENGTH = 12; // 12 * 5 = ~60 bits
 // carry their own code automatically over the encrypted control channel, so the
 // extra length costs nothing there. randomInt(0, 32) per char is unbiased.
 export const generatePairingCode = (): string => {
-  let code = '';
+  let raw = '';
   for (let i = 0; i < CODE_LENGTH; i += 1) {
-    code += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+    raw += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
   }
-  return code;
+  // Grouped into 4-char chunks (skd6-f7yf-khnm) for legible reading/typing. The
+  // dashes are PART OF the code value — used verbatim everywhere (PBKDF2
+  // password, join-room chip auto-fill, the phone's code input) — so both sides
+  // derive the same key. They carry no entropy; the 12 base32 chars do.
+  return (raw.match(/.{1,4}/g) ?? [raw]).join('-');
 };
 
 // Prompt the operator for a free-form line. Returns the trimmed line or
