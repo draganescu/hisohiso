@@ -9,27 +9,46 @@ plaintext message or a raw secret — it only hashes tokens and signs JWTs.
 
 ## What gets derived from the secret
 
-The secret is 32 random bytes (base64url in the URL). From it the client
-derives a few independent keys with HKDF-SHA256, each with its own "info"
-label so they can't be confused for one another:
+The secret is 32 random bytes (base64url in the URL). The `room_hash` (the
+server's routing key) is a one-way SHA-256 of the secret. The two **content
+keys** — the message key and the knock key — are derived with **PBKDF2-HMAC-SHA256
+(600 000 iterations)**, where the *password* is the room's pairing code / channel
+key and the *salt* is `SHA-256(label ‖ 0x00 ‖ secret)`. A distinct domain label
+(`hisohiso.kdf.v1.k_msg` vs `…k_knock`) keeps the two keys independent:
 
 ```mermaid
 flowchart TD
     SECRET[room secret<br/>32 random bytes, in the URL #]
+    CODE[pairing code / channel key<br/>transferred out-of-band, NOT in the URL]
     SECRET -->|SHA-256 'hisohiso.room_hash'| HASH[room_hash<br/>the server's routing key]
-    SECRET -->|HKDF 'hisohiso.k_msg'| KMSG[message key<br/>AES-256-GCM]
-    SECRET -->|HKDF 'hisohiso.k_knock'| KKNOCK[knock key<br/>AES-256-GCM]
+    SECRET -->|salt| KDF[PBKDF2-HMAC-SHA256<br/>600k iterations]
+    CODE -->|password| KDF
+    KDF -->|label …k_msg| KMSG[message key<br/>AES-256-GCM]
+    KDF -->|label …k_knock| KKNOCK[knock key<br/>AES-256-GCM]
 ```
 
 - **room_hash** is the only one the server sees. It's a one-way hash, so it
   can't be turned back into the secret or any of the keys.
-- **message key** encrypts chat. Everyone with the secret derives the same key,
-  so everyone in the room can read everyone else.
+- **message key** encrypts chat. Everyone with the secret *and* the pairing
+  code derives the same key, so everyone admitted to the room reads everyone.
 - **knock key** encrypts the little "hi, let me in" payload a newcomer sends.
 
-If a room uses an optional **passphrase**, it's folded into the knock-key
-derivation. That means knowing the link isn't enough to knock — you also need
-the out-of-band passphrase. Stronger gate for the paranoid.
+**Why PBKDF2 and a separate pairing code (finding #93).** The old scheme was a
+single fast SHA-256 of the secret, so anyone who had the **link alone** could
+derive the content keys instantly — and, given one captured ciphertext, mount a
+trivial offline attack. Now the keys also depend on a pairing code that travels
+**out-of-band** (read off the terminal / typed on the phone, never in the URL),
+and PBKDF2's 600k iterations make guessing it expensive. Daemon-minted rooms use
+a generated high-entropy code; the 600k stretch is a one-time cost at join, not
+per message. Payloads carry a version (`v:1`); a key derived under the old
+scheme can't read a new payload, so a stale room fails loudly rather than
+returning garbage.
+
+For a peer chat room the pairing code is an **optional** channel key — leave it
+blank and the room follows the plain "the link is the room" model (anyone with
+the link who is *approved in* can read); set one and the link alone is no longer
+enough. Peer rooms have no agent, so the stakes are message confidentiality, not
+remote code execution.
 
 ## Encrypting a message
 

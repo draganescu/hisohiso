@@ -40,32 +40,49 @@ export const deriveRoomHash = async (roomSecret: string): Promise<string> => {
   return bufferToHex(digest);
 };
 
-export const deriveMessageKey = async (roomSecret: string, password: string): Promise<CryptoKey> => {
-  const prefix = encoder.encode('hisohiso.k_msg');
-  const secretBytes = base64UrlDecode(roomSecret);
-  const passwordBytes = encoder.encode(password);
-  const combined = new Uint8Array(prefix.length + secretBytes.length + passwordBytes.length);
-  combined.set(prefix, 0);
-  combined.set(secretBytes, prefix.length);
-  combined.set(passwordBytes, prefix.length + secretBytes.length);
-  const digest = await crypto.subtle.digest('SHA-256', combined);
-  return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+// k_msg / k_knock are derived with PBKDF2-HMAC-SHA256 (KDF v1, finding #93).
+// The old scheme was a single fast SHA-256, so an attacker who had the URL
+// (room_secret) could trial-decrypt one captured ciphertext across the entire
+// pairing-code space in seconds. PBKDF2 at 600k iterations over a high-entropy
+// generated pairing code (see generatePairingCode) makes that offline search
+// infeasible. MUST stay byte-identical to app/src/lib/crypto.ts — same domain
+// labels, salt construction, NFC normalization, iteration count, output length
+// (verified by a cross-implementation known-answer / interop test).
+const KDF_ITERS_V1 = 600_000;
+
+const concatBytes = (...parts: Uint8Array[]): Uint8Array => {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let off = 0;
+  for (const p of parts) { out.set(p, off); off += p.length; }
+  return out;
 };
 
-export const deriveKnockKey = async (roomSecret: string, password: string): Promise<CryptoKey> => {
-  const prefix = encoder.encode('hisohiso.k_knock');
+// salt = SHA-256( utf8(domainLabel) || 0x00 || base64UrlDecode(roomSecret) ).
+// Per-purpose (label) and per-room (secret), fixed 32 bytes. The room secret is
+// the salt rather than a secret factor — a URL-holder already has it — so it
+// only defeats cross-room precomputation; the unknown factor is the pairing
+// code fed as the PBKDF2 password.
+const deriveKeyV1 = async (domainLabel: string, roomSecret: string, password: string): Promise<CryptoKey> => {
   const secretBytes = base64UrlDecode(roomSecret);
-  const passwordBytes = encoder.encode(password);
-  const combined = new Uint8Array(prefix.length + secretBytes.length + passwordBytes.length);
-  combined.set(prefix, 0);
-  combined.set(secretBytes, prefix.length);
-  combined.set(passwordBytes, prefix.length + secretBytes.length);
-  const digest = await crypto.subtle.digest('SHA-256', combined);
-  return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const saltInput = concatBytes(encoder.encode(domainLabel), Uint8Array.of(0x00), secretBytes);
+  const salt = new Uint8Array(await crypto.subtle.digest('SHA-256', saltInput as BufferSource));
+  const pwBytes = encoder.encode(password.normalize('NFC'));
+  const baseKey = await crypto.subtle.importKey('raw', pwBytes as BufferSource, { name: 'PBKDF2' }, false, ['deriveBits']);
+  const dk = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations: KDF_ITERS_V1 }, baseKey, 256);
+  return crypto.subtle.importKey('raw', dk, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 };
 
+export const deriveMessageKey = (roomSecret: string, password: string): Promise<CryptoKey> =>
+  deriveKeyV1('hisohiso.kdf.v1.k_msg', roomSecret, password);
+
+export const deriveKnockKey = (roomSecret: string, password: string): Promise<CryptoKey> =>
+  deriveKeyV1('hisohiso.kdf.v1.k_knock', roomSecret, password);
+
+// v bumped 0 -> 1 with the KDF v1 change (#93). A v:0 payload was encrypted
+// under the old SHA-256 key and is undecryptable with a v1 key; decryptText
+// rejects it loudly rather than failing as an opaque AES-GCM auth error.
 export type EncryptedPayload = {
-  v: 0;
+  v: 1;
   alg: 'A256GCM';
   nonce: string;
   aad: string;
@@ -91,7 +108,7 @@ export const encryptText = async (
     encoder.encode(plaintext)
   );
   return {
-    v: 0,
+    v: 1,
     alg: 'A256GCM',
     nonce: base64UrlEncode(nonce),
     aad: base64UrlEncode(aadBytes),
@@ -106,6 +123,9 @@ export const decryptText = async (
   msgId: string,
   payload: EncryptedPayload
 ): Promise<string> => {
+  if (payload.v !== 1) {
+    throw new Error(`hisohiso: unsupported payload version ${(payload as { v: number }).v} — re-pair this room (encryption upgraded for security fix #93)`);
+  }
   const nonce = base64UrlDecode(payload.nonce);
   const aadBytes = buildAadBytes(roomHash, msgType, msgId);
   const ciphertext = base64UrlDecode(payload.ct);

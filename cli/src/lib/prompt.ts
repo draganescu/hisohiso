@@ -5,14 +5,25 @@
 import { createInterface } from 'node:readline/promises';
 import { randomInt } from 'node:crypto';
 
-// Returns a 4-digit pairing code (0000-9999) as a string. The pairing code
-// is the per-room password (k_msg / k_knock are derived from secret + code);
-// 4 digits is weak as a brute-force secret, but it sits BEHIND k_knock — to
-// even attempt a knock you also need room_secret AND the operator's session
-// knock message. The code's job is to make 'I have only the URL' a sterile
-// position, not to be the strong factor on its own.
+// Lowercase Crockford-style base32 (no i/l/o/u — unambiguous when read off a
+// terminal and typed on a phone). 32 symbols => 5 bits each.
+const CODE_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
+const CODE_LENGTH = 12; // 12 * 5 = ~60 bits
+
+// Returns a high-entropy (~60-bit) pairing code. It is the per-room password
+// fed into the PBKDF2 k_msg/k_knock derivation (crypto.ts) and is the factor an
+// attacker who has ONLY the room URL does not possess. The old 4-digit code
+// (~13 bits) was offline-brute-forceable in seconds (finding #93); ~60 bits
+// over 600k PBKDF2 iterations puts an offline search out of reach. The operator
+// transfers it to the phone once at control-room pairing; spawned agent rooms
+// carry their own code automatically over the encrypted control channel, so the
+// extra length costs nothing there. randomInt(0, 32) per char is unbiased.
 export const generatePairingCode = (): string => {
-  return String(randomInt(0, 10_000)).padStart(4, '0');
+  let code = '';
+  for (let i = 0; i < CODE_LENGTH; i += 1) {
+    code += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+  }
+  return code;
 };
 
 // Prompt the operator for a free-form line. Returns the trimmed line or

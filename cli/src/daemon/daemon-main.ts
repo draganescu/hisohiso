@@ -781,6 +781,12 @@ const setupControlRoom = async (
       // there were no saved state, which forces a fresh pair below.
       throw new Error('saved state predates pairing-code release');
     }
+    if (saved.kdfVersion !== 1) {
+      // Paired under the old weak-code KDF (finding #93). Reusing it would keep
+      // the weak 4-digit code alive under the new PBKDF2 derivation (still
+      // offline-crackable). Force a fresh pair so a high-entropy code is minted.
+      throw new Error('saved state predates KDF v1 — re-pairing to mint a high-entropy code');
+    }
     console.log('Reusing previously paired control room (no QR scan needed).');
     const messageKey = await deriveMessageKey(saved.controlRoomSecret, saved.controlRoomPassword);
     return { state: saved, messageKey };
@@ -914,6 +920,7 @@ const setupControlRoom = async (
     // The device we just approved above IS the first device — bind to it so any
     // subsequent knock requires an explicit operator confirm tap.
     controlBound: true,
+    kdfVersion: 1,
   };
   await saveDaemonState(state);
 
