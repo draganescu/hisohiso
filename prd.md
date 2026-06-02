@@ -31,7 +31,7 @@
       },
       "messaging": {
         "algorithm": "AES-256-GCM",
-        "derivation": "k_msg = HKDF(room_secret, 'hisohiso.k_msg')",
+        "derivation": "k_msg = PBKDF2-HMAC-SHA256(password=pairing_code, salt=SHA-256('hisohiso.kdf.v1.k_msg' || 0x00 || room_secret), iterations=600000) (finding #93)",
         "payload": {
           "nonce": "12 bytes (unique)",
           "aad": "room_hash + msg_type + msg_id",

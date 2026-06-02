@@ -99,7 +99,12 @@ function publish_event_to(array $topics, string $room_hash, string $type, array 
     ];
 
     $keys = require_mercure_jwt_keys();
-    $jwt = jwt_encode(['mercure' => ['publish' => $topics]], $keys['publisher']);
+    $jwt_now = time();
+    $jwt = jwt_encode([
+        'mercure' => ['publish' => $topics],
+        'iat' => $jwt_now,
+        'exp' => $jwt_now + 60,
+    ], $keys['publisher']);
 
     // Mercure accepts `topic` as a repeated form parameter — one event fans
     // out to every listed topic in a single hub call. private=on gates this

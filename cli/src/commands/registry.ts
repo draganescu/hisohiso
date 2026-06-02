@@ -11,7 +11,7 @@ const confirm = async (message: string): Promise<boolean> => {
   });
 };
 
-export const register = async (name: string, command: string, mode = 'default'): Promise<void> => {
+export const register = async (name: string, command: string, mode = 'default', needsRoomSecret = false): Promise<void> => {
   const agents = await loadRegistry();
 
   if (agents.find((a) => a.name === name)) {
@@ -22,7 +22,11 @@ export const register = async (name: string, command: string, mode = 'default'):
   console.log(`\nYou are about to register an agent that your phone will be able to run on this machine.\n`);
   console.log(`  Name:    ${name}`);
   console.log(`  Command: ${command}`);
-  console.log(`  Mode:    ${mode}\n`);
+  console.log(`  Mode:    ${mode}`);
+  if (needsRoomSecret) {
+    console.log(`  Env:     HISOHISO_ROOM_SECRET will be exported to this agent`);
+  }
+  console.log('');
 
   const ok = await confirm('Your phone will be able to run this command on this machine. Continue?');
   if (!ok) {
@@ -30,7 +34,7 @@ export const register = async (name: string, command: string, mode = 'default'):
     return;
   }
 
-  agents.push({ name, command, mode });
+  agents.push({ name, command, mode, ...(needsRoomSecret ? { needsRoomSecret: true } : {}) });
   await saveRegistry(agents);
   console.log(`Registered "${name}".`);
 };

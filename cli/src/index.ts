@@ -81,8 +81,9 @@ daemon
   .argument('<name>', 'Agent name')
   .requiredOption('--command <cmd>', 'Shell command to spawn')
   .option('--mode <profile>', 'Preamble profile', 'default')
-  .action(async (name: string, opts: { command: string; mode: string }) => {
-    await register(name, opts.command, opts.mode);
+  .option('--needs-room-secret', 'Export HISOHISO_ROOM_SECRET into this agent (off by default)', false)
+  .action(async (name: string, opts: { command: string; mode: string; needsRoomSecret?: boolean }) => {
+    await register(name, opts.command, opts.mode, opts.needsRoomSecret ?? false);
   });
 
 daemon

@@ -209,7 +209,18 @@ export const runDaemon = async (): Promise<void> => {
             console.error('Knock message mismatch — ignoring.');
             return;
           }
-          console.log('Phone is joining... approving.');
+          // First-device-wins: the first authenticated knock binds the control
+          // room and is auto-approved. A later knock (a second/unknown device
+          // that learned room_secret + pairing code + sessionKnockMessage) is
+          // NOT silently admitted — route it to an operator confirm tap posted
+          // into THIS control room. A single-device operator who lost their
+          // token recovers only via terminal `daemon start --fresh`.
+          if (iterState.controlBound) {
+            console.warn('Additional device knocked on a bound control room — awaiting operator confirm.');
+            await iterCtrl.requestControlKnockConfirm(knockPubkey, knockMsgId);
+            return;
+          }
+          console.log('Phone is joining... approving (control room binding to first device).');
           try {
             const binding = await beginApprove(knockPubkey, knockMsgId);
             const approveRes = await api.approveKnock(server, iterState.controlRoomHash, iterState.participantToken, binding.claimTagHash);
@@ -219,6 +230,8 @@ export const runDaemon = async (): Promise<void> => {
             });
             const wrapped = await binding.wrap(bundle);
             await api.sendWrappedToken(server, iterState.controlRoomHash, iterState.participantToken, knockMsgId, wrapped);
+            iterState.controlBound = true;
+            await saveDaemonState(iterState);
             console.log('Phone connected to control room.');
           } catch (err) {
             console.error('Failed to approve knock:', err);
@@ -413,12 +426,29 @@ const getAllAgentNames = async (): Promise<string[]> => {
   return [...new Set([...builtIn, ...registered])];
 };
 
+// A knock against an already-bound control room, parked until the operator taps
+// confirm. Keyed by knockMsgId; expires with the lobby JWT so a never-answered
+// knock is never resolved later and the map can't grow unbounded.
+type PendingControlKnock = {
+  knockPubkey: string;
+  knockMsgId: string;
+  expiresAt: number;
+};
+
+// Stale pending control-room knocks expire with the lobby JWT (~10 min,
+// server/index.php LOBBY_JWT_TTL=600s).
+const PENDING_CONTROL_KNOCK_TTL_MS = 10 * 60 * 1000;
+
 // Bundles the per-iteration control-room context (server, room identity,
 // message key, manager) so every send/handle stops threading five positional
 // parameters by hand. Recreated each main-loop iteration because the room
 // identity rotates on re-pair; the AgentManager is stable across iterations
 // but its current count rides on every reply via listRunning().length.
 class ControlRoom {
+  // Additional-device knocks against a bound control room, awaiting the
+  // operator's confirm tap (delivered as a confirm-danger block_response).
+  private pendingKnocks = new Map<string, PendingControlKnock>();
+
   constructor(
     private readonly server: string,
     private readonly state: DaemonState,
@@ -426,6 +456,71 @@ class ControlRoom {
     private readonly manager: AgentManager,
     private readonly suggestedName: string | null
   ) {}
+
+  // Park an additional-device knock against a bound control room and post a
+  // confirm-danger block so the operator can approve/deny it from a device that
+  // is already joined. A single-device operator who lost their token cannot
+  // approve here — the confirm copy points them at `daemon start --fresh`.
+  async requestControlKnockConfirm(knockPubkey: string, knockMsgId: string): Promise<void> {
+    // Evict already-expired parked knocks before adding this one so a flood of
+    // never-answered knocks can't grow the map without bound (no timer needed).
+    const nowMs = Date.now();
+    for (const [k, v] of this.pendingKnocks) {
+      if (nowMs > v.expiresAt) this.pendingKnocks.delete(k);
+    }
+    this.pendingKnocks.set(knockMsgId, {
+      knockPubkey,
+      knockMsgId,
+      expiresAt: nowMs + PENDING_CONTROL_KNOCK_TTL_MS,
+    });
+    await this.reply(
+      'A new device is requesting control-room access.',
+      [
+        buildBlock({
+          type: 'confirm-danger',
+          id: `confirm-routing:${knockMsgId}`,
+          title: 'Admit a new device to the control room?',
+          description: 'A new device is requesting control-room access. Approve only if this is you. If you lost your only device, you cannot approve from here — re-pair from the terminal with `hisohiso daemon start --fresh`.',
+          confirm_label: 'Admit device',
+        }),
+      ]
+    );
+  }
+
+  // Operator tapped the control-room confirm-danger block. Resolve the parked
+  // knock: reject if unknown/expired (with an in-band notice), else run the
+  // beginApprove -> approveKnock -> sendWrappedToken handshake for the control
+  // room. Returns nothing; all feedback goes back into the control room.
+  async resolveControlKnock(knockMsgId: string, approve: boolean): Promise<void> {
+    const pending = this.pendingKnocks.get(knockMsgId);
+    if (!pending) {
+      await this.reply('That join request is no longer pending — ask the device to knock again.');
+      return;
+    }
+    this.pendingKnocks.delete(knockMsgId);
+    if (Date.now() > pending.expiresAt) {
+      await this.reply('That join request expired — ask the device to knock again.');
+      return;
+    }
+    if (!approve) {
+      await this.reply('Denied the new device.');
+      return;
+    }
+    try {
+      const binding = await beginApprove(pending.knockPubkey, pending.knockMsgId);
+      const approveRes = await api.approveKnock(this.server, this.state.controlRoomHash, this.state.participantToken, binding.claimTagHash);
+      const bundle = JSON.stringify({
+        token: approveRes.new_participant_token,
+        subscriber_jwt: approveRes.subscriber_jwt,
+      });
+      const wrapped = await binding.wrap(bundle);
+      await api.sendWrappedToken(this.server, this.state.controlRoomHash, this.state.participantToken, pending.knockMsgId, wrapped);
+      await this.reply('Admitted the new device to the control room.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.reply(`Could not admit the new device: ${msg} — ask it to knock again.`);
+    }
+  }
 
   // Every reply goes into the control room, so stamp `room_kind: 'control'`
   // — the phone QR-pairs the control room (no join-room action) so this
@@ -566,6 +661,33 @@ class ControlRoom {
           return;
         }
 
+        // Operator answered the "admit a new device to the control room?"
+        // confirm raised when an additional phone knocked on a bound control
+        // room (finding #94 STEP 3). value true => run the admit handshake.
+        if (type === 'confirm-danger' && block_id.startsWith('confirm-routing:')) {
+          const knockMsgId = block_id.slice('confirm-routing:'.length);
+          await this.resolveControlKnock(knockMsgId, value === true);
+          return;
+        }
+
+        // Operator answered the "admit a new device to the <agent> room?"
+        // confirm raised when an additional phone knocked on a bound agent room
+        // (finding #94 STEP 4). block_id is approve-agent-knock:<agentId>:<msgId>;
+        // the agentId may itself contain no ':' (it's a 12-hex slice) so split on
+        // the LAST ':' to recover the msg_id.
+        if (type === 'confirm-danger' && block_id.startsWith('approve-agent-knock:')) {
+          const rest = block_id.slice('approve-agent-knock:'.length);
+          const sep = rest.lastIndexOf(':');
+          if (sep < 0) {
+            await this.reply('Malformed agent-knock confirmation — ignoring.');
+            return;
+          }
+          const agentId = rest.slice(0, sep);
+          const knockMsgId = rest.slice(sep + 1);
+          await this.manager.resolveAgentKnock(agentId, knockMsgId, value === true);
+          return;
+        }
+
         if (typeof value === 'string') {
           if (value === 'show-launcher') {
             await this.reply('Pick an agent.', [launcherBlock(await getAllAgentNames())]);
@@ -658,6 +780,12 @@ const setupControlRoom = async (
       // Pre-pairing-code state — too risky to reuse silently. Treat as if
       // there were no saved state, which forces a fresh pair below.
       throw new Error('saved state predates pairing-code release');
+    }
+    if (saved.kdfVersion !== 1) {
+      // Paired under the old weak-code KDF (finding #93). Reusing it would keep
+      // the weak 4-digit code alive under the new PBKDF2 derivation (still
+      // offline-crackable). Force a fresh pair so a high-entropy code is minted.
+      throw new Error('saved state predates KDF v1 — re-pairing to mint a high-entropy code');
     }
     console.log('Reusing previously paired control room (no QR scan needed).');
     const messageKey = await deriveMessageKey(saved.controlRoomSecret, saved.controlRoomPassword);
@@ -789,6 +917,10 @@ const setupControlRoom = async (
     subscriberJwt,
     controlRoomPassword: password,
     sessionKnockMessage,
+    // The device we just approved above IS the first device — bind to it so any
+    // subsequent knock requires an explicit operator confirm tap.
+    controlBound: true,
+    kdfVersion: 1,
   };
   await saveDaemonState(state);
 

@@ -34,6 +34,11 @@ const PARTICIPANT_JWT_TTL = 7 * 24 * 3600;
 // the participant token. 10 minutes is generous; abandoned knocks expire
 // silently and are harmless (no events ever publish for them).
 const LOBBY_JWT_TTL = 10 * 60;
+// Pending participant rows (pending=1, minted by /approve) are claimable only
+// while the knocker's lobby JWT lives. Once that expires the row can never be
+// legitimately claimed, so we GC pending rows older than this. Matches
+// LOBBY_JWT_TTL with a small grace margin for clock skew / in-flight claims.
+const PENDING_PARTICIPANT_TTL = LOBBY_JWT_TTL + 60; // 11 minutes
 
 function touch_room(string $room_hash): void
 {
@@ -69,10 +74,35 @@ function presence_prune_stale(): void
     });
 }
 
+// Throttled GC of pending participant rows that were minted by /approve but
+// never claimed via /presence. Such rows are immortal otherwise (only a
+// claim/failed-claim deletes them) and any participant can mint unlimited ones.
+// Same lockfile-mtime throttle pattern as presence_prune_stale(); own marker so
+// the two pruners don't share a clock. Only pending=1 rows are touched, so an
+// active participant (pending=0) is never affected regardless of joined_at age.
+// The DELETE is a full scan of the participants table (no index on pending /
+// joined_at; idx_participants_room covers room_hash only) — fine because the
+// table is bounded by rooms*members and this runs at most once / 60s server-wide.
+function pending_participant_prune_stale(): void
+{
+    $marker = (getenv('CHAT_DB_PATH') ? dirname((string) getenv('CHAT_DB_PATH')) : '/data') . '/.pending_cleanup_at';
+    $now = time();
+    $last = @filemtime($marker);
+    if ($last !== false && ($now - $last) < 60) {
+        return;
+    }
+    @touch($marker, $now);
+    $cutoff = $now - PENDING_PARTICIPANT_TTL;
+    sqlite_write_with_retry(function () use ($cutoff): void {
+        db()->prepare('DELETE FROM participants WHERE pending = 1 AND joined_at < :cutoff')->execute([':cutoff' => $cutoff]);
+    });
+}
+
 function participant_count(string $room_hash): int
 {
     $pdo = db();
     presence_prune_stale();
+    pending_participant_prune_stale();
     $cutoff = time() - 45;
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM presence WHERE room_hash = :room_hash AND last_seen >= :cutoff');
     $stmt->execute([':room_hash' => $room_hash, ':cutoff' => $cutoff]);
