@@ -2,7 +2,10 @@ import { readFile, writeFile, mkdir, access, unlink, rename } from 'node:fs/prom
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const CONFIG_DIR = join(homedir(), '.hisohiso');
+// State directory. Defaults to ~/.hisohiso, but HISOHISO_HOME overrides it so a
+// second (e.g. worktree / dev) daemon can run with isolated config + PID + rooms
+// state alongside the production daemon, without colliding on ~/.hisohiso.
+const CONFIG_DIR = process.env.HISOHISO_HOME || join(homedir(), '.hisohiso');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 const REGISTRY_FILE = join(CONFIG_DIR, 'registry.json');
 const ROOMS_FILE = join(CONFIG_DIR, 'rooms.json');
