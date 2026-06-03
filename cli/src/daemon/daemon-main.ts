@@ -901,7 +901,10 @@ class ControlRoom {
   }
 }
 
-const setupControlRoom = async (
+// Exported so `daemon install` can pair inline (when run interactively) without
+// a separate `daemon start` — it shows the QR, waits on the knock, persists the
+// control-room state, then continues to install.
+export const setupControlRoom = async (
   server: string,
   carriedKnockMessage?: string
 ): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
