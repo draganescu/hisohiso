@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>hisohiso · Agent-room batch replies (mock)</title>
+<style>
+  /* ---- Real PWA tokens (from app/src/styles.css) ---- */
+  :root{
+    --bg:#f4f1ea; --surface:rgba(255,255,255,.78); --surface-strong:#fffdf8;
+    --ink:#0b0d12; --ink-soft:#555c6b; --ink-dim:#8b92a1; --ink-fade:#c8cdd6;
+    --rule:rgba(11,13,18,.10); --rule-soft:rgba(11,13,18,.06);
+    --danger:#be123c; --danger-soft:rgba(244,63,94,.12);
+    --on-ink:#fff; --filled:#11131a; --accent:#7170ff; --accent-strong:#5e6ad2;
+    --accent-soft:rgba(113,112,255,.13); --success:#10b981;
+    --overlay:rgba(11,13,18,.48);
+    --shadow-soft:0 18px 60px -34px rgba(12,16,24,.45);
+    --shadow-float:0 24px 80px -30px rgba(12,16,24,.5);
+    --glow-accent:0 0 0 1px rgba(113,112,255,.16),0 20px 70px -38px rgba(113,112,255,.9);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  .dark{
+    --bg:#07080b; --surface:rgba(20,22,28,.72); --surface-strong:#11131a;
+    --ink:#f7f8f8; --ink-soft:#c8ccd7; --ink-dim:#8f96a8; --ink-fade:#434858;
+    --rule:rgba(255,255,255,.10); --rule-soft:rgba(255,255,255,.06);
+    --danger:#fb7185; --danger-soft:rgba(251,113,133,.14);
+    --on-ink:#fff; --filled:#5e6ad2; --accent:#828fff; --accent-strong:#7170ff;
+    --accent-soft:rgba(130,143,255,.16); --success:#34d399;
+    --overlay:rgba(0,0,0,.72);
+    --shadow-soft:0 22px 80px -42px rgba(0,0,0,.85);
+    --shadow-float:0 28px 90px -32px rgba(0,0,0,.88);
+    --glow-accent:0 0 0 1px rgba(130,143,255,.18),0 22px 80px -38px rgba(130,143,255,.72);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:#1b1d24;color:var(--ink);-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;align-items:center;min-height:100vh;
+       padding:18px 12px 40px;gap:14px}
+  .dark body{background:#000}
+
+  /* top chrome (out of phone): room-kind + theme toggles to prove gating */
+  .chrome{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;max-width:420px}
+  .chrome .seg{display:inline-flex;background:var(--surface-strong);border:1px solid var(--rule);
+       border-radius:999px;padding:3px;gap:2px;box-shadow:var(--shadow-soft)}
+  .chrome button{border:0;background:transparent;color:var(--ink-soft);font:inherit;font-size:13px;
+       font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer}
+  .chrome button.on{background:var(--accent);color:#fff}
+  .chrome .hint{font-size:12px;color:#9aa0ad;width:100%;text-align:center;margin-top:2px}
+
+  /* phone frame */
+  .phone{width:390px;max-width:100%;height:760px;max-height:88vh;background:var(--bg);
+       border-radius:38px;box-shadow:0 0 0 10px #121319,0 40px 90px -30px rgba(0,0,0,.7);
+       overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .statusbar{height:30px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+       padding:0 24px;font-size:12px;font-weight:600;color:var(--ink-soft)}
+
+  /* room header */
+  .rhead{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:8px 16px 12px;
+       border-bottom:1px solid var(--rule-soft)}
+  .rhead .back{font-size:20px;color:var(--ink-soft);background:none;border:0;cursor:pointer;padding:4px}
+  .rhead .ttl{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+  .badge{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+       padding:2px 7px;border-radius:999px;border:1px solid var(--rule)}
+  .badge.agent{background:var(--accent-soft);color:var(--accent-strong);border-color:transparent}
+  .badge.chat{background:var(--surface);color:var(--ink-soft)}
+  .badge.control{background:var(--accent-soft);color:var(--accent-strong);border-color:transparent}
+
+  /* timeline */
+  .scroll{flex:1 1 auto;overflow-y:auto;padding:14px 14px 96px;display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;flex-direction:column;gap:3px;max-width:86%}
+  .row.out{align-self:flex-end;align-items:flex-end}
+  .row.in{align-self:flex-start}
+  .who{font-size:11px;color:var(--ink-dim);padding:0 4px}
+  .bub{padding:9px 12px;border-radius:16px;font-size:14.5px;line-height:1.4;cursor:pointer;
+       border:1px solid var(--rule-soft);position:relative;transition:transform .08s,box-shadow .15s}
+  .bub:active{transform:scale(.99)}
+  .row.in .bub{background:var(--surface-strong);border-top-left-radius:6px}
+  .row.out .bub{background:var(--filled);color:var(--on-ink);border-top-right-radius:6px;border-color:transparent}
+  .bub.flash{box-shadow:var(--glow-accent)}
+  .tapnote{font-size:11px;color:var(--ink-dim);padding:2px 4px}
+  .qmark{position:absolute;top:-7px;right:-7px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;
+       width:18px;height:18px;border-radius:50%;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-soft)}
+  .bub.queued .qmark{display:flex}
+
+  /* collapsed batch block (the dispatched bundle in the timeline) */
+  .batch{cursor:pointer;border:1px solid var(--rule);background:var(--surface-strong);
+       border-radius:16px;border-top-right-radius:6px;overflow:hidden;min-width:200px}
+  .batch .bh{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:13.5px;font-weight:600;color:var(--ink)}
+  .batch .bh .pill{margin-left:auto;font-size:11px;font-weight:700;color:var(--accent-strong);
+       background:var(--accent-soft);padding:2px 8px;border-radius:999px}
+  .batch .chev{transition:transform .2s;color:var(--ink-dim)}
+  .batch.open .chev{transform:rotate(90deg)}
+  .batch .body{display:none;border-top:1px solid var(--rule-soft);padding:4px 10px 10px}
+  .batch.open .body{display:block}
+  .batch .item{padding:8px 4px;border-bottom:1px solid var(--rule-soft)}
+  .batch .item:last-child{border-bottom:0}
+  .batch .q{font-size:11px;color:var(--ink-dim);border-left:2px solid var(--accent);padding-left:7px;margin-bottom:3px}
+  .batch .t{font-size:13.5px;color:var(--ink)}
+
+  /* FAB compose */
+  .fab{position:absolute;right:16px;bottom:18px;background:var(--filled);color:var(--on-ink);
+       border:0;border-radius:999px;padding:13px 20px;font:inherit;font-weight:700;font-size:14px;
+       box-shadow:var(--shadow-float);cursor:pointer}
+  .control-bar{position:absolute;left:12px;right:12px;bottom:14px;display:flex;gap:8px;
+       background:var(--surface-strong);border:1px solid var(--rule);border-radius:18px;padding:8px;box-shadow:var(--shadow-float)}
+  .control-bar button{flex:1;border:0;border-radius:12px;padding:11px;font:inherit;font-weight:700;font-size:13px;
+       background:var(--accent-soft);color:var(--accent-strong);cursor:pointer}
+
+  /* collector bubble (floating, agent rooms only) */
+  .collector{position:absolute;left:16px;bottom:18px;z-index:30;background:var(--accent);color:#fff;
+       border-radius:999px;padding:11px 16px 11px 14px;display:none;align-items:center;gap:9px;
+       box-shadow:var(--glow-accent);cursor:pointer;font-weight:700;font-size:13.5px}
+  .collector.show{display:inline-flex;animation:pop .2s ease}
+  @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+  .collector .cnt{background:#fff;color:var(--accent-strong);min-width:20px;height:20px;border-radius:999px;
+       display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+  /* sheet (detail + composer + collector tray) */
+  .sheet{position:absolute;inset:0;z-index:40;background:var(--overlay);display:none;
+       align-items:flex-end;backdrop-filter:blur(2px)}
+  .sheet.show{display:flex}
+  .card{background:var(--bg);width:100%;max-height:92%;border-radius:24px 24px 0 0;
+       display:flex;flex-direction:column;box-shadow:var(--shadow-float);animation:up .22s ease}
+  @keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:translateY(0);opacity:1}}
+  .card h3{margin:0;font-size:15px}
+  .card .top{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--rule-soft)}
+  .card .top .x{margin-left:auto;background:none;border:0;font-size:20px;color:var(--ink-soft);cursor:pointer}
+  .card .pad{padding:14px 16px;overflow-y:auto}
+  .detail-msg{background:var(--surface-strong);border:1px solid var(--rule-soft);border-radius:14px;
+       padding:12px;font-size:14.5px;line-height:1.45}
+  .detail-meta{font-size:11px;color:var(--ink-dim);margin-bottom:6px}
+  .acts{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--rule-soft)}
+  .acts button{flex:1;border-radius:12px;padding:12px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;border:1px solid var(--rule)}
+  .acts .primary{background:var(--accent);color:#fff;border-color:transparent}
+  .acts .ghost{background:var(--surface);color:var(--ink)}
+
+  .replyctx{font-size:11.5px;color:var(--ink-dim);border-left:2px solid var(--accent);
+       padding:3px 9px;margin-bottom:8px;background:var(--accent-soft);border-radius:0 8px 8px 0}
+  textarea{width:100%;min-height:64px;resize:none;border:1px solid var(--rule);border-radius:12px;
+       padding:11px;font:inherit;font-size:14.5px;background:var(--surface-strong);color:var(--ink)}
+  textarea:focus{outline:none;box-shadow:var(--glow-accent)}
+  .added{font-size:12px;color:var(--success);font-weight:600;padding:8px 2px 0;display:none}
+  .added.show{display:block}
+
+  /* tray (expanded collector) */
+  .tray-item{display:flex;gap:8px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--rule-soft)}
+  .tray-item .meat{flex:1;min-width:0}
+  .tray-item .q{font-size:11px;color:var(--ink-dim);border-left:2px solid var(--accent);padding-left:7px;margin-bottom:3px}
+  .tray-item .t{font-size:14px}
+  .tray-item .del{background:none;border:0;color:var(--danger);font-size:18px;cursor:pointer;padding:0 2px}
+  .empty{color:var(--ink-dim);font-size:13px;text-align:center;padding:18px}
+
+  .toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--filled);color:var(--on-ink);
+       font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:999px;box-shadow:var(--shadow-float);
+       opacity:0;transition:opacity .25s;z-index:60;pointer-events:none;max-width:90%;text-align:center}
+  .toast.show{opacity:1}
+  .gateoff{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+       gap:8px;text-align:center;padding:30px;color:var(--ink-soft);background:var(--bg)}
+  .caption{max-width:420px;font-size:12.5px;color:#9aa0ad;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+  <div class="chrome">
+    <div class="seg" id="kindSeg">
+      <button data-kind="agent" class="on">Agent room</button>
+      <button data-kind="chat">Normal room</button>
+      <button data-kind="control">Control room</button>
+    </div>
+    <div class="seg">
+      <button id="themeBtn">◐ Theme</button>
+    </div>
+    <div class="hint">Switch room kind to see the batch-reply feature is gated to <b>agent</b> rooms only.</div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="statusbar"><span>9:41</span><span>hisohiso</span><span>▮▮▮</span></div>
+    <div class="rhead">
+      <button class="back">‹</button>
+      <div class="ttl">Channel <span class="badge agent" id="kindBadge">Agent</span></div>
+    </div>
+
+    <div class="scroll" id="scroll"><!-- messages injected --></div>
+
+    <!-- agent-room affordances -->
+    <button class="fab" id="fab">Compose</button>
+    <div class="collector" id="collector"><span class="cnt" id="ccount">0</span><span>replies · tap to dispatch</span></div>
+
+    <!-- control-room affordance -->
+    <div class="control-bar" id="controlBar" style="display:none">
+      <button>＋ Spawn</button><button>◷ Agents · 2</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="gateoff" id="gateoff"></div>
+
+    <!-- sheet host -->
+    <div class="sheet" id="sheet"><div class="card" id="card"></div></div>
+  </div>
+
+  <div class="caption">
+    Tap an agent message → <b>Reply</b> → send. The detail view <b>stays open</b> and each reply drops into the
+    <b>collector bubble</b>. Tap the bubble to review, then <b>Dispatch all</b> — they leave as one message and the
+    timeline shows a collapsed batch block you can expand.
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(s,r){return (r||document).querySelector(s)};
+  var scroll=$("#scroll"), sheet=$("#sheet"), card=$("#card"),
+      collector=$("#collector"), ccount=$("#ccount"), fab=$("#fab"),
+      controlBar=$("#controlBar"), gateoff=$("#gateoff"), toast=$("#toast"),
+      kindBadge=$("#kindBadge"), phone=$("#phone");
+
+  var kind="agent";           // agent | chat | control
+  var queue=[];               // [{toId, quote, text}]
+  var openDetailId=null;      // message id whose detail sheet is open
+
+  // seed timeline (agent messages = "in")
+  var msgs=[
+    {id:"m1",dir:"in",who:"agent",text:"I refactored the auth module. The token refresh now retries 3× with backoff before failing. Want me to apply the same to the payments client?"},
+    {id:"m2",dir:"in",who:"agent",text:"Heads up: tests/auth.spec.ts has 2 failing cases after the change — both assert the old single-attempt behaviour. Update them or keep the old path behind a flag?"},
+    {id:"m3",dir:"in",who:"agent",text:"I also found a hardcoded staging URL in src/config.ts:42. Should I move it to an env var?"},
+    {id:"m4",dir:"in",who:"agent",text:"Deploy preview is up. Lighthouse perf dropped 4 points — the new retry loop adds a synchronous JSON parse on the hot path."}
+  ];
+
+  function esc(s){return s.replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c]})}
+  function quoteOf(t){t=t.trim();return t.length>54?t.slice(0,54)+"…":t}
+  function showToast(t){toast.textContent=t;toast.classList.add("show");setTimeout(function(){toast.classList.remove("show")},1700)}
+
+  function render(){
+    scroll.innerHTML="";
+    msgs.forEach(function(m){
+      var row=document.createElement("div");
+      row.className="row "+(m.dir==="out"?"out":"in");
+      if(m.batch){
+        row.innerHTML='<div class="who">You</div>'+
+          '<div class="batch" data-batch="'+m.id+'">'+
+            '<div class="bh"><span class="chev">▸</span> Sent a batch of replies'+
+              '<span class="pill">'+m.batch.length+'</span></div>'+
+            '<div class="body">'+m.batch.map(function(b){
+              return '<div class="item"><div class="q">↳ '+esc(b.quote)+'</div><div class="t">'+esc(b.text)+'</div></div>'
+            }).join("")+'</div>'+
+          '</div>';
+      }else{
+        var queued = m.dir==="in" && queue.some(function(q){return q.toId===m.id});
+        row.innerHTML=(m.dir==="in"?'<div class="who">Agent</div>':'<div class="who">You</div>')+
+          '<div class="bub'+(queued?" queued":"")+'" data-msg="'+m.id+'">'+esc(m.text)+
+            '<span class="qmark">'+(queue.filter(function(q){return q.toId===m.id}).length||"")+'</span></div>'+
+          (m.dir==="in"?'<div class="tapnote">tap to open · reply</div>':"");
+      }
+      scroll.appendChild(row);
+    });
+    scroll.scrollTop=scroll.scrollHeight;
+    updateCollector();
+  }
+
+  function updateCollector(){
+    ccount.textContent=queue.length;
+    if(kind==="agent" && queue.length>0){collector.classList.add("show")}
+    else{collector.classList.remove("show")}
+  }
+
+  /* ---------- detail sheet ---------- */
+  function openDetail(id){
+    if(kind!=="agent" && kind!=="chat") return;   // control rooms: no message replies
+    openDetailId=id;
+    var m=msgs.find(function(x){return x.id===id});
+    var canBatch = kind==="agent";
+    card.innerHTML=
+      '<div class="top"><h3>Message</h3><button class="x" data-close>✕</button></div>'+
+      '<div class="pad">'+
+        '<div class="detail-meta">Agent · just now</div>'+
+        '<div class="detail-msg">'+esc(m.text)+'</div>'+
+        (canBatch?'<div class="added" id="added">✓ Added to batch — keep replying or dispatch.</div>':"")+
+      '</div>'+
+      '<div class="acts">'+
+        '<button class="ghost" data-close>Back</button>'+
+        '<button class="primary" data-reply="'+id+'">Reply'+(canBatch?' →':"")+'</button>'+
+      '</div>';
+    sheet.classList.add("show");
+  }
+
+  /* ---------- composer ---------- */
+  function openComposer(id){
+    var m=msgs.find(function(x){return x.id===id});
+    var canBatch = kind==="agent";
+    card.innerHTML=
+      '<div class="top"><h3>'+(canBatch?"Reply (adds to batch)":"Reply")+'</h3><button class="x" data-close-comp>✕</button></div>'+
+      '<div class="pad">'+
+        '<div class="replyctx">↳ '+esc(quoteOf(m.text))+'</div>'+
+        '<textarea id="ta" placeholder="Your reply…"></textarea>'+
+      '</div>'+
+      '<div class="acts">'+
+        '<button class="ghost" data-close-comp>Cancel</button>'+
+        '<button class="primary" data-send="'+id+'">'+(canBatch?"Add to batch":"Send")+'</button>'+
+      '</div>';
+    sheet.classList.add("show");
+    setTimeout(function(){var t=$("#ta");if(t)t.focus()},60);
+  }
+
+  function sendReply(id){
+    var ta=$("#ta"); var text=(ta&&ta.value.trim())||"";
+    if(!text){showToast("Write something first");return}
+    var m=msgs.find(function(x){return x.id===id});
+    if(kind==="agent"){
+      // FEATURE 1+2+3: pointer to msg id, batch collect, STAY in detail view
+      queue.push({toId:id, quote:quoteOf(m.text), text:text});
+      render();
+      openDetail(id);                       // reopen detail (composer closed) → we REMAIN in context
+      var a=$("#added"); if(a){a.classList.add("show")}
+      showToast("Added — "+queue.length+" in batch");
+    }else{
+      // normal room: single reply, sends immediately (issue #141 behaviour)
+      msgs.push({id:"u"+Date.now(),dir:"out",text:text, single:true});
+      closeSheet(); render(); showToast("Reply sent");
+    }
+  }
+
+  /* ---------- collector tray ---------- */
+  function openTray(){
+    card.innerHTML=
+      '<div class="top"><h3>Batch · '+queue.length+' '+(queue.length===1?"reply":"replies")+'</h3>'+
+        '<button class="x" data-close>✕</button></div>'+
+      '<div class="pad" id="trayPad"></div>'+
+      '<div class="acts">'+
+        '<button class="ghost" data-clear>Clear</button>'+
+        '<button class="primary" data-dispatch>Dispatch all ('+queue.length+')</button>'+
+      '</div>';
+    var pad=$("#trayPad");
+    if(queue.length===0){pad.innerHTML='<div class="empty">No replies queued.</div>'}
+    else{
+      pad.innerHTML=queue.map(function(q,i){
+        return '<div class="tray-item"><div class="meat"><div class="q">↳ '+esc(q.quote)+
+          '</div><div class="t">'+esc(q.text)+'</div></div>'+
+          '<button class="del" data-del="'+i+'">✕</button></div>'
+      }).join("");
+    }
+    sheet.classList.add("show");
+  }
+
+  function dispatch(){
+    if(queue.length===0)return;
+    // FEATURE 3: leave detail, append ONE outgoing batch message to the room
+    msgs.push({id:"b"+Date.now(),dir:"out",batch:queue.slice()});
+    queue=[];
+    closeSheet();
+    render();
+    showToast("Dispatched as one message → agent");
+  }
+
+  function closeSheet(){sheet.classList.remove("show");openDetailId=null}
+
+  /* ---------- room-kind gating ---------- */
+  function setKind(k){
+    kind=k;
+    queue=[]; closeSheet();
+    kindBadge.className="badge "+k;
+    kindBadge.textContent=k.charAt(0).toUpperCase()+k.slice(1);
+    // affordances
+    fab.style.display = (k==="control")?"none":"block";
+    controlBar.style.display = (k==="control")?"flex":"none";
+    if(k==="control"){
+      gateoff.style.display="flex";
+      gateoff.innerHTML='<div style="font-size:30px">⌘</div><b>Control room</b>'+
+        '<div style="font-size:13px;max-width:230px">No free-text replies and no collector here — only the Spawn / Agents command bar. Batch replies stay out of control rooms.</div>';
+    }else{
+      gateoff.style.display="none";
+    }
+    if(k==="chat"){showToast("Normal room: replies send one-by-one (no collector)")}
+    if(k==="agent"){showToast("Agent room: replies collect into a batch")}
+    render();
+  }
+
+  /* ---------- events (delegated) ---------- */
+  scroll.addEventListener("click",function(e){
+    var bub=e.target.closest("[data-msg]");
+    var batch=e.target.closest("[data-batch]");
+    if(batch){batch.classList.toggle("open");return}
+    if(bub){var m=msgs.find(function(x){return x.id===bub.getAttribute("data-msg")});if(m&&m.dir==="in")openDetail(m.id)}
+  });
+  collector.addEventListener("click",openTray);
+  fab.addEventListener("click",function(){showToast("Tap an agent message to reply in context")});
+
+  card.addEventListener("click",function(e){
+    var t=e.target;
+    if(t.closest("[data-close]")){closeSheet();return}
+    if(t.closest("[data-close-comp]")){ // closing composer returns to detail (stay in context)
+      if(kind==="agent"&&openDetailId){openDetail(openDetailId)}else{closeSheet()} return}
+    var rep=t.closest("[data-reply]"); if(rep){openComposer(rep.getAttribute("data-reply"));return}
+    var snd=t.closest("[data-send]"); if(snd){sendReply(snd.getAttribute("data-send"));return}
+    var del=t.closest("[data-del]"); if(del){queue.splice(+del.getAttribute("data-del"),1);openTray();render();return}
+    if(t.closest("[data-clear]")){queue=[];closeSheet();render();showToast("Batch cleared");return}
+    if(t.closest("[data-dispatch]")){dispatch();return}
+  });
+  sheet.addEventListener("click",function(e){if(e.target===sheet)closeSheet()});
+
+  $("#kindSeg").addEventListener("click",function(e){
+    var b=e.target.closest("button[data-kind]"); if(!b)return;
+    [].forEach.call(this.querySelectorAll("button"),function(x){x.classList.remove("on")});
+    b.classList.add("on"); setKind(b.getAttribute("data-kind"));
+  });
+  $("#themeBtn").addEventListener("click",function(){document.documentElement.classList.toggle("dark")});
+
+  // boot
+  if(window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches){document.documentElement.classList.add("dark")}
+  setKind("agent");
+})();
+</script>
+</body>
+</html>
