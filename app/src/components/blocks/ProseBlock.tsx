@@ -65,7 +65,7 @@ const renderInline = (text: string): React.ReactNode[] => {
     if (tok.startsWith('**')) {
       out.push(<strong key={key++} className="font-semibold">{tok.slice(2, -2)}</strong>);
     } else if (tok.startsWith('`')) {
-      out.push(<code key={key++} className="rounded bg-rule-soft px-1 font-mono text-[0.8125rem]">{tok.slice(1, -1)}</code>);
+      out.push(<code key={key++} className="rounded bg-rule-soft px-1 font-mono text-[0.8125rem] [overflow-wrap:anywhere]">{tok.slice(1, -1)}</code>);
     } else {
       out.push(<em key={key++} className="italic">{tok.slice(1, -1)}</em>);
     }
@@ -88,7 +88,7 @@ export const ProseBlockView = ({ block }: Props) => {
             {tok.items.map((item, j) => (
               <li key={j} className="flex gap-2">
                 <span className="shrink-0 select-none text-ink-dim">{'•'}</span>
-                <span>{renderInline(item)}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">{renderInline(item)}</span>
               </li>
             ))}
           </ul>
