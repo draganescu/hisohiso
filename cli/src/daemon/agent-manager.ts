@@ -1,4 +1,4 @@
-import { createRoomAndJoin, encryptAndSend, type SendOptions } from '../lib/room-bridge.js';
+import { createRoomAndJoin, encryptAndSend, quoteForAgent, type SendOptions } from '../lib/room-bridge.js';
 import { deriveMessageKey, deriveKnockKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { generatePairingCode } from '../lib/prompt.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
@@ -620,8 +620,26 @@ export class AgentManager {
             : event.body.encrypted_payload as EncryptedPayload;
           const msgId = incomingMsgId;
           const decrypted = await decryptText(messageKey, roomHash, 'chat', msgId, encPayload);
-          const parsed = JSON.parse(decrypted) as { text: string };
-          text = parsed.text;
+          const parsed = JSON.parse(decrypted) as {
+            text: string;
+            replies?: Array<{ text?: string; reply_to?: { quote?: string } }>;
+          };
+          // A batch of replies (agent-room collector): feed the whole set as ONE
+          // turn so the agent reads them together, each tagged with the message it
+          // answers. Without this, only the "N replies" summary text reaches the
+          // agent and the per-reply text is lost. Mirrors wrap.ts / room-bridge.ts.
+          if (Array.isArray(parsed.replies) && parsed.replies.length > 0) {
+            const lines = parsed.replies
+              .filter((r) => r && typeof r.text === 'string')
+              .map((r) => {
+                const q = r.reply_to?.quote ? ` (re: "${quoteForAgent(r.reply_to.quote)}")` : '';
+                return `↳${q} ${r.text}`;
+              });
+            const label = lines.length === 1 ? 'reply' : 'replies';
+            text = `[FROM USER · ${lines.length} ${label}]\n${lines.join('\n')}`;
+          } else {
+            text = parsed.text;
+          }
         } catch (err) {
           console.error(`[${agentName}:${agentId}] Failed to decrypt:`, err);
           return;

@@ -21,7 +21,7 @@ const FLUSH_MAX_LINES = 50;
 
 // Bound a quoted snippet to one readable stdin line: collapse whitespace and
 // cap length so a long original message can't blow out the agent's input line.
-const quoteForAgent = (quote: string): string => {
+export const quoteForAgent = (quote: string): string => {
   const compact = quote.replace(/\s+/g, ' ').trim();
   return compact.length > 80 ? `${compact.slice(0, 77)}...` : compact;
 };

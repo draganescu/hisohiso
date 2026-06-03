@@ -1369,6 +1369,18 @@ const RoomController = () => {
     setSelectedId(null);
   }, []);
 
+  // What "Copy" should put on the clipboard for a message. For a batch reply
+  // message, the rendered content is just the "N replies" summary — copy the
+  // actual reply texts (with the quote each answers) instead of that label.
+  const messageCopyText = useCallback((msg: ChatMessage): string => {
+    if (msg.replies && msg.replies.length > 0) {
+      return msg.replies
+        .map((r) => (r.reply_to?.quote ? `↳ ${r.reply_to.quote}\n${r.text}` : r.text))
+        .join('\n\n');
+    }
+    return msg.content;
+  }, []);
+
   const openComposer = useCallback((messageId?: string) => {
     // Control rooms have no free-text affordance — every verb the daemon
     // accepts is reachable via the command bar's Spawn/Agents buttons and
@@ -1817,7 +1829,7 @@ const RoomController = () => {
                       <button
                         type="button"
                         className="hover:text-ink"
-                        onClick={() => void handleCopyMessage(msg.content)}
+                        onClick={() => void handleCopyMessage(messageCopyText(msg))}
                       >
                         Copy
                       </button>
@@ -1867,7 +1879,7 @@ const RoomController = () => {
             daemon takes no arbitrary instructions there. Every verb it
             accepts is reachable through these two buttons and their
             downstream blocks (launcher / list with per-row Join/Kill). */}
-        {!isControlRoom && (
+        {!isControlRoom && !(isAgentRoom && replyQueue.length > 0) && (
           <button
             className="floating-action px-5 py-3.5 text-sm font-semibold"
             onClick={() => openComposer()}
@@ -1884,26 +1896,24 @@ const RoomController = () => {
           />
         )}
 
-        {/* ---- Collector bubble (agent rooms only) ----
-            Pending replies the operator has queued. Tap to review and dispatch
-            them as one message. Sits opposite the Compose FAB. */}
+        {/* ---- Dispatch trigger (agent rooms only) ----
+            Replaces the Compose FAB in the same spot/style while a batch is
+            pending: tap to review and dispatch the queued replies as one
+            message. Clearing/dispatching the batch brings Compose back. */}
         {isAgentRoom && replyQueue.length > 0 && (
           <button
             type="button"
             onClick={() => setShowCollector(true)}
-            className="fixed bottom-6 left-4 z-30 inline-flex items-center gap-2 rounded-full border border-accent bg-accent px-4 py-3 text-sm font-semibold text-on-ink shadow-[0_18px_60px_-34px_rgba(12,16,24,0.45)]"
+            className="floating-action px-5 py-3.5 text-sm font-semibold"
           >
-            <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-on-ink px-1.5 text-xs font-bold text-accent-strong">
-              {replyQueue.length}
-            </span>
-            {replyQueue.length === 1 ? 'reply' : 'replies'} · dispatch
+            Dispatch ({replyQueue.length})
           </button>
         )}
 
         {/* ---- Collector tray ---- */}
         {showCollector && (
           <div
-            className="fixed inset-0 z-50 flex items-end bg-overlay"
+            className="fixed inset-0 z-[60] flex items-end bg-overlay"
             onClick={() => setShowCollector(false)}
           >
             <div
@@ -2197,19 +2207,10 @@ const RoomController = () => {
                 )}
 
                 <div className="mt-2 flex flex-wrap gap-2 pb-[env(safe-area-inset-bottom)]">
-                  {isAgentRoom && replyQueue.length > 0 && (
-                    <button
-                      type="button"
-                      className="rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink"
-                      onClick={() => setShowCollector(true)}
-                    >
-                      Batch ({replyQueue.length}) →
-                    </button>
-                  )}
                   <button
                     type="button"
                     className="rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
-                    onClick={() => void handleCopyMessage(activeMessage.content)}
+                    onClick={() => void handleCopyMessage(messageCopyText(activeMessage))}
                   >
                     Copy
                   </button>
@@ -2223,6 +2224,21 @@ const RoomController = () => {
                 </div>
               </div>
             </div>
+
+            {/* Dispatch trigger — the Compose FAB is hidden behind this z-50
+                detail overlay, but a pending batch must stay reachable here too.
+                Tap to review and send the queued replies as one message. */}
+            {isAgentRoom && replyQueue.length > 0 && (
+              <div className="border-t border-rule bg-surface px-5 py-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
+                <button
+                  type="button"
+                  onClick={() => setShowCollector(true)}
+                  className="flex w-full items-center justify-center rounded-full border border-accent bg-accent px-5 py-3.5 text-sm font-semibold text-on-ink"
+                >
+                  Dispatch ({replyQueue.length})
+                </button>
+              </div>
+            )}
           </div>
         )}
 
