@@ -18,6 +18,23 @@ export type MessageAction = {
   room_kind?: RoomKind;
 };
 
+// A reply's pointer to the message it answers. The quote is a bounded preview
+// of that message, embedded so the reply stays legible even when the original
+// isn't on this device (catch-up gaps). Lives inside the encrypted payload —
+// the relay never sees which message answers which.
+export type ReplyRef = {
+  msg_id: string;
+  quote: string;
+};
+
+// One reply in a batch: the text plus what it answers. A single human reply is
+// a normal message carrying reply_to; an agent-room batch carries many of these
+// in `replies`, the free-text twin of block_responses.
+export type ReplyEntry = {
+  text: string;
+  reply_to: ReplyRef;
+};
+
 export type ChatMessage = {
   id: string;
   room_hash: string;
@@ -31,6 +48,10 @@ export type ChatMessage = {
   blocks?: Block[] | null;
   block_response?: BlockResponse | null;
   block_responses?: BlockResponse[] | null;
+  // Single reply: this message answers reply_to. Shared with human chat (#141).
+  reply_to?: ReplyRef | null;
+  // Agent-room batch: replies the operator collected and dispatched together.
+  replies?: ReplyEntry[] | null;
 };
 
 class ChatDatabase extends Dexie {

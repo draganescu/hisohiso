@@ -50,9 +50,19 @@ After decrypting a `chat` event, the plaintext is either raw text or a JSON enve
   "action": { "type": "join-room", "roomSecret": "...", "label": "...", "code": "optional", "roomName": "optional" },
   "blocks": [{ "type": "buttons" }],
   "block_response": { "block_id": "id", "type": "buttons", "value": "selected" },
-  "block_responses": [{ "block_id": "id", "type": "buttons", "value": "selected" }]
+  "block_responses": [{ "block_id": "id", "type": "buttons", "value": "selected" }],
+  "reply_to": { "msg_id": "id", "quote": "bounded preview of the answered message" },
+  "replies": [{ "text": "reply text", "reply_to": { "msg_id": "id", "quote": "..." } }]
 }
 ```
+
+A reply points at the message it answers with `reply_to` — the answered
+message's id plus a bounded quote, so the reply stays legible even when the
+original isn't on this device. It rides inside the encrypted plaintext, never as
+a cleartext field on the POST, so the relay never learns the reply graph. Human
+chat sends one `reply_to`; agent rooms collect several replies and dispatch them
+together in `replies`, the free-text twin of `block_responses` — one message, so
+the agent receives the whole set at once instead of one queued line at a time.
 
 When one agent message carries several interactive blocks, the phone gathers
 every selection and sends them together in a single message via

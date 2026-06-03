@@ -19,6 +19,13 @@ import { decodeControlMessage } from './control-protocol.js';
 const FLUSH_INTERVAL_MS = 500;
 const FLUSH_MAX_LINES = 50;
 
+// Bound a quoted snippet to one readable stdin line: collapse whitespace and
+// cap length so a long original message can't blow out the agent's input line.
+const quoteForAgent = (quote: string): string => {
+  const compact = quote.replace(/\s+/g, ' ').trim();
+  return compact.length > 80 ? `${compact.slice(0, 77)}...` : compact;
+};
+
 export const createRoomAndJoin = async (
   server: string,
   password = '',
@@ -185,7 +192,13 @@ export const bridgeAgentToRoom = async (
           : event.body.encrypted_payload as EncryptedPayload;
         const msgId = (event.body.msg_id as string) || '';
         const decrypted = await decryptText(messageKey, roomHash, 'chat', msgId, encPayload);
-        const parsed = JSON.parse(decrypted) as { text: string; handle?: string; tag?: string };
+        const parsed = JSON.parse(decrypted) as {
+          text: string;
+          handle?: string;
+          tag?: string;
+          reply_to?: { msg_id?: string; quote?: string };
+          replies?: Array<{ text?: string; reply_to?: { msg_id?: string; quote?: string } }>;
+        };
         const text = parsed.text;
 
         console.error(`[bridge] inbound from phone: ${text.slice(0, 80)}`);
@@ -195,12 +208,30 @@ export const bridgeAgentToRoom = async (
         const ctrl = decodeControlMessage(text);
         if (ctrl) return;
 
+        // A batch of replies: feed the whole set as ONE stdin write so the agent
+        // reads them together and acts in context, rather than one queued line
+        // winning while the rest wait behind it.
+        if (Array.isArray(parsed.replies) && parsed.replies.length > 0) {
+          const lines = parsed.replies
+            .filter((r) => r && typeof r.text === 'string')
+            .map((r) => {
+              const q = r.reply_to?.quote ? ` (re: "${quoteForAgent(r.reply_to.quote)}")` : '';
+              return `↳${q} ${r.text}`;
+            });
+          const label = lines.length === 1 ? 'reply' : 'replies';
+          agent.writeStdin(`[FROM USER · ${lines.length} ${label}]\n${lines.join('\n')}\n`);
+          return;
+        }
+
+        // A single reply carries the message it answers as quoted context.
+        const replyCtx = parsed.reply_to?.quote ? ` (re: "${quoteForAgent(parsed.reply_to.quote)}")` : '';
+
         // Feed to agent stdin
         const lower = text.toLowerCase().trim();
-        if (lower === 'yes' || lower === 'no') {
+        if (!replyCtx && (lower === 'yes' || lower === 'no')) {
           agent.writeStdin(`${lower}\n`);
         } else {
-          agent.writeStdin(`[FROM USER] ${text}\n`);
+          agent.writeStdin(`[FROM USER${replyCtx}] ${text}\n`);
         }
       } catch (err) {
         console.error('[bridge] failed to process inbound message:', err);

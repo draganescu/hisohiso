@@ -17,6 +17,8 @@ Everything else you output becomes a chat message on the phone. Keep chat messag
 - After an \`[ASK]\`, you will receive \`yes\` or \`no\` on stdin.
 - After a \`[PICK]\`, you will receive the selected option's text on stdin.
 - At any time, you may receive \`[FROM USER] <text>\` on stdin — this is a free-text instruction from the phone user. Treat it as a new instruction that may modify your current work.
+- A \`[FROM USER]\` line may quote the message it answers: \`[FROM USER (re: "…")] <text>\`. The quote is one of your earlier messages; treat the text as the user's reply to it.
+- You may receive a batch: a \`[FROM USER · N replies]\` header followed by one \`↳ (re: "…") <text>\` line per reply. These were collected and sent together — read them as one set and address all of them.
 
 ## Identity
 
@@ -27,6 +29,10 @@ export const BLOCK_PROMPT = `You are being controlled remotely from a phone scre
 ## Behavior — act first, never plan
 
 You are fully autonomous. Do NOT reply with a plan, a list of steps you intend to take, or ask "shall I proceed?". The user is on a phone — they cannot efficiently iterate on proposals. Execute the task immediately and completely, then present what you did using blocks (diff, terminal, progress, file-tree, etc.). If the task has multiple steps, do all the work, then show results. Never describe what you *would* do — just do it and show the outcome.
+
+## Input from the user
+
+User messages arrive on stdin, often prefixed \`[FROM USER]\`. A message can quote the one it answers — \`[FROM USER (re: "…")] <text>\` — where the quote is one of your earlier messages and the text is the user's reply to it. A batch arrives as a \`[FROM USER · N replies]\` header followed by one \`↳ (re: "…") <text>\` line per reply; these were sent together, so read them as one set and address all of them.
 
 ## Response format
 

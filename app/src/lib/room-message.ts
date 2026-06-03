@@ -1,5 +1,5 @@
 import type { Block, BlockResponse } from './blocks';
-import type { ChatMessage, MessageAction } from './db';
+import type { ChatMessage, MessageAction, ReplyEntry, ReplyRef } from './db';
 import type { RoomKind } from './storage';
 
 // Local guard (kept here rather than imported as a value from storage) so this
@@ -35,6 +35,12 @@ export type RoomEnvelope = {
   // channel — QR pairing carries no metadata). Applied only when no
   // nickname is set; never overrides a user rename.
   room_name?: string | null;
+  // Single reply: the message this one answers. Inside the encrypted payload,
+  // so the relay never sees the reply graph. Shared with human chat (#141).
+  reply_to?: ReplyRef | null;
+  // Agent-room batch: replies the operator collected and dispatched as one
+  // message — the free-text twin of block_responses.
+  replies?: ReplyEntry[] | null;
 };
 
 export type ChatMessageRecordInput = {
@@ -56,6 +62,19 @@ export const getMessagePreview = (content: string): string => {
     .map((line) => line.replace(/[^\S\n]+/g, ' ').trimEnd())
     .join('\n');
   return compact.length > 160 ? `${compact.slice(0, 157)}...` : compact;
+};
+
+// Validate a reply pointer off the wire. The quote is re-bounded through
+// getMessagePreview so a malicious or oversized payload can't bloat what we
+// store or render. Returns null for anything that isn't a usable pointer.
+const parseReplyRef = (val: unknown): ReplyRef | null => {
+  if (!val || typeof val !== 'object') return null;
+  const ref = val as { msg_id?: unknown; quote?: unknown };
+  if (typeof ref.msg_id !== 'string' || ref.msg_id === '') return null;
+  const quote = typeof ref.quote === 'string' && ref.quote.trim() !== ''
+    ? getMessagePreview(ref.quote)
+    : '';
+  return { msg_id: ref.msg_id, quote };
 };
 
 // Render any block_response value as a readable string. Objects (e.g. the
@@ -119,6 +138,8 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
   let messageRoomKind: RoomKind | null = null;
   let messageAgentCount: number | null = null;
   let messageRoomName: string | null = null;
+  let messageReplyTo: ReplyRef | null = null;
+  let messageReplies: ReplyEntry[] | null = null;
 
   if (plaintext.trim().startsWith('{')) {
     try {
@@ -132,6 +153,8 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
         room_kind?: unknown;
         agent_count?: unknown;
         room_name?: unknown;
+        reply_to?: unknown;
+        replies?: unknown;
       };
       if (typeof obj.text === 'string') messageText = obj.text;
       if (typeof obj.handle === 'string') messageHandle = obj.handle;
@@ -161,6 +184,19 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
         const trimmed = obj.room_name.trim();
         if (trimmed !== '') messageRoomName = trimmed;
       }
+      messageReplyTo = parseReplyRef(obj.reply_to);
+      if (Array.isArray(obj.replies)) {
+        const valid = obj.replies
+          .map((entry): ReplyEntry | null => {
+            if (!entry || typeof entry !== 'object') return null;
+            const e = entry as { text?: unknown; reply_to?: unknown };
+            const ref = parseReplyRef(e.reply_to);
+            if (!ref || typeof e.text !== 'string' || e.text === '') return null;
+            return { text: e.text, reply_to: ref };
+          })
+          .filter((e): e is ReplyEntry => e !== null);
+        if (valid.length > 0) messageReplies = valid;
+      }
     } catch {
       messageText = plaintext;
     }
@@ -186,6 +222,8 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
     room_kind: messageRoomKind,
     agent_count: messageAgentCount,
     room_name: messageRoomName,
+    reply_to: messageReplyTo,
+    replies: messageReplies,
   };
 };
 
@@ -211,6 +249,8 @@ export const toChatMessageRecord = ({
     blocks: envelope.blocks ?? null,
     block_response: envelope.block_response ?? null,
     block_responses: envelope.block_responses ?? null,
+    reply_to: envelope.reply_to ?? null,
+    replies: envelope.replies ?? null,
   };
 };
 
