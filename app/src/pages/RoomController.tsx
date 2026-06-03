@@ -40,7 +40,7 @@ import {
   type StoredRoom
 } from '../lib/storage';
 import { createRoomEventSource } from '../lib/mercure';
-import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
+import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction, type ReplyEntry } from '../lib/db';
 import type { BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
 import { formatBlockResponse, formatBlockValue, getMessagePreview, mergeChatMessageEcho, parseRoomEnvelope, toChatMessageRecord } from '../lib/room-message';
@@ -149,6 +149,10 @@ const RoomController = () => {
   const [showComposer, setShowComposer] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
+  // Agent-room collector: replies the operator has queued but not yet sent.
+  // Dispatched together as one message so the agent acts on them in context.
+  const [replyQueue, setReplyQueue] = useState<ReplyEntry[]>([]);
+  const [showCollector, setShowCollector] = useState(false);
   const [headerCondensed, setHeaderCondensed] = useState(false);
   const [roomNickname, setRoomNickname] = useState<string>(() => initialContext?.roomNickname ?? '');
   const [roomColor, setRoomColor] = useState<string>(() => initialContext?.roomColor ?? '#ccc');
@@ -157,6 +161,9 @@ const RoomController = () => {
   // then sharpened when a daemon message envelope carries `room_kind`.
   const [roomKind, setRoomKindState] = useState<RoomKind>('chat');
   const isControlRoom = roomKind === 'control';
+  // Agent rooms get the batch-reply collector: replies queue and dispatch as
+  // one message. Gated here so normal (chat) and control rooms never see it.
+  const isAgentRoom = roomKind === 'agent';
   // Daemon-reported running-agent count. null = unknown (no daemon envelope
   // with this field has arrived yet). The command-bar badge hides while
   // null rather than render a misleading zero. Hydrated by every incoming
@@ -1138,7 +1145,16 @@ const RoomController = () => {
 
     upsertRoom(roomHash, roomSecret, handle || null);
     const msgId = base64UrlEncode(randomBytes(12));
-    const payload = JSON.stringify({ text: trimmed, handle: handle || null });
+    // Reply pointer rides inside the encrypted payload, never as a cleartext
+    // field — the relay must not learn which message answers which.
+    const replyRef = replyToId && replyTarget
+      ? { msg_id: replyToId, quote: getMessagePreview(replyTarget.content) }
+      : null;
+    const payload = JSON.stringify({
+      text: trimmed,
+      handle: handle || null,
+      ...(replyRef ? { reply_to: replyRef } : {}),
+    });
     const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
 
     const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
@@ -1152,7 +1168,8 @@ const RoomController = () => {
         type: 'chat',
         direction: 'out',
         from: tokenHash,
-        handle: handle || null
+        handle: handle || null,
+        reply_to: replyRef
       };
       void persistMessage(messageRecord);
       setMessages((prev) => {
@@ -1169,7 +1186,80 @@ const RoomController = () => {
     } finally {
       sendInFlightRef.current = false;
     }
-  }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret, persistMessage]);
+  }, [roomHash, token, cryptoKey, chatInput, tokenHash, handle, addSystemMessage, roomSecret, persistMessage, replyToId, replyTarget]);
+
+  // Agent rooms: a reply doesn't send — it joins the batch. We then reopen the
+  // message we replied to so the operator stays in context (spec: remain in the
+  // detail view after the composer closes) and can keep answering.
+  const addReplyToBatch = useCallback(() => {
+    const trimmed = chatInput.trim();
+    if (!trimmed || !replyToId || !replyTarget) return;
+    const entry: ReplyEntry = {
+      text: trimmed,
+      reply_to: { msg_id: replyToId, quote: getMessagePreview(replyTarget.content) },
+    };
+    setReplyQueue((prev) => [...prev, entry]);
+    setChatInput('');
+    setShowComposer(false);
+    setReplyToId(null);
+    setSelectedId(entry.reply_to.msg_id);
+  }, [chatInput, replyToId, replyTarget]);
+
+  // The composer's submit (Done button, ⌘↵, iOS keyboard Done) routes here:
+  // batch the reply in an agent room, otherwise send a normal message.
+  const submitComposer = useCallback(() => {
+    if (isAgentRoom && replyToId) {
+      addReplyToBatch();
+    } else {
+      void sendMessage();
+    }
+  }, [isAgentRoom, replyToId, addReplyToBatch, sendMessage]);
+
+  const removeQueuedReply = useCallback((index: number) => {
+    setReplyQueue((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Dispatch the whole batch as ONE encrypted message: one request, one
+  // ciphertext, one event. The agent receives every reply together, each
+  // tagged with the message it answers. Then we leave the detail view.
+  const dispatchBatch = useCallback(async () => {
+    if (!roomHash || !token || !cryptoKey || replyQueue.length === 0) return;
+    if (sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    try {
+      const replies = replyQueue;
+      const summary = `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`;
+      upsertRoom(roomHash, roomSecret, handle || null);
+      const msgId = base64UrlEncode(randomBytes(12));
+      const payload = JSON.stringify({ text: summary, handle: handle || null, replies });
+      const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
+      const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
+      if (response.ok) {
+        const record: ChatMessage = {
+          id: msgId,
+          room_hash: roomHash,
+          timestamp: Date.now(),
+          content: summary,
+          type: 'chat',
+          direction: 'out',
+          from: tokenHash,
+          handle: handle || null,
+          replies,
+        };
+        void persistMessage(record);
+        setMessages((prev) =>
+          prev.find((item) => item.id === msgId)
+            ? prev
+            : [...prev, record].sort((a, b) => a.timestamp - b.timestamp)
+        );
+        setReplyQueue([]);
+        setShowCollector(false);
+        setSelectedId(null);
+      }
+    } finally {
+      sendInFlightRef.current = false;
+    }
+  }, [roomHash, token, cryptoKey, replyQueue, roomSecret, handle, tokenHash, persistMessage]);
 
   // All selections from one agent message are sent together as a single
   // encrypted message. Sending them one-at-a-time used to make the first reply
@@ -1277,6 +1367,18 @@ const RoomController = () => {
   const handleCopyMessage = useCallback(async (content: string) => {
     await navigator.clipboard.writeText(content);
     setSelectedId(null);
+  }, []);
+
+  // What "Copy" should put on the clipboard for a message. For a batch reply
+  // message, the rendered content is just the "N replies" summary — copy the
+  // actual reply texts (with the quote each answers) instead of that label.
+  const messageCopyText = useCallback((msg: ChatMessage): string => {
+    if (msg.replies && msg.replies.length > 0) {
+      return msg.replies
+        .map((r) => (r.reply_to?.quote ? `↳ ${r.reply_to.quote}\n${r.text}` : r.text))
+        .join('\n\n');
+    }
+    return msg.content;
   }, []);
 
   const openComposer = useCallback((messageId?: string) => {
@@ -1620,8 +1722,26 @@ const RoomController = () => {
                           : 'message-card-in rounded-bl-[7px] text-ink hover:border-ink'
                       }`}
                     >
+                      {msg.reply_to && (
+                        <p
+                          className={`mb-1.5 line-clamp-2 border-l-2 pl-2 text-xs ${
+                            isMine ? 'border-on-ink/40 text-on-ink/70' : 'border-accent text-ink-dim'
+                          }`}
+                        >
+                          ↳ {msg.reply_to.quote || 'message'}
+                        </p>
+                      )}
                       <p className="whitespace-pre-line break-words text-[0.9375rem]">
-                        {msg.block_response || (msg.block_responses && msg.block_responses.length > 0) ? (
+                        {msg.replies && msg.replies.length > 0 ? (
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={`inline-block h-1.5 w-1.5 rounded-full ${
+                                isMine ? 'bg-surface/60' : 'bg-ink'
+                              }`}
+                            />
+                            {msg.replies.length} {msg.replies.length === 1 ? 'reply' : 'replies'} — tap to view
+                          </span>
+                        ) : msg.block_response || (msg.block_responses && msg.block_responses.length > 0) ? (
                           <span className="flex items-center gap-2">
                             <span
                               className={`inline-block h-1.5 w-1.5 rounded-full ${
@@ -1709,7 +1829,7 @@ const RoomController = () => {
                       <button
                         type="button"
                         className="hover:text-ink"
-                        onClick={() => void handleCopyMessage(msg.content)}
+                        onClick={() => void handleCopyMessage(messageCopyText(msg))}
                       >
                         Copy
                       </button>
@@ -1759,7 +1879,7 @@ const RoomController = () => {
             daemon takes no arbitrary instructions there. Every verb it
             accepts is reachable through these two buttons and their
             downstream blocks (launcher / list with per-row Join/Kill). */}
-        {!isControlRoom && (
+        {!isControlRoom && !(isAgentRoom && replyQueue.length > 0) && (
           <button
             className="floating-action px-5 py-3.5 text-sm font-semibold"
             onClick={() => openComposer()}
@@ -1774,6 +1894,92 @@ const RoomController = () => {
             onSpawn={() => void sendBlockResponses([{ blockId: 'control-cmd-spawn', type: 'buttons', value: 'show-launcher' }])}
             onAgents={() => void sendBlockResponses([{ blockId: 'control-cmd-list', type: 'buttons', value: 'show-list' }])}
           />
+        )}
+
+        {/* ---- Dispatch trigger (agent rooms only) ----
+            Replaces the Compose FAB in the same spot/style while a batch is
+            pending: tap to review and dispatch the queued replies as one
+            message. Clearing/dispatching the batch brings Compose back. */}
+        {isAgentRoom && replyQueue.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowCollector(true)}
+            className="floating-action px-5 py-3.5 text-sm font-semibold"
+          >
+            Dispatch ({replyQueue.length})
+          </button>
+        )}
+
+        {/* ---- Collector tray ---- */}
+        {showCollector && (
+          <div
+            className="fixed inset-0 z-[60] flex items-end bg-overlay"
+            onClick={() => setShowCollector(false)}
+          >
+            <div
+              className="mx-auto flex max-h-[85dvh] w-full flex-col rounded-t-[24px] bg-bg md:max-w-lg"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-rule px-5 py-4">
+                <p className="text-sm font-semibold">
+                  Batch · {replyQueue.length} {replyQueue.length === 1 ? 'reply' : 'replies'}
+                </p>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-ink-soft hover:text-ink"
+                  onClick={() => setShowCollector(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-3">
+                {replyQueue.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-ink-dim">No replies queued.</p>
+                ) : (
+                  <ul className="flex flex-col gap-3">
+                    {replyQueue.map((entry, index) => (
+                      <li key={index} className="flex items-start gap-3 border-b border-rule-soft pb-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="mb-1 border-l-2 border-accent pl-2 text-xs text-ink-dim line-clamp-2">
+                            ↳ {entry.reply_to.quote || 'message'}
+                          </p>
+                          <p className="whitespace-pre-line break-words text-sm text-ink">{entry.text}</p>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Remove reply"
+                          className="shrink-0 text-danger hover:opacity-70"
+                          onClick={() => removeQueuedReply(index)}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex gap-3 border-t border-rule px-5 py-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
+                <button
+                  type="button"
+                  className="rounded-full border border-rule bg-surface px-4 py-2.5 text-sm font-medium text-ink"
+                  onClick={() => {
+                    setReplyQueue([]);
+                    setShowCollector(false);
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded-full border border-ink bg-filled px-4 py-2.5 text-sm font-semibold text-on-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  disabled={replyQueue.length === 0}
+                  onClick={() => void dispatchBatch()}
+                >
+                  Dispatch all ({replyQueue.length})
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ---- Full-screen modal composer ----
@@ -1798,7 +2004,7 @@ const RoomController = () => {
                       keyboardVisible ? 'hidden' : ''
                     }`}
                   >
-                    Replying to
+                    {isAgentRoom ? 'Replying to · adds to batch' : 'Replying to'}
                   </p>
                   <p
                     className={`font-medium text-ink transition-all duration-200 ${
@@ -1827,7 +2033,7 @@ const RoomController = () => {
                 onKeyDown={(event) => {
                   if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
                     event.preventDefault();
-                    void sendMessage();
+                    submitComposer();
                   }
                 }}
                 onBlur={() => {
@@ -1842,7 +2048,7 @@ const RoomController = () => {
                     return;
                   }
                   if (chatInput.trim()) {
-                    void sendMessage();
+                    submitComposer();
                   }
                 }}
                 className="composer-textarea block w-full flex-1 resize-none border-0 bg-transparent px-4 py-4 leading-7 text-ink outline-none sm:px-6"
@@ -1879,11 +2085,11 @@ const RoomController = () => {
                   onPointerDown={() => {
                     suppressSendOnBlurRef.current = true;
                   }}
-                  onClick={() => void sendMessage()}
+                  onClick={submitComposer}
                   type="button"
                   disabled={!chatInput.trim()}
                 >
-                  Done
+                  {isAgentRoom && replyToId ? 'Add to batch' : 'Done'}
                 </button>
               </div>
             </div>
@@ -1929,11 +2135,41 @@ const RoomController = () => {
                       : 'message-card-in text-ink'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap break-words text-[0.9375rem]">
-                    {activeMessage.block_response || (activeMessage.block_responses && activeMessage.block_responses.length > 0)
-                      ? formatBlockResponse(activeMessage) || activeMessage.content
-                      : activeMessage.content || 'Empty message'}
-                  </p>
+                  {activeMessage.reply_to && (
+                    <p
+                      className={`mb-2 border-l-2 pl-2.5 text-xs ${
+                        activeMessage.direction === 'out'
+                          ? 'border-on-ink/40 text-on-ink/70'
+                          : 'border-accent text-ink-dim'
+                      }`}
+                    >
+                      ↳ {activeMessage.reply_to.quote || 'message'}
+                    </p>
+                  )}
+                  {activeMessage.replies && activeMessage.replies.length > 0 ? (
+                    <ul className="flex flex-col gap-3">
+                      {activeMessage.replies.map((entry, index) => (
+                        <li key={index} className={index > 0 ? 'border-t border-rule-soft pt-3' : ''}>
+                          <p
+                            className={`mb-1 border-l-2 pl-2 text-xs ${
+                              activeMessage.direction === 'out'
+                                ? 'border-on-ink/40 text-on-ink/70'
+                                : 'border-accent text-ink-dim'
+                            }`}
+                          >
+                            ↳ {entry.reply_to.quote || 'message'}
+                          </p>
+                          <p className="whitespace-pre-wrap break-words text-[0.9375rem]">{entry.text}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words text-[0.9375rem]">
+                      {activeMessage.block_response || (activeMessage.block_responses && activeMessage.block_responses.length > 0)
+                        ? formatBlockResponse(activeMessage) || activeMessage.content
+                        : activeMessage.content || 'Empty message'}
+                    </p>
+                  )}
                 </article>
 
                 {activeMessage.blocks && activeMessage.blocks.length > 0 && (
@@ -1974,7 +2210,7 @@ const RoomController = () => {
                   <button
                     type="button"
                     className="rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
-                    onClick={() => void handleCopyMessage(activeMessage.content)}
+                    onClick={() => void handleCopyMessage(messageCopyText(activeMessage))}
                   >
                     Copy
                   </button>
@@ -1988,6 +2224,21 @@ const RoomController = () => {
                 </div>
               </div>
             </div>
+
+            {/* Dispatch trigger — the Compose FAB is hidden behind this z-50
+                detail overlay, but a pending batch must stay reachable here too.
+                Tap to review and send the queued replies as one message. */}
+            {isAgentRoom && replyQueue.length > 0 && (
+              <div className="border-t border-rule bg-surface px-5 py-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
+                <button
+                  type="button"
+                  onClick={() => setShowCollector(true)}
+                  className="flex w-full items-center justify-center rounded-full border border-accent bg-accent px-5 py-3.5 text-sm font-semibold text-on-ink"
+                >
+                  Dispatch ({replyQueue.length})
+                </button>
+              </div>
+            )}
           </div>
         )}
 

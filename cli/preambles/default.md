@@ -17,6 +17,8 @@ Everything else you output becomes a chat message on the phone. Keep chat messag
 - After an `[ASK]`, you will receive `yes` or `no` on stdin.
 - After a `[PICK]`, you will receive the selected option's text on stdin.
 - At any time, you may receive `[FROM USER] <text>` on stdin — this is a free-text instruction from the phone user. Treat it as a new instruction that may modify your current work.
+- A `[FROM USER]` line may quote the message it answers: `[FROM USER (re: "…")] <text>`. The quote is one of your earlier messages; treat the text as the user's reply to it.
+- You may receive a batch: a `[FROM USER · N replies]` header followed by one `↳ (re: "…") <text>` line per reply. These were collected and sent together — read them as one set and address all of them.
 
 ## Identity
 

@@ -113,4 +113,57 @@ const batchRecord = toChatMessageRecord({
 assert(batchRecord.block_responses?.length === 2, 'record should carry the batched responses');
 assert(formatBlockResponse(batchRecord) === 'Selected: ship\nSet to: 30', 'batch labels should join one per line');
 
+// A single reply carries reply_to inside the envelope; the record keeps it and
+// leaves the batch field null.
+const replyEnvelope = parseRoomEnvelope(JSON.stringify({
+  text: 'Update the tests.',
+  handle: 'operator',
+  reply_to: { msg_id: 'm2', quote: 'update the tests or flag the old path?' },
+})) as RoomEnvelope;
+assert(replyEnvelope.reply_to?.msg_id === 'm2', 'reply_to msg_id should be parsed');
+assert(replyEnvelope.reply_to?.quote === 'update the tests or flag the old path?', 'reply_to quote should be parsed');
+
+const replyRecord = toChatMessageRecord({
+  msgId: 'r-1', roomHash: 'room-hash', timestamp: 5,
+  from: 'own-token-hash', plaintext: JSON.stringify(replyEnvelope), ownTokenHash: 'own-token-hash',
+});
+assert(replyRecord.reply_to?.msg_id === 'm2', 'record should carry reply_to');
+assert(replyRecord.replies == null, 'a single reply should leave replies null');
+
+// An oversized quote is re-bounded through getMessagePreview so payloads and
+// stored records can't bloat.
+const boundedReply = parseRoomEnvelope(JSON.stringify({
+  text: 'ok', reply_to: { msg_id: 'm9', quote: 'x'.repeat(500) },
+})) as RoomEnvelope;
+assert((boundedReply.reply_to?.quote.length ?? 999) <= 163, 'reply quote should be bounded');
+
+// A malformed reply_to (no msg_id) is dropped, never thrown.
+const noRef = parseRoomEnvelope(JSON.stringify({ text: 'hi', reply_to: { quote: 'no id' } })) as RoomEnvelope;
+assert(noRef.reply_to === null, 'reply_to without msg_id should be dropped');
+
+// A batch keeps only valid entries and round-trips into the record.
+const batchReplies = parseRoomEnvelope(JSON.stringify({
+  text: '2 replies',
+  handle: 'operator',
+  replies: [
+    { text: 'Update the tests.', reply_to: { msg_id: 'm2', quote: 'update tests?' } },
+    { text: 'Yes, env var.', reply_to: { msg_id: 'm3', quote: 'move URL to env?' } },
+    { text: 'dropped — no ref' },
+    { reply_to: { msg_id: 'm4', quote: 'q' } },
+  ],
+})) as RoomEnvelope;
+assert(batchReplies.replies?.length === 2, 'batch should keep only valid reply entries');
+assert(batchReplies.replies?.[0]?.text === 'Update the tests.', 'batch entry text should be parsed');
+assert(batchReplies.replies?.[1]?.reply_to.msg_id === 'm3', 'batch entry reply_to should be parsed');
+
+const batchReplyRecord = toChatMessageRecord({
+  msgId: 'r-batch', roomHash: 'room-hash', timestamp: 6,
+  from: 'own-token-hash', plaintext: JSON.stringify(batchReplies), ownTokenHash: 'own-token-hash',
+});
+assert(batchReplyRecord.replies?.length === 2, 'record should carry the batched replies');
+
+// Legacy raw text and non-reply envelopes are unaffected.
+assert(record.reply_to == null, 'non-reply record should have null reply_to');
+assert(ownRecord.replies == null, 'legacy raw-text record should have no replies');
+
 console.log('room message contracts OK');

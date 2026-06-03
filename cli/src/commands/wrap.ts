@@ -1,5 +1,5 @@
 import { getServer, ensureConfigDir } from '../lib/config.js';
-import { createRoomAndJoin, encryptAndSend } from '../lib/room-bridge.js';
+import { createRoomAndJoin, encryptAndSend, quoteForAgent } from '../lib/room-bridge.js';
 import { startPresence } from '../lib/presence.js';
 import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
@@ -267,8 +267,26 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
           ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
           : event.body.encrypted_payload as EncryptedPayload;
         const decrypted = await decryptText(room.messageKey, room.roomHash, 'chat', incomingMsgId, encPayload);
-        const parsed = JSON.parse(decrypted) as { text: string };
-        text = parsed.text;
+        const parsed = JSON.parse(decrypted) as {
+          text: string;
+          replies?: Array<{ text?: string; reply_to?: { quote?: string } }>;
+        };
+        // A batch of replies (agent-room collector): feed the whole set as ONE
+        // turn so the agent reads them together, each tagged with the message it
+        // answers — matching room-bridge's daemon path. Without this, only the
+        // "N replies" summary text reaches the agent and the replies are lost.
+        if (Array.isArray(parsed.replies) && parsed.replies.length > 0) {
+          const lines = parsed.replies
+            .filter((r) => r && typeof r.text === 'string')
+            .map((r) => {
+              const q = r.reply_to?.quote ? ` (re: "${quoteForAgent(r.reply_to.quote)}")` : '';
+              return `↳${q} ${r.text}`;
+            });
+          const label = lines.length === 1 ? 'reply' : 'replies';
+          text = `[FROM USER · ${lines.length} ${label}]\n${lines.join('\n')}`;
+        } else {
+          text = parsed.text;
+        }
       } catch (err) {
         console.error('[bridge] failed to decrypt inbound:', err);
         return;
