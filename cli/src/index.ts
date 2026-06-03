@@ -5,6 +5,7 @@ import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
 import { statusCmd, pairCmd, admitCmd, denyCmd } from './commands/control.js';
+import { info } from './commands/info.js';
 import { saveConfig, ensureConfigDir } from './lib/config.js';
 import { listAgents } from './lib/agents.js';
 // Single source of truth for the CLI version. release.sh bumps
@@ -57,6 +58,14 @@ program
 // Control-plane verbs (#134) — talk to the running daemon over its control
 // socket. Top-level (not under `daemon`) because they're the everyday surface
 // for a detached daemon you drive from your phone.
+program
+  .command('info')
+  .description('Show the whole daemon at a glance: paths, config, status, service, logs — works when down')
+  .option('--json', 'Emit the full picture as JSON for scripting')
+  .action(async (opts: { json?: boolean }) => {
+    await info({ json: opts.json === true });
+  });
+
 program
   .command('status')
   .description('Show the running daemon: control room, agents, devices awaiting admission')
