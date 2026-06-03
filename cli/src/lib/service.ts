@@ -185,29 +185,105 @@ const uninstallLaunchd = async (): Promise<{ removed: boolean }> => {
   return { removed: existed };
 };
 
+// --- systemd (Linux, per-user service) ---
+
+const xdgConfigHome = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
+const SYSTEMD_USER_DIR = join(xdgConfigHome, 'systemd', 'user');
+const SYSTEMD_UNIT = 'hisohiso.service';
+const SYSTEMD_UNIT_PATH = join(SYSTEMD_USER_DIR, SYSTEMD_UNIT);
+
+// Pure builder (exported for tests). systemd quotes the whole "KEY=value" token,
+// so PATH (which contains no quotes but does contain ':') is safe unquoted, but
+// we quote uniformly for clarity. Same env contract as the launchd plist:
+// HISOHISO_SERVICE marks the no-TTY context; PATH is captured so the backgrounded
+// daemon finds the wrapped agent CLIs; HISOHISO_HOME / _AUTO_UPDATE pass through.
+export const systemdUnit = (execPath: string): string => {
+  const path = process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+  const env: string[] = [
+    `Environment="${SERVICE_ENV_FLAG}=systemd"`,
+    `Environment="PATH=${path}"`,
+  ];
+  if (process.env.HISOHISO_HOME) env.push(`Environment="HISOHISO_HOME=${process.env.HISOHISO_HOME}"`);
+  if (process.env.HISOHISO_AUTO_UPDATE) env.push(`Environment="HISOHISO_AUTO_UPDATE=${process.env.HISOHISO_AUTO_UPDATE}"`);
+  return [
+    '[Unit]',
+    'Description=hisohiso daemon (phone-driven agent control)',
+    'After=network-online.target',
+    'Wants=network-online.target',
+    '',
+    '[Service]',
+    'Type=simple',
+    `ExecStart=${execPath} daemon start`,
+    // Restart on crash/reboot only. The binary self-updates by re-exec (same
+    // PID image), not by exiting, so Restart=always isn't for updates — see the
+    // updater/Restart QA note in the PR.
+    'Restart=always',
+    'RestartSec=2',
+    ...env,
+    `WorkingDirectory=${homedir()}`,
+    '',
+    '[Install]',
+    'WantedBy=default.target',
+    '',
+  ].join('\n');
+};
+
+const systemctlUser = (args: string[]) => execFileP('systemctl', ['--user', ...args]);
+
+const installSystemd = async (): Promise<{ unitPath: string; execPath: string }> => {
+  const execPath = resolveExecPath();
+  await mkdir(SYSTEMD_USER_DIR, { recursive: true });
+  await writeFile(SYSTEMD_UNIT_PATH, systemdUnit(execPath), 'utf-8');
+  // enable-linger lets the user manager (and our unit) run without an active
+  // login session — survive logout, start at boot. Best-effort: a no-op if the
+  // operator already has linger.
+  await execFileP('loginctl', ['enable-linger', userInfo().username]).catch(() => {});
+  await systemctlUser(['daemon-reload']);
+  await systemctlUser(['enable', '--now', SYSTEMD_UNIT]);
+  return { unitPath: SYSTEMD_UNIT_PATH, execPath };
+};
+
+const uninstallSystemd = async (): Promise<{ removed: boolean }> => {
+  await systemctlUser(['disable', '--now', SYSTEMD_UNIT]).catch(() => {});
+  const existed = await pathExists(SYSTEMD_UNIT_PATH);
+  if (existed) await unlink(SYSTEMD_UNIT_PATH).catch(() => {});
+  await systemctlUser(['daemon-reload']).catch(() => {});
+  // Leave linger enabled — other user services may rely on it; turning it off is
+  // the operator's call (`loginctl disable-linger`).
+  return { removed: existed };
+};
+
+const systemdEnabled = async (): Promise<boolean> => {
+  try {
+    const { stdout } = await systemctlUser(['is-enabled', SYSTEMD_UNIT]);
+    return stdout.trim() === 'enabled';
+  } catch {
+    return false;
+  }
+};
+
 // --- public, platform-dispatched API ---
 
-export const installService = async (): Promise<{ manager: 'launchd'; unitPath: string; execPath: string }> => {
+export const installService = async (): Promise<{ manager: 'launchd' | 'systemd'; unitPath: string; execPath: string }> => {
   if (platform() === 'darwin') {
     const { unitPath, execPath } = await installLaunchd();
     return { manager: 'launchd', unitPath, execPath };
   }
   if (platform() === 'linux') {
-    throw new Error(
-      'Linux (systemd user unit) service install lands in the next #125 PR.\n' +
-        'For now, run `hisohiso daemon start` under your own process manager (systemd/tmux).'
-    );
+    const { unitPath, execPath } = await installSystemd();
+    return { manager: 'systemd', unitPath, execPath };
   }
-  throw new Error(`Unsupported platform for service install: ${platform()} (macOS supported; Linux next).`);
+  throw new Error(`Unsupported platform for service install: ${platform()} (macOS + Linux supported).`);
 };
 
-export const uninstallService = async (): Promise<{ manager: 'launchd'; removed: boolean }> => {
+export const uninstallService = async (): Promise<{ manager: 'launchd' | 'systemd'; removed: boolean }> => {
   if (platform() === 'darwin') {
     const { removed } = await uninstallLaunchd();
     return { manager: 'launchd', removed };
   }
   if (platform() === 'linux') {
-    throw new Error('Linux (systemd) service support lands in the next #125 PR; nothing to uninstall here yet.');
+    const { removed } = await uninstallSystemd();
+    return { manager: 'systemd', removed };
   }
   throw new Error(`Unsupported platform for service uninstall: ${platform()}.`);
 };
@@ -228,10 +304,22 @@ export const getServiceInfo = async (): Promise<ServiceInfo> => {
       loaded: installed ? await launchdLoaded() : false,
     };
   }
+  if (plat === 'linux') {
+    const installed = await pathExists(SYSTEMD_UNIT_PATH);
+    return {
+      platform: plat,
+      supported: true,
+      manager: 'systemd',
+      label: SYSTEMD_UNIT,
+      unitPath: SYSTEMD_UNIT_PATH,
+      installed,
+      loaded: installed ? await systemdEnabled() : false,
+    };
+  }
   return {
     platform: plat,
     supported: false,
-    manager: plat === 'linux' ? 'systemd' : null,
+    manager: null,
     label: SERVICE_LABEL,
     unitPath: null,
     installed: false,
