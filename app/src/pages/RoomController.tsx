@@ -43,7 +43,7 @@ import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction } from '../lib/db';
 import type { BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
-import { formatBlockResponse, formatBlockValue, getMessagePreview, parseRoomEnvelope, toChatMessageRecord } from '../lib/room-message';
+import { formatBlockResponse, formatBlockValue, getMessagePreview, mergeChatMessageEcho, parseRoomEnvelope, toChatMessageRecord } from '../lib/room-message';
 import { generateRoomName } from '../lib/room-names';
 import {
   fetchOutbox,
@@ -201,6 +201,14 @@ const RoomController = () => {
   // resolves and clears the draft, minting two msgIds for one message. Held for
   // the duration of an in-flight send so concurrent triggers no-op.
   const sendInFlightRef = useRef(false);
+  // Live mirror of tokenHash so ingestEncryptedChat reads the CURRENT identity
+  // rather than whatever was captured when its SSE effect instance was created.
+  // tokenHash hydrates asynchronously; on a flaky connection the subscription
+  // effect can be (re)created while tokenHash is still null, and that effect's
+  // closure — including the outbox catch-up loop on reconnect — would otherwise
+  // compute every own message as direction:'in' and persist it. A ref dodges
+  // the stale-closure capture entirely. See the 4G→WiFi authorship-flip bug.
+  const tokenHashRef = useRef<string | null>(null);
   const prevCountRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
   // Ephemeral keypair used to receive the wrapped participant token after a
@@ -338,6 +346,12 @@ const RoomController = () => {
     [roomHash]
   );
 
+  // Keep the identity mirror in lockstep with the state. Runs after every
+  // tokenHash change so any later network event reads the hydrated value.
+  useEffect(() => {
+    tokenHashRef.current = tokenHash;
+  }, [tokenHash]);
+
   const persistMessage = useCallback(async (record: ChatMessage): Promise<void> => {
     try {
       await saveMessage(record);
@@ -397,30 +411,29 @@ const RoomController = () => {
       timestamp: ts,
       from,
       plaintext,
-      ownTokenHash: tokenHash,
+      ownTokenHash: tokenHashRef.current,
     });
-    if (messageRecord.direction === 'in') setHasCompanion(true);
-    // Persist before exposing to state so a write failure is logged rather than
-    // leaving a memory-only message that disappears on the next reconcile.
-    await persistMessage(messageRecord);
     setMessages((prev) => {
       const existing = prev.find((item) => item.id === msgId);
       if (existing) {
-        // This is the echo of a message we already hold — almost always our own
+        // This is the echo of a message we already hold — often our own
         // optimistic send, which was stamped with the client's local Date.now().
-        // The daemon's replies are stamped with the server clock (payload.ts), so
-        // a client clock that runs ahead of the server makes our command sort
-        // AFTER the reply it triggered — the launcher rendering above the "spawn"
-        // bubble. Re-stamp the existing record onto the server's clock so command
-        // and reply share one monotonic ordering and causal order is preserved.
-        if (existing.timestamp === ts) return prev;
+        // The echo might arrive before ownTokenHash is hydrated; in that case
+        // messageRecord.direction is wrong. Preserve the existing authorship and
+        // only re-stamp onto the server clock so command/reply causal ordering is
+        // stable after reload too.
+        const merged = mergeChatMessageEcho(existing, messageRecord);
+        if (merged === existing) return prev;
+        void persistMessage(merged);
         return prev
-          .map((item) => (item.id === msgId ? { ...item, timestamp: ts } : item))
+          .map((item) => (item.id === msgId ? merged : item))
           .sort((a, b) => a.timestamp - b.timestamp);
       }
+      if (messageRecord.direction === 'in') setHasCompanion(true);
+      void persistMessage(messageRecord);
       return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
     });
-  }, [cryptoKey, roomHash, tokenHash, persistMessage]);
+  }, [cryptoKey, roomHash, persistMessage]);
 
   useEffect(() => {
     let active = true;

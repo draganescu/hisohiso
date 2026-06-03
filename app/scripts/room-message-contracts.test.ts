@@ -3,6 +3,7 @@ import {
   toChatMessageRecord,
   getMessagePreview,
   formatBlockResponse,
+  mergeChatMessageEcho,
   type RoomEnvelope,
 } from '../src/lib/room-message.js';
 
@@ -60,6 +61,28 @@ const swipeLabel = formatBlockResponse({
 });
 assert(swipeLabel === 'Chose: 👍 plan-a, plan-c  👎 plan-b', `swipe response should group verdicts, got: ${swipeLabel}`);
 assert(!swipeLabel!.includes('[object Object]'), 'swipe response must not stringify to [object Object]');
+
+const optimisticOwn = {
+  id: 'echo-1',
+  room_hash: 'room-hash',
+  timestamp: 2000,
+  content: 'user typed this',
+  type: 'chat' as const,
+  direction: 'out' as const,
+  from: 'own-token-hash',
+  handle: null,
+};
+const misclassifiedEcho = {
+  ...optimisticOwn,
+  timestamp: 1000,
+  direction: 'in' as const,
+  from: 'own-token-hash',
+  handle: 'agent',
+};
+const mergedEcho = mergeChatMessageEcho(optimisticOwn, misclassifiedEcho);
+assert(mergedEcho.direction === 'out', 'server echo should preserve optimistic outgoing authorship');
+assert(mergedEcho.handle === null, 'server echo should not relabel an own message with inbound handle');
+assert(mergedEcho.timestamp === 1000, 'server echo should still adopt server timestamp');
 
 // A single selection mirrors into block_responses so consumers can read either.
 assert(envelope.block_responses?.length === 1, 'single block_response should mirror into block_responses');

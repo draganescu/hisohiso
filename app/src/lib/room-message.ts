@@ -213,3 +213,12 @@ export const toChatMessageRecord = ({
     block_responses: envelope.block_responses ?? null,
   };
 };
+
+export const mergeChatMessageEcho = (existing: ChatMessage, incoming: ChatMessage): ChatMessage => {
+  // A server echo of an optimistic local send has the same id but can arrive
+  // before ownTokenHash is hydrated, so `incoming` may be misclassified as an
+  // inbound peer message. Preserve the already-rendered local authorship and
+  // only accept the server clock, which is the reason we process the echo.
+  if (existing.timestamp === incoming.timestamp) return existing;
+  return { ...existing, timestamp: incoming.timestamp };
+};
