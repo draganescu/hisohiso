@@ -28,8 +28,10 @@ import { resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 
 // Bun-compiled binaries report a virtual /$bunfs/… path for process.execPath.
-// Resolve the real filesystem path from argv[0] instead.
-function resolveExecPath(): string {
+// Resolve the real filesystem path from argv[0] instead. Exported so the
+// service-install unit (#125) and `hisohiso info` (#137) point at the real
+// on-disk binary rather than the /$bunfs virtual path.
+export function resolveExecPath(): string {
   const argv0 = process.argv[0];
   if (argv0 && !argv0.startsWith('/$bunfs')) {
     try {

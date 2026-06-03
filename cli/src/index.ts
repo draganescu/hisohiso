@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { wrap } from './commands/wrap.js';
-import { daemonStart, daemonStop, daemonStatus } from './commands/daemon.js';
+import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
 import { saveConfig, ensureConfigDir } from './lib/config.js';
 import { listAgents } from './lib/agents.js';
@@ -69,6 +69,16 @@ daemon
   .command('stop')
   .description('Stop the daemon')
   .action(daemonStop);
+
+daemon
+  .command('install')
+  .description('Install a per-user background service (launchd/systemd) that survives reboots — pair first')
+  .action(daemonInstall);
+
+daemon
+  .command('uninstall')
+  .description('Stop and remove the background service (preserves ~/.hisohiso state)')
+  .action(daemonUninstall);
 
 daemon
   .command('status')

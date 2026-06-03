@@ -9,8 +9,16 @@ import {
 } from '../lib/config.js';
 import * as api from '../lib/api-client.js';
 import { runDaemon } from '../daemon/daemon-main.js';
+import {
+  assertNotRoot,
+  isPaired,
+  installService,
+  uninstallService,
+} from '../lib/service.js';
 
 export const daemonStart = async (opts: { fresh?: boolean } = {}): Promise<void> => {
+  // Never run the phone-driven daemon as root (#125) — same hard gate as install.
+  assertNotRoot('run the daemon');
   await ensureConfigDir();
 
   if (await isDaemonRunning()) {
@@ -27,8 +35,69 @@ export const daemonStart = async (opts: { fresh?: boolean } = {}): Promise<void>
   }
 
   // Runs in foreground: shows QR for phone to join, then enters main loop.
-  // Use a process manager (systemd, launchd, screen, tmux) to background it.
+  // Background it with `hisohiso daemon install` (launchd/systemd user service).
   await runDaemon();
+};
+
+// Install (or reinstall) the per-user background service so the daemon survives
+// logout/reboot and restarts on crash (#125). Gated on: not root, and already
+// paired — a service can't show a QR, so the operator pairs once interactively
+// with `daemon start` first. Stops any foreground instance so launchd owns the
+// single daemon process.
+export const daemonInstall = async (): Promise<void> => {
+  try {
+    assertNotRoot('install the service');
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!(await isPaired())) {
+    console.error(
+      'No paired control room yet. Pair once first:\n' +
+        '  hisohiso daemon start        # scan the QR from your phone, then Ctrl-C\n' +
+        'then re-run `hisohiso daemon install`.'
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  // Hand the single instance to the service manager: stop a foreground/old one
+  // so RunAtLoad doesn't collide with it on the PID file.
+  if (await isDaemonRunning()) {
+    console.log('Stopping the running daemon so the service can manage it...');
+    await daemonStop();
+  }
+
+  try {
+    const { manager, unitPath, execPath } = await installService();
+    console.log(`Installed and started the hisohiso ${manager} service.`);
+    console.log(`  unit:   ${unitPath}`);
+    console.log(`  binary: ${execPath}`);
+    console.log('It will start on login and restart on crash. Logs: ~/.hisohiso/logs/daemon.log');
+    console.log('Stop/remove it with `hisohiso daemon uninstall`.');
+  } catch (err) {
+    console.error(`Service install failed: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+};
+
+// Stop and remove the per-user background service. Safe to run regardless of
+// paired state. Composes with the broader `hisohiso uninstall` (#41).
+export const daemonUninstall = async (): Promise<void> => {
+  try {
+    const { manager, removed } = await uninstallService();
+    if (removed) {
+      console.log(`Removed the hisohiso ${manager} service and stopped the daemon.`);
+    } else {
+      console.log(`No hisohiso ${manager} service was installed.`);
+    }
+    console.log('Local state under ~/.hisohiso is preserved.');
+  } catch (err) {
+    console.error(`Service uninstall failed: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
 };
 
 // Disband every room we know about server-side, then delete the local state files.
