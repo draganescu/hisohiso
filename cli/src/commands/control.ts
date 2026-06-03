@@ -9,13 +9,21 @@
 
 import qrTerminal from 'qrcode-terminal';
 import { isDaemonRunning, readPid } from '../daemon/pid.js';
+import { saveConfig } from '../lib/config.js';
+import { promptLine } from '../lib/prompt.js';
 import {
   sendControlRequest,
   DaemonUnreachableError,
   type StatusResult,
   type PairResult,
   type AdmitResult,
+  type ReExecResult,
 } from '../lib/control-plane.js';
+
+const confirm = async (prompt: string): Promise<boolean> => {
+  const ans = (await promptLine(prompt)).trim().toLowerCase();
+  return ans === 'y' || ans === 'yes';
+};
 
 const fmtUptime = (ms: number): string => {
   const s = Math.floor(ms / 1000);
@@ -98,3 +106,64 @@ const resolveDevice = async (op: 'admit' | 'deny', knockMsgId?: string): Promise
 
 export const admitCmd = async (knockMsgId?: string): Promise<void> => resolveDevice('admit', knockMsgId);
 export const denyCmd = async (knockMsgId?: string): Promise<void> => resolveDevice('deny', knockMsgId);
+
+// Destructive (#134 pt2): disband ALL rooms and re-pair from scratch. The daemon
+// re-execs ~0.5s after replying.
+export const repairCmd = async (opts: { yes?: boolean } = {}): Promise<void> => {
+  if (!opts.yes && !(await confirm('Disband ALL rooms and re-pair from scratch? This kills every running agent. [y/N] '))) {
+    console.log('Aborted.');
+    return;
+  }
+  try {
+    const r = await sendControlRequest<ReExecResult>({ op: 'repair' });
+    console.log(r.message);
+  } catch (err) {
+    if (err instanceof DaemonUnreachableError) {
+      console.log(notRunningHint);
+      return;
+    }
+    console.error(`repair failed: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+};
+
+// `server <url>`: if a daemon is live, this is a destructive migration (disband
+// on the old host + re-exec on the new one). If no daemon is running, it falls
+// back to the original behaviour — just record the server for the next start.
+export const serverCmd = async (url: string, opts: { yes?: boolean } = {}): Promise<void> => {
+  let running = false;
+  try {
+    await sendControlRequest<StatusResult>({ op: 'status' }, 1500);
+    running = true;
+  } catch (err) {
+    if (!(err instanceof DaemonUnreachableError)) {
+      console.error(`server failed: ${(err as Error).message}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  if (!running) {
+    await saveConfig({ server: url });
+    console.log(`Server set to ${url}. (No daemon running — applied to config; takes effect on next \`hisohiso daemon start\`.)`);
+    return;
+  }
+
+  if (!opts.yes && !(await confirm(`Move the running daemon to ${url}? This disbands all rooms on the current server. [y/N] `))) {
+    console.log('Aborted.');
+    return;
+  }
+  try {
+    const r = await sendControlRequest<ReExecResult>({ op: 'server', url });
+    console.log(r.message);
+  } catch (err) {
+    if (err instanceof DaemonUnreachableError) {
+      // Raced: the daemon went away between probe and migrate — record it anyway.
+      await saveConfig({ server: url });
+      console.log(`Server set to ${url}. (Daemon stopped — applied to config.)`);
+      return;
+    }
+    console.error(`server failed: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+};

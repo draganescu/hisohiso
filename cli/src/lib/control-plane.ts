@@ -15,7 +15,10 @@ export type ControlRequest =
   | { op: 'status' }
   | { op: 'pair' }
   | { op: 'admit'; knockMsgId?: string }
-  | { op: 'deny'; knockMsgId?: string };
+  | { op: 'deny'; knockMsgId?: string }
+  // Destructive (#134 pt2): both tear down rooms server-side then re-exec.
+  | { op: 'repair' }
+  | { op: 'server'; url: string };
 
 export type AgentSummary = { agentId: string; name: string };
 export type PendingDevice = { knockMsgId: string; expiresAt: number };
@@ -40,6 +43,10 @@ export type PairResult = {
 };
 
 export type AdmitResult = { resolved: number; message: string };
+
+// repair / server return a human-readable confirmation; the daemon re-execs
+// ~half a second later, so the reply is sent before the process recycles.
+export type ReExecResult = { message: string };
 
 export type ControlResponse<T = unknown> =
   | { ok: true; data: T }

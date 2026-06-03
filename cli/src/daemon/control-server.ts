@@ -13,6 +13,8 @@ export type ControlHandlers = {
   pair: () => Promise<unknown> | unknown;
   admit: (knockMsgId?: string) => Promise<unknown> | unknown;
   deny: (knockMsgId?: string) => Promise<unknown> | unknown;
+  repair: () => Promise<unknown> | unknown;
+  server: (url: string) => Promise<unknown> | unknown;
 };
 
 export type ControlServerHandle = { close: () => Promise<void> };
@@ -27,6 +29,10 @@ const dispatch = async (h: ControlHandlers, req: ControlRequest): Promise<unknow
       return h.admit(req.knockMsgId);
     case 'deny':
       return h.deny(req.knockMsgId);
+    case 'repair':
+      return h.repair();
+    case 'server':
+      return h.server(req.url);
     default:
       throw new Error(`unknown control op: ${(req as { op: string }).op}`);
   }

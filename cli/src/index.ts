@@ -4,9 +4,8 @@ import { Command } from 'commander';
 import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
-import { statusCmd, pairCmd, admitCmd, denyCmd } from './commands/control.js';
+import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, serverCmd } from './commands/control.js';
 import { info } from './commands/info.js';
-import { saveConfig, ensureConfigDir } from './lib/config.js';
 import { listAgents } from './lib/agents.js';
 // Single source of truth for the CLI version. release.sh bumps
 // cli/package.json and the bundled binary picks it up at build time.
@@ -35,12 +34,11 @@ program
 
 program
   .command('server')
-  .description('Set a custom server (default: hisohiso.org)')
+  .description('Move a running daemon to a new server (disband + re-pair), or set it for the next start')
   .argument('<url>', 'Server URL')
-  .action(async (url: string) => {
-    await ensureConfigDir();
-    await saveConfig({ server: url });
-    console.log(`Server set to ${url}`);
+  .option('-y, --yes', 'Skip the destructive-migration confirmation')
+  .action(async (url: string, opts: { yes?: boolean }) => {
+    await serverCmd(url, { yes: opts.yes === true });
   });
 
 program
@@ -87,6 +85,14 @@ program
   .description('Deny a device waiting to join the control room')
   .argument('[id]', 'pending knock id (optional when only one is waiting)')
   .action(denyCmd);
+
+program
+  .command('repair')
+  .description('Clean slate: disband all rooms and re-pair the running daemon from scratch')
+  .option('-y, --yes', 'Skip the destructive confirmation')
+  .action(async (opts: { yes?: boolean }) => {
+    await repairCmd({ yes: opts.yes === true });
+  });
 
 const daemon = program
   .command('daemon')
