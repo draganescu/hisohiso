@@ -19,7 +19,7 @@ export const ListBlockView = ({ block }: Props) => {
         {block.items.map((item, i) => (
           <li key={i} className="flex gap-2 text-sm leading-6 text-ink-soft">
             <span className="shrink-0 select-none text-ink-dim">{markerFor(style, i)}</span>
-            <span>{item}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{item}</span>
           </li>
         ))}
       </ul>
