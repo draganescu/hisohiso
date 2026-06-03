@@ -28,6 +28,8 @@ import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
 import { hostname } from 'node:os';
+import { startControlServer, type ControlServerHandle } from './control-server.js';
+import pkg from '../../package.json' with { type: 'json' };
 
 // Suggested name the daemon stamps on every control-room envelope so the
 // phone can auto-name the room on first contact. Strip mDNS `.local` (macOS
@@ -45,6 +47,7 @@ const suggestedControlRoomName = ((): string | null => {
 
 export const runDaemon = async (): Promise<void> => {
   const server = await getServer();
+  const startTime = Date.now();
 
   // Initial control room — reuses saved pairing if alive server-side, else shows QR.
   let { state, messageKey } = await setupControlRoom(server);
@@ -81,6 +84,10 @@ export const runDaemon = async (): Promise<void> => {
   // outer binding so shutdown (set up before the first iteration) can call
   // ctrl?.reply('Daemon stopped.') against whichever iteration is current.
   let ctrl: ControlRoom | null = null;
+  // #134 control socket — started once below, but its handlers read the live
+  // `ctrl` / `state` / `manager` each call, so a re-pair that rotates the room
+  // identity is transparent to the socket.
+  let controlServer: ControlServerHandle | null = null;
 
   // Periodic reconciliation against the server. Catches silent SSE death,
   // missed destroy events, and any other failure mode where local in-memory
@@ -105,6 +112,7 @@ export const runDaemon = async (): Promise<void> => {
     currentSse?.close();
     currentPresence?.stop();
     manager.detachAll();
+    await controlServer?.close().catch(() => {});
     await removePid();
     await ctrl?.reply('Daemon stopped.').catch(() => {});
     process.exit(0);
@@ -112,6 +120,60 @@ export const runDaemon = async (): Promise<void> => {
 
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+
+  // Resolve a parked additional-device knock for the control socket. With no id
+  // and exactly one pending, resolve it; with several, require the caller to
+  // disambiguate. Reuses the same handshake the in-room confirm tap drives, so
+  // a terminal `hisohiso admit` and a phone tap are interchangeable.
+  const resolvePending = async (
+    knockMsgId: string | undefined,
+    approve: boolean
+  ): Promise<{ resolved: number; message: string }> => {
+    if (!ctrl) throw new Error('control room is not ready yet');
+    const pending = ctrl.listPendingKnocks();
+    if (pending.length === 0) return { resolved: 0, message: 'No device is waiting for admission.' };
+    let target = knockMsgId;
+    if (!target) {
+      if (pending.length > 1) {
+        throw new Error(
+          `${pending.length} devices waiting — pass an id: ${pending.map((p) => p.knockMsgId).join(', ')}`
+        );
+      }
+      target = pending[0].knockMsgId;
+    } else if (!pending.some((p) => p.knockMsgId === target)) {
+      throw new Error(`no pending device with id ${target}`);
+    }
+    await ctrl.resolveControlKnock(target, approve);
+    return {
+      resolved: 1,
+      message: approve ? 'Admitted the device to the control room.' : 'Denied the device.',
+    };
+  };
+
+  // Bring up the #134 control socket once. Handlers read the live refs at call
+  // time. A bind failure must not take down the daemon — log and carry on
+  // (the daemon still works; only the CLI control verbs are unavailable).
+  controlServer = await startControlServer({
+    status: () => ({
+      version: pkg.version,
+      uptimeMs: Date.now() - startTime,
+      controlRoomHash: state.controlRoomHash,
+      paired: state.controlBound === true,
+      agents: manager.listRunning(),
+      pendingDevices: ctrl ? ctrl.listPendingKnocks() : [],
+    }),
+    // Reconstruct the join material from persisted state — never the knock msg.
+    pair: () => ({
+      joinUrl: `${server}/room#${state.controlRoomSecret}`,
+      pairingCode: state.controlRoomPassword,
+      controlRoomHash: state.controlRoomHash,
+    }),
+    admit: (id) => resolvePending(id, true),
+    deny: (id) => resolvePending(id, false),
+  }).catch((err) => {
+    console.error('Control socket failed to start:', err instanceof Error ? err.message : err);
+    return null;
+  });
 
   // Re-pair loop: each iteration owns one control-room lifecycle. The phone disbanding
   // the control room resolves the iteration's promise and we re-pair (fresh QR), keeping
@@ -491,6 +553,19 @@ class ControlRoom {
   // knock: reject if unknown/expired (with an in-band notice), else run the
   // beginApprove -> approveKnock -> sendWrappedToken handshake for the control
   // room. Returns nothing; all feedback goes back into the control room.
+  // Snapshot of still-valid parked knocks, for the control socket (#134) so
+  // `hisohiso status` can report "N devices awaiting admission" and `hisohiso
+  // admit` knows what to resolve. Expired entries are filtered out (they're
+  // lazily evicted on the next requestControlKnockConfirm).
+  listPendingKnocks(): Array<{ knockMsgId: string; expiresAt: number }> {
+    const now = Date.now();
+    const out: Array<{ knockMsgId: string; expiresAt: number }> = [];
+    for (const [knockMsgId, v] of this.pendingKnocks) {
+      if (now <= v.expiresAt) out.push({ knockMsgId, expiresAt: v.expiresAt });
+    }
+    return out;
+  }
+
   async resolveControlKnock(knockMsgId: string, approve: boolean): Promise<void> {
     const pending = this.pendingKnocks.get(knockMsgId);
     if (!pending) {

@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
+import { statusCmd, pairCmd, admitCmd, denyCmd } from './commands/control.js';
 import { saveConfig, ensureConfigDir } from './lib/config.js';
 import { listAgents } from './lib/agents.js';
 // Single source of truth for the CLI version. release.sh bumps
@@ -52,6 +53,31 @@ program
       console.log(`  ${' '.repeat(14)} → ${agent.command} ${agent.args.join(' ')} <message>\n`);
     }
   });
+
+// Control-plane verbs (#134) — talk to the running daemon over its control
+// socket. Top-level (not under `daemon`) because they're the everyday surface
+// for a detached daemon you drive from your phone.
+program
+  .command('status')
+  .description('Show the running daemon: control room, agents, devices awaiting admission')
+  .action(statusCmd);
+
+program
+  .command('pair')
+  .description('Re-render the QR + pairing code for the current control room (e.g. to add a phone)')
+  .action(pairCmd);
+
+program
+  .command('admit')
+  .description('Admit a device waiting to join the control room')
+  .argument('[id]', 'pending knock id (optional when only one is waiting)')
+  .action(admitCmd);
+
+program
+  .command('deny')
+  .description('Deny a device waiting to join the control room')
+  .argument('[id]', 'pending knock id (optional when only one is waiting)')
+  .action(denyCmd);
 
 const daemon = program
   .command('daemon')
