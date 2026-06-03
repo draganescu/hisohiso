@@ -6,9 +6,9 @@ interface Props {
 
 export const LabelBlockView = ({ block }: Props) => (
   <div className="mt-4 mb-1 flex items-center gap-2">
-    <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-[#8d816c]">
+    <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-ink-dim">
       {block.text}
     </span>
-    <div className="h-px flex-1 bg-[#e8e0d0]" />
+    <div className="h-px flex-1 bg-rule" />
   </div>
 );
