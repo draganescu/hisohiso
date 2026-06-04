@@ -42,6 +42,36 @@ claude --version
 codex --version
 ```
 
+## Update
+
+The daemon auto-updates on a 6-hour tick, but you can update on demand — handy
+for `wrap`/one-shot users (no daemon running) or right before a breaking release:
+
+```sh
+hisohiso update          # download the latest release, verify its checksum, swap the binary
+hisohiso update --check  # just report current vs latest; download nothing
+```
+
+`update` downloads the matching-arch binary from the latest GitHub Release,
+verifies it against the published `checksums.txt`, and atomically replaces the
+on-disk binary. If a daemon is running it keeps its current process until you
+restart it (or its next tick). It runs even with `HISOHISO_AUTO_UPDATE=off`,
+which only silences the background tick.
+
+## Uninstall
+
+```sh
+hisohiso uninstall            # stop daemon + service, remove the binary, keep ~/.hisohiso
+hisohiso uninstall --clean    # also remove ~/.hisohiso and the installer's PATH block
+hisohiso uninstall --dry-run  # show exactly what would be removed, change nothing
+hisohiso uninstall --yes      # skip the confirmation prompt (for scripts)
+```
+
+`--clean` is destructive and confirms by default. It removes only what hisohiso
+owns: the running binary, `~/.hisohiso`, files listed in a hisohiso-written
+manifest (`~/.hisohiso/created-files.json`), and the managed PATH block the
+installer wrote to your shell rc — never arbitrary name-matched files.
+
 ## Quick start — wrap mode
 
 `wrap` is the simplest way to use the CLI. It creates a one-off encrypted room,
