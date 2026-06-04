@@ -1,11 +1,14 @@
 import {
   getServer,
+  saveConfig,
   loadActiveRooms,
   loadDaemonState,
   saveDaemonState,
   clearDaemonState,
+  clearActiveRooms,
   type DaemonState,
 } from '../lib/config.js';
+import { reExecSelf } from '../lib/reexec.js';
 import {
   generateRoomSecret,
   deriveRoomHash,
@@ -28,6 +31,8 @@ import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
 import { hostname } from 'node:os';
+import { startControlServer, type ControlServerHandle } from './control-server.js';
+import pkg from '../../package.json' with { type: 'json' };
 
 // Suggested name the daemon stamps on every control-room envelope so the
 // phone can auto-name the room on first contact. Strip mDNS `.local` (macOS
@@ -45,6 +50,7 @@ const suggestedControlRoomName = ((): string | null => {
 
 export const runDaemon = async (): Promise<void> => {
   const server = await getServer();
+  const startTime = Date.now();
 
   // Initial control room — reuses saved pairing if alive server-side, else shows QR.
   let { state, messageKey } = await setupControlRoom(server);
@@ -81,6 +87,10 @@ export const runDaemon = async (): Promise<void> => {
   // outer binding so shutdown (set up before the first iteration) can call
   // ctrl?.reply('Daemon stopped.') against whichever iteration is current.
   let ctrl: ControlRoom | null = null;
+  // #134 control socket — started once below, but its handlers read the live
+  // `ctrl` / `state` / `manager` each call, so a re-pair that rotates the room
+  // identity is transparent to the socket.
+  let controlServer: ControlServerHandle | null = null;
 
   // Periodic reconciliation against the server. Catches silent SSE death,
   // missed destroy events, and any other failure mode where local in-memory
@@ -105,6 +115,7 @@ export const runDaemon = async (): Promise<void> => {
     currentSse?.close();
     currentPresence?.stop();
     manager.detachAll();
+    await controlServer?.close().catch(() => {});
     await removePid();
     await ctrl?.reply('Daemon stopped.').catch(() => {});
     process.exit(0);
@@ -112,6 +123,118 @@ export const runDaemon = async (): Promise<void> => {
 
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+
+  // Resolve a parked additional-device knock for the control socket. With no id
+  // and exactly one pending, resolve it; with several, require the caller to
+  // disambiguate. Reuses the same handshake the in-room confirm tap drives, so
+  // a terminal `hisohiso admit` and a phone tap are interchangeable.
+  const resolvePending = async (
+    knockMsgId: string | undefined,
+    approve: boolean
+  ): Promise<{ resolved: number; message: string }> => {
+    if (!ctrl) throw new Error('control room is not ready yet');
+    const pending = ctrl.listPendingKnocks();
+    if (pending.length === 0) return { resolved: 0, message: 'No device is waiting for admission.' };
+    let target = knockMsgId;
+    if (!target) {
+      if (pending.length > 1) {
+        throw new Error(
+          `${pending.length} devices waiting — pass an id: ${pending.map((p) => p.knockMsgId).join(', ')}`
+        );
+      }
+      target = pending[0].knockMsgId;
+    } else if (!pending.some((p) => p.knockMsgId === target)) {
+      throw new Error(`no pending device with id ${target}`);
+    }
+    await ctrl.resolveControlKnock(target, approve);
+    return {
+      resolved: 1,
+      message: approve ? 'Admitted the device to the control room.' : 'Denied the device.',
+    };
+  };
+
+  // Disband every room we currently hold tokens for, on `srv`. Agent rooms come
+  // from the persisted rooms.json (kept current by AgentManager); the control
+  // room from live `state`. Order matters for `server <url>`: this must run on
+  // the OLD server while we still hold its tokens, before the config swap.
+  const disbandEverything = async (srv: string): Promise<void> => {
+    const rooms = await loadActiveRooms().catch(() => []);
+    const jobs: Promise<unknown>[] = [];
+    for (const r of rooms) {
+      if (r.participantToken) jobs.push(api.disbandRoom(srv, r.roomHash, r.participantToken).catch(() => {}));
+    }
+    jobs.push(api.disbandRoom(srv, state.controlRoomHash, state.participantToken).catch(() => {}));
+    await Promise.all(jobs);
+  };
+
+  // Tear down this process and re-exec fresh after the socket reply has flushed.
+  // We bypass the SIGTERM `shutdown` (which would try to disband the rooms we
+  // just disbanded and message a dead control room); instead release resources
+  // directly and re-exec carrying the knock so the boot-path re-pair is headless.
+  const scheduleReExec = (carriedKnock: string): void => {
+    shuttingDown = true;
+    setTimeout(() => {
+      clearInterval(reconcileTimer);
+      currentSse?.close();
+      currentPresence?.stop();
+      manager.detachAll();
+      void controlServer?.close().catch(() => {}).finally(() => {
+        reExecSelf({ HISOHISO_CARRY_KNOCK: carriedKnock });
+      });
+    }, 400);
+  };
+
+  // `repair` — clean slate: disband everything on the current server, wipe local
+  // state, re-exec. The boot path mints a fresh control room (reusing the knock).
+  const doRepair = async (): Promise<{ message: string }> => {
+    const carried = state.sessionKnockMessage;
+    await disbandEverything(server);
+    await clearDaemonState().catch(() => {});
+    await clearActiveRooms().catch(() => {});
+    scheduleReExec(carried);
+    return { message: 'Repairing: disbanded all rooms; re-pairing with a fresh control room. Run `hisohiso pair` once it is back.' };
+  };
+
+  // `server <url>` — move hosts. The live rooms exist only on the OLD server and
+  // can't migrate, so this is a teardown + re-pair on the new host (reusing the
+  // boot path), not a hot config reload. Disband old → persist new → re-exec.
+  const doServer = async (url: string): Promise<{ message: string }> => {
+    if (!/^https?:\/\//.test(url)) throw new Error('server url must start with http:// or https://');
+    const carried = state.sessionKnockMessage;
+    await disbandEverything(server); // OLD server — tokens still valid here
+    await saveConfig({ server: url });
+    await clearDaemonState().catch(() => {});
+    await clearActiveRooms().catch(() => {});
+    scheduleReExec(carried);
+    return { message: `Moving to ${url}: disbanded rooms on the old server; re-pairing there. Run \`hisohiso pair\` once it is back.` };
+  };
+
+  // Bring up the #134 control socket once. Handlers read the live refs at call
+  // time. A bind failure must not take down the daemon — log and carry on
+  // (the daemon still works; only the CLI control verbs are unavailable).
+  controlServer = await startControlServer({
+    status: () => ({
+      version: pkg.version,
+      uptimeMs: Date.now() - startTime,
+      controlRoomHash: state.controlRoomHash,
+      paired: state.controlBound === true,
+      agents: manager.listRunning(),
+      pendingDevices: ctrl ? ctrl.listPendingKnocks() : [],
+    }),
+    // Reconstruct the join material from persisted state — never the knock msg.
+    pair: () => ({
+      joinUrl: `${server}/room#${state.controlRoomSecret}`,
+      pairingCode: state.controlRoomPassword,
+      controlRoomHash: state.controlRoomHash,
+    }),
+    admit: (id) => resolvePending(id, true),
+    deny: (id) => resolvePending(id, false),
+    repair: () => doRepair(),
+    server: (url) => doServer(url),
+  }).catch((err) => {
+    console.error('Control socket failed to start:', err instanceof Error ? err.message : err);
+    return null;
+  });
 
   // Re-pair loop: each iteration owns one control-room lifecycle. The phone disbanding
   // the control room resolves the iteration's promise and we re-pair (fresh QR), keeping
@@ -491,6 +614,19 @@ class ControlRoom {
   // knock: reject if unknown/expired (with an in-band notice), else run the
   // beginApprove -> approveKnock -> sendWrappedToken handshake for the control
   // room. Returns nothing; all feedback goes back into the control room.
+  // Snapshot of still-valid parked knocks, for the control socket (#134) so
+  // `hisohiso status` can report "N devices awaiting admission" and `hisohiso
+  // admit` knows what to resolve. Expired entries are filtered out (they're
+  // lazily evicted on the next requestControlKnockConfirm).
+  listPendingKnocks(): Array<{ knockMsgId: string; expiresAt: number }> {
+    const now = Date.now();
+    const out: Array<{ knockMsgId: string; expiresAt: number }> = [];
+    for (const [knockMsgId, v] of this.pendingKnocks) {
+      if (now <= v.expiresAt) out.push({ knockMsgId, expiresAt: v.expiresAt });
+    }
+    return out;
+  }
+
   async resolveControlKnock(knockMsgId: string, approve: boolean): Promise<void> {
     const pending = this.pendingKnocks.get(knockMsgId);
     if (!pending) {
@@ -765,7 +901,10 @@ class ControlRoom {
   }
 }
 
-const setupControlRoom = async (
+// Exported so `daemon install` can pair inline (when run interactively) without
+// a separate `daemon start` — it shows the QR, waits on the knock, persists the
+// control-room state, then continues to install.
+export const setupControlRoom = async (
   server: string,
   carriedKnockMessage?: string
 ): Promise<{ state: DaemonState; messageKey: CryptoKey }> => {
@@ -799,9 +938,26 @@ const setupControlRoom = async (
   // in scrollback / screenshots. Persisted via DaemonState below; the same
   // string is the expected knock cleartext for every agent room minted later.
   // A re-pair carries the existing knockMessage forward — no re-prompt.
+  // A backgrounded daemon (#125) has no TTY to scan a QR or type a knock on.
+  // Gated strictly on the unit-set HISOHISO_SERVICE env so foreground behaviour
+  // is byte-for-byte unchanged.
+  const underService = Boolean(process.env.HISOHISO_SERVICE);
+
   let sessionKnockMessage: string;
+  const carriedEnvKnock = process.env.HISOHISO_CARRY_KNOCK;
   if (typeof carriedKnockMessage === 'string' && carriedKnockMessage !== '') {
     sessionKnockMessage = carriedKnockMessage;
+  } else if (typeof carriedEnvKnock === 'string' && carriedEnvKnock !== '') {
+    // Re-exec after `repair`/`server` (#134 pt2) carries the operator's session
+    // knock here so the headless re-pair doesn't prompt. Consume it once.
+    sessionKnockMessage = carriedEnvKnock;
+    delete process.env.HISOHISO_CARRY_KNOCK;
+  } else if (underService) {
+    // No carried knock and no TTY — can't pair headlessly. This shouldn't happen
+    // (`daemon install` requires a prior foreground pair), but fail loudly rather
+    // than hang on an invisible prompt.
+    console.error('Cannot pair headlessly with no carried knock — pair once in the foreground first.');
+    process.exit(1);
   } else {
     sessionKnockMessage = (await promptLine('Session knock message (used to authenticate every join in this session): ', { hidden: true })).trim();
     if (sessionKnockMessage === '') {
@@ -827,6 +983,28 @@ const setupControlRoom = async (
 
   // Start presence so room shows as active
   const tempPresence = startPresence(server, controlRoomHash, participantToken);
+
+  // Headless (under a service): don't block on the first knock against a QR no
+  // one can scan — that's the motivating bug. Persist an UNBOUND control room
+  // and return; runDaemon's own onKnock handler binds the first authenticated
+  // device, and `hisohiso pair` renders this QR on demand over the control
+  // socket. `hisohiso status` reports "awaiting pairing" until a device binds.
+  if (underService) {
+    tempPresence.stop();
+    const awaitingState: DaemonState = {
+      controlRoomSecret,
+      controlRoomHash,
+      participantToken,
+      subscriberJwt,
+      controlRoomPassword: password,
+      sessionKnockMessage,
+      controlBound: false,
+      kdfVersion: 1,
+    };
+    await saveDaemonState(awaitingState);
+    console.log('Control room created — awaiting pairing. Run `hisohiso pair` to show the QR.');
+    return { state: awaitingState, messageKey };
+  }
 
   // Show QR + pairing code together. The phone scans QR for room_secret;
   // operator reads the pairing code off this terminal and types it as the

@@ -2,9 +2,10 @@
 
 import { Command } from 'commander';
 import { wrap } from './commands/wrap.js';
-import { daemonStart, daemonStop, daemonStatus } from './commands/daemon.js';
+import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
-import { saveConfig, ensureConfigDir } from './lib/config.js';
+import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, serverCmd } from './commands/control.js';
+import { info } from './commands/info.js';
 import { listAgents } from './lib/agents.js';
 // Single source of truth for the CLI version. release.sh bumps
 // cli/package.json and the bundled binary picks it up at build time.
@@ -33,12 +34,11 @@ program
 
 program
   .command('server')
-  .description('Set a custom server (default: hisohiso.org)')
+  .description('Move a running daemon to a new server (disband + re-pair), or set it for the next start')
   .argument('<url>', 'Server URL')
-  .action(async (url: string) => {
-    await ensureConfigDir();
-    await saveConfig({ server: url });
-    console.log(`Server set to ${url}`);
+  .option('-y, --yes', 'Skip the destructive-migration confirmation')
+  .action(async (url: string, opts: { yes?: boolean }) => {
+    await serverCmd(url, { yes: opts.yes === true });
   });
 
 program
@@ -51,6 +51,47 @@ program
       console.log(`  ${name.padEnd(14)} ${agent.description}${mode}`);
       console.log(`  ${' '.repeat(14)} → ${agent.command} ${agent.args.join(' ')} <message>\n`);
     }
+  });
+
+// Control-plane verbs (#134) — talk to the running daemon over its control
+// socket. Top-level (not under `daemon`) because they're the everyday surface
+// for a detached daemon you drive from your phone.
+program
+  .command('info')
+  .description('Show the whole daemon at a glance: paths, config, status, service, logs — works when down')
+  .option('--json', 'Emit the full picture as JSON for scripting')
+  .action(async (opts: { json?: boolean }) => {
+    await info({ json: opts.json === true });
+  });
+
+program
+  .command('status')
+  .description('Show the running daemon: control room, agents, devices awaiting admission')
+  .action(statusCmd);
+
+program
+  .command('pair')
+  .description('Re-render the QR + pairing code for the current control room (e.g. to add a phone)')
+  .action(pairCmd);
+
+program
+  .command('admit')
+  .description('Admit a device waiting to join the control room')
+  .argument('[id]', 'pending knock id (optional when only one is waiting)')
+  .action(admitCmd);
+
+program
+  .command('deny')
+  .description('Deny a device waiting to join the control room')
+  .argument('[id]', 'pending knock id (optional when only one is waiting)')
+  .action(denyCmd);
+
+program
+  .command('repair')
+  .description('Clean slate: disband all rooms and re-pair the running daemon from scratch')
+  .option('-y, --yes', 'Skip the destructive confirmation')
+  .action(async (opts: { yes?: boolean }) => {
+    await repairCmd({ yes: opts.yes === true });
   });
 
 const daemon = program
@@ -69,6 +110,16 @@ daemon
   .command('stop')
   .description('Stop the daemon')
   .action(daemonStop);
+
+daemon
+  .command('install')
+  .description('Install a per-user background service (launchd/systemd) that survives reboots — pair first')
+  .action(daemonInstall);
+
+daemon
+  .command('uninstall')
+  .description('Stop and remove the background service (preserves ~/.hisohiso state)')
+  .action(daemonUninstall);
 
 daemon
   .command('status')

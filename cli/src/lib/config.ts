@@ -11,10 +11,13 @@ const REGISTRY_FILE = join(CONFIG_DIR, 'registry.json');
 const ROOMS_FILE = join(CONFIG_DIR, 'rooms.json');
 const PID_FILE = join(CONFIG_DIR, 'daemon.pid');
 const LOGS_DIR = join(CONFIG_DIR, 'logs');
+// Owner-only control socket (#134) — same local trust boundary as the PID file.
+// The detached daemon listens here; CLI verbs (status/pair/admit) connect.
+const SOCKET_FILE = join(CONFIG_DIR, 'daemon.sock');
 
 const DEFAULT_SERVER = 'https://hisohiso.org';
 
-export { CONFIG_DIR, CONFIG_FILE, REGISTRY_FILE, ROOMS_FILE, PID_FILE, LOGS_DIR, DEFAULT_SERVER };
+export { CONFIG_DIR, CONFIG_FILE, REGISTRY_FILE, ROOMS_FILE, PID_FILE, LOGS_DIR, SOCKET_FILE, DEFAULT_SERVER };
 
 export type Config = {
   server: string;
