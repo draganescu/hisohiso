@@ -6,6 +6,7 @@ import {
   clearDaemonState,
   clearActiveRooms,
   getServer,
+  CONFIG_DIR,
 } from '../lib/config.js';
 import * as api from '../lib/api-client.js';
 import { runDaemon, setupControlRoom } from '../daemon/daemon-main.js';
@@ -14,6 +15,7 @@ import {
   isPaired,
   installService,
   uninstallService,
+  LOG_PATH,
 } from '../lib/service.js';
 
 export const daemonStart = async (opts: { fresh?: boolean } = {}): Promise<void> => {
@@ -96,7 +98,7 @@ export const daemonInstall = async (): Promise<void> => {
     console.log(`Installed and started the hisohiso ${manager} service.`);
     console.log(`  unit:   ${unitPath}`);
     console.log(`  binary: ${execPath}`);
-    console.log('It will start on login and restart on crash. Logs: ~/.hisohiso/logs/daemon.log');
+    console.log(`It will start on login and restart on crash. Logs: ${LOG_PATH}`);
     console.log('Stop/remove it with `hisohiso daemon uninstall`.');
   } catch (err) {
     console.error(`Service install failed: ${(err as Error).message}`);
@@ -114,7 +116,7 @@ export const daemonUninstall = async (): Promise<void> => {
     } else {
       console.log(`No hisohiso ${manager} service was installed.`);
     }
-    console.log('Local state under ~/.hisohiso is preserved.');
+    console.log(`Local state under ${CONFIG_DIR} is preserved.`);
   } catch (err) {
     console.error(`Service uninstall failed: ${(err as Error).message}`);
     process.exitCode = 1;

@@ -118,7 +118,7 @@ daemon
 
 daemon
   .command('uninstall')
-  .description('Stop and remove the background service (preserves ~/.hisohiso state)')
+  .description('Stop and remove the background service (preserves local daemon state)')
   .action(daemonUninstall);
 
 daemon

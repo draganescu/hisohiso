@@ -74,13 +74,24 @@ export const isPaired = async (): Promise<boolean> => {
 
 const uid = (): number => userInfo().uid;
 
+// launchd and systemd do NOT expand a leading ~ in PATH entries, so an
+// unexpanded '~/...' inherited from the installing shell (e.g. a tool that
+// appended `~/.composer/vendor/bin` to PATH without expanding it) becomes a
+// dead entry under the service. Expand `~` and `~/…` to the real home so the
+// captured PATH stays usable for resolving the wrapped agent CLIs.
+const expandPathEntries = (path: string): string =>
+  path
+    .split(':')
+    .map((p) => (p === '~' ? homedir() : p.startsWith('~/') ? join(homedir(), p.slice(2)) : p))
+    .join(':');
+
 // --- launchd (macOS) ---
 
 const launchdPlist = (execPath: string): string => {
   // PATH is captured from the installing shell so the backgrounded daemon can
   // still find the wrapped agent CLIs (claude/codex/…), which usually live in
   // ~/.local/bin or a Homebrew prefix that launchd's minimal PATH omits.
-  const path = process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+  const path = expandPathEntries(process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin');
   const env: Record<string, string> = {
     [SERVICE_ENV_FLAG]: 'launchd',
     PATH: path,
@@ -198,7 +209,7 @@ const SYSTEMD_UNIT_PATH = join(SYSTEMD_USER_DIR, SYSTEMD_UNIT);
 // HISOHISO_SERVICE marks the no-TTY context; PATH is captured so the backgrounded
 // daemon finds the wrapped agent CLIs; HISOHISO_HOME / _AUTO_UPDATE pass through.
 export const systemdUnit = (execPath: string): string => {
-  const path = process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+  const path = expandPathEntries(process.env.PATH || '/usr/local/bin:/usr/bin:/bin');
   const env: string[] = [
     `Environment="${SERVICE_ENV_FLAG}=systemd"`,
     `Environment="PATH=${path}"`,
