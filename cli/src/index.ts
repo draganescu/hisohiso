@@ -6,6 +6,8 @@ import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall }
 import { register, unregister, list } from './commands/registry.js';
 import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, serverCmd } from './commands/control.js';
 import { info } from './commands/info.js';
+import { updateCmd } from './commands/update.js';
+import { uninstallCmd } from './commands/uninstall.js';
 import { listAgents } from './lib/agents.js';
 // Single source of truth for the CLI version. release.sh bumps
 // cli/package.json and the bundled binary picks it up at build time.
@@ -92,6 +94,26 @@ program
   .option('-y, --yes', 'Skip the destructive confirmation')
   .action(async (opts: { yes?: boolean }) => {
     await repairCmd({ yes: opts.yes === true });
+  });
+
+// Binary lifecycle (#153, #41) — manage the installed CLI itself, independent
+// of any running daemon.
+program
+  .command('update')
+  .description('Update the CLI to the latest release (verifies checksum), or --check for versions only')
+  .option('--check', 'Report current vs latest version without downloading anything')
+  .action(async (opts: { check?: boolean }) => {
+    await updateCmd({ check: opts.check === true });
+  });
+
+program
+  .command('uninstall')
+  .description('Remove the CLI (stops daemon + service, deletes the binary); --clean also wipes local state')
+  .option('--clean', 'Also remove ~/.hisohiso state and hisohiso-owned generated files')
+  .option('--dry-run', 'Show what would be removed without changing anything')
+  .option('-y, --yes', 'Skip the confirmation prompt')
+  .action(async (opts: { clean?: boolean; dryRun?: boolean; yes?: boolean }) => {
+    await uninstallCmd({ clean: opts.clean === true, dryRun: opts.dryRun === true, yes: opts.yes === true });
   });
 
 const daemon = program

@@ -43,9 +43,18 @@ main() {
     *)
       shell_config="$(detect_shell_config)"
       if [ -n "$shell_config" ]; then
-        printf '\nexport PATH="%s:$PATH"\n' "$INSTALL_DIR" >> "$shell_config"
-        printf "Added %s to PATH in %s\n" "$INSTALL_DIR" "$shell_config"
-        printf "Run: source %s  (or open a new terminal)\n" "$shell_config"
+        # Write a managed marker block (not a bare line) so `hisohiso uninstall
+        # --clean` can remove exactly what the installer added and nothing else.
+        # Skip if a block is already present (idempotent re-install).
+        if [ ! -f "$shell_config" ] || ! grep -q '# >>> hisohiso installer >>>' "$shell_config"; then
+          {
+            printf '\n# >>> hisohiso installer >>>\n'
+            printf 'export PATH="%s:$PATH"\n' "$INSTALL_DIR"
+            printf '# <<< hisohiso installer <<<\n'
+          } >> "$shell_config"
+          printf "Added %s to PATH in %s\n" "$INSTALL_DIR" "$shell_config"
+          printf "Run: source %s  (or open a new terminal)\n" "$shell_config"
+        fi
       else
         printf "\nAdd this to your shell config:\n"
         printf '  export PATH="%s:$PATH"\n' "$INSTALL_DIR"
