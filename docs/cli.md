@@ -75,6 +75,31 @@ Daemon rooms are created with **offline catch-up on** (see
 agent keeps working while your phone is closed — and you still see what it said
 when you reopen.
 
+### Always on, and managed from the laptop
+
+`daemon start` is foreground. For a daemon that survives logout and reboot,
+install it as a per-user background service — launchd on macOS, a systemd user
+unit on Linux. It never runs as root (it wraps phone-driven agent processes, so
+uid 0 is off the table), carries your `PATH` so the backgrounded process still
+finds the wrapped agent CLIs, and restarts on crash.
+
+```sh
+hisohiso daemon install     # pairs inline if needed, then installs + starts the service
+hisohiso daemon uninstall   # stop + remove the service; local state stays
+```
+
+A running daemon is detached, so the everyday verbs reach it over an owner-only
+Unix control socket and degrade gracefully when it's down:
+
+| Command | What it does |
+| --- | --- |
+| `hisohiso info` | One screen: paths, config, pairing, rooms, service, logs — truthful even when the daemon is down |
+| `hisohiso status` | The live picture: control room, running agents, devices awaiting admission |
+| `hisohiso pair` | Re-render the QR + pairing code (e.g. to add another phone) |
+| `hisohiso admit` / `deny` | Resolve a device waiting to join the control room |
+| `hisohiso repair` | Disband every room and re-pair from scratch |
+| `hisohiso server <url>` | Migrate a running daemon to a new server (disband on the old host, re-pair on the new) |
+
 ## How the bridge works
 
 The interesting plumbing, file by file (`cli/src/`):
@@ -90,7 +115,11 @@ The interesting plumbing, file by file (`cli/src/`):
 | `lib/preamble.ts` + `preambles/` | The system prompt that teaches an agent to emit phone-friendly blocks |
 | `lib/control-protocol.ts` | The control-room command language (`claude`, `list`, `kill`) |
 | `daemon/agent-manager.ts` | Tracks running sessions, spawns/kills them |
-| `lib/updater.ts` | Tick-based silent self-update |
+| `daemon/control-server.ts` | The owner-only control socket the laptop verbs (`status`, `pair`, `admit`, …) connect to |
+| `lib/control-plane.ts` | Client side of that socket — what `hisohiso status` / `info` / … send |
+| `lib/service.ts` | Per-user background-service install (launchd / systemd user unit) |
+| `lib/reexec.ts` | Re-exec plumbing for `repair` / `server` migration and self-update |
+| `lib/updater.ts` | The shared download → verify → swap path, used by the background tick *and* on-demand `hisohiso update` |
 
 The **preamble** is what makes the experience good: it instructs the agent to
 respond with the structured blocks the app renders (diffs, buttons, confirm
@@ -122,11 +151,13 @@ blocks.
   authenticated** on the machine. hisohiso doesn't install agents, set API
   keys, or run login flows — it assumes a working agent.
 - By default the CLI points at `hisohiso.org`. Point it at your own server with
-  `hisohiso server https://your-host`. Config lives in
-  `~/.config/hisohiso/config.json`.
+  `hisohiso server https://your-host`. Config and daemon state live under
+  `~/.hisohiso` (override the whole directory with `HISOHISO_HOME`).
 - Binaries are published for darwin/linux on each release tag; `install.sh`
-  pulls the right one. The CLI then keeps itself updated silently in the
-  background.
+  pulls the right one. After that the daemon self-updates on a ~6h tick, or you
+  can update on demand with `hisohiso update` (checksum-verified against the
+  release). Remove the CLI with `hisohiso uninstall` — `--clean` also wipes
+  `~/.hisohiso`.
 
 For running and operating the server those rooms live on, see
 [stack-and-server.md](stack-and-server.md).

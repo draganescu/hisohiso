@@ -115,6 +115,35 @@ Daemon rooms (the control room + every spawned agent room) are created with
 closed (the server stores ciphertext only, capped at 500 messages / 24h per
 room — see the [main README](../README.md#offline-catch-up-opt-in)).
 
+### Always on (background service)
+
+`daemon start` runs in the foreground. To keep the control room alive across
+logout and reboot — and restart it on crash — install it as a per-user
+background service (launchd on macOS, a systemd user unit on Linux):
+
+```sh
+hisohiso daemon install     # pairs inline if needed, then installs + starts the service
+hisohiso daemon uninstall   # stop + remove the service (keeps your local state)
+```
+
+It never runs as root, carries your `PATH` so the backgrounded daemon can still
+find the wrapped agent CLIs, and logs to `~/.hisohiso/logs/daemon.log`.
+
+### Managing a running daemon
+
+These talk to the running daemon over an owner-only local control socket, and
+degrade gracefully when it's down:
+
+```sh
+hisohiso info          # one-screen overview: paths, config, pairing, rooms, service — works when down
+hisohiso status        # control room, running agents, devices awaiting admission
+hisohiso pair          # re-render the QR + pairing code (e.g. to add another phone)
+hisohiso admit [id]    # admit a device waiting to join the control room
+hisohiso deny [id]     # deny a waiting device
+hisohiso repair        # clean slate: disband all rooms and re-pair from scratch
+hisohiso server <url>  # migrate a running daemon to a new server (disband + re-pair)
+```
+
 ### Registering custom agents
 
 If you want to expose another tool through the daemon, register a shell
@@ -140,8 +169,10 @@ By default the CLI talks to `hisohiso.org`. To run against your own deployment:
 hisohiso server https://your-hisohiso.example.com
 ```
 
-The server URL is stored in `~/.config/hisohiso/config.json`. Daemon state
-(active rooms, registered agents) also lives in that directory.
+The server URL is stored in `~/.hisohiso/config.json`. Daemon state (pairing,
+active rooms, registered agents, logs) also lives under `~/.hisohiso`. Set
+`HISOHISO_HOME` to point at a different state directory — handy for running an
+isolated second daemon alongside your main one.
 
 ## Built-in agent profiles
 
