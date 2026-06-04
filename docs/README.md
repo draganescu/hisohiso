@@ -15,7 +15,7 @@ thing, jump to it.
 | [realtime.md](realtime.md) | How a message gets from one phone to another in real time. Mercure (SSE), the two per-room topics, and the JWTs that gate them. |
 | [offline-catchup.md](offline-catchup.md) | The optional server-side outbox that lets a device catch up on messages it missed while closed. |
 | [frontend.md](frontend.md) | The React app. The room state machine, where crypto happens, where history lives, and the PWA bits. |
-| [cli.md](cli.md) | The `hisohiso` CLI — bridging a terminal AI agent to a room on your phone. wrap mode vs daemon mode. |
+| [cli.md](cli.md) | The `hisohiso` CLI — bridging a terminal AI agent to a room on your phone. wrap mode, the always-on daemon + its control plane, and the `update` / `uninstall` lifecycle. |
 | [stack-and-server.md](stack-and-server.md) | **The stack and the recommended server setup.** What each piece is, why it's there, and how to run it in production. |
 | [host-bootstrap.md](host-bootstrap.md) | The provisioning runbook — turning a fresh Linux box into a hardened hisohiso host. |
 
