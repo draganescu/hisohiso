@@ -31,7 +31,7 @@ import { listAgents } from '../lib/agents.js';
 import { loadRegistry } from '../lib/config.js';
 import qrTerminal from 'qrcode-terminal';
 import { hostname } from 'node:os';
-import { startControlServer, type ControlServerHandle } from './control-server.js';
+import { startControlServer, isControlSocketLive, DaemonAlreadyRunningError, type ControlServerHandle } from './control-server.js';
 import pkg from '../../package.json' with { type: 'json' };
 
 // Suggested name the daemon stamps on every control-room envelope so the
@@ -52,10 +52,44 @@ export const runDaemon = async (): Promise<void> => {
   const server = await getServer();
   const startTime = Date.now();
 
+  // Single-instance guard. The control socket is an OS-enforced mutex (one
+  // listener per Unix socket), far more reliable than the PID file — that's
+  // last-writer-wins and only checked by the `daemon start` wrapper, so a
+  // launchd service starting while a foreground daemon was still alive left two
+  // daemons both subscribed to the control room, both answering every message
+  // (the duplicate-reply bug). Probe before we subscribe or touch the PID file.
+  if (await isControlSocketLive()) {
+    // A re-exec (repair / server-move / auto-update) spawns us while the old
+    // process is still finishing its ~250ms exit. That's a handoff, not a
+    // duplicate: wait for the predecessor to release the socket instead of
+    // refusing. A live socket with no re-exec flag is a real second instance.
+    const handoff = process.env.HISOHISO_REEXEC === '1';
+    let freed = false;
+    if (handoff) {
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (!(await isControlSocketLive())) {
+          freed = true;
+          break;
+        }
+      }
+    }
+    if (!freed) {
+      console.error(
+        handoff
+          ? 'Predecessor daemon did not release the control socket in time; exiting.'
+          : 'Another hisohiso daemon is already running (control socket is live). ' +
+              'This instance is exiting to avoid duplicate replies.'
+      );
+      return;
+    }
+  }
+  // Don't leak the handoff flag into the long-running process or agent command envs.
+  delete process.env.HISOHISO_REEXEC;
+
   // Initial control room — reuses saved pairing if alive server-side, else shows QR.
   let { state, messageKey } = await setupControlRoom(server);
-
-  await writePid(process.pid);
 
   const manager = new AgentManager(
     server,
@@ -232,9 +266,23 @@ export const runDaemon = async (): Promise<void> => {
     repair: () => doRepair(),
     server: (url) => doServer(url),
   }).catch((err) => {
+    if (err instanceof DaemonAlreadyRunningError) {
+      // Lost a start race against another daemon between the preflight probe and
+      // binding the socket. Exit cleanly rather than running as a duplicate;
+      // leave the PID file alone — the winner owns it (we never wrote ours).
+      console.error('Another hisohiso daemon won the start race; this instance is exiting.');
+      clearInterval(reconcileTimer);
+      manager.detachAll();
+      process.exit(0);
+    }
     console.error('Control socket failed to start:', err instanceof Error ? err.message : err);
     return null;
   });
+
+  // We now hold the control socket — the single-instance lock. Claim the PID
+  // file (for `daemon stop`/`status`) only after the lock, so a duplicate that
+  // loses the socket race never overwrites the winner's PID.
+  await writePid(process.pid);
 
   // Re-pair loop: each iteration owns one control-room lifecycle. The phone disbanding
   // the control room resolves the iteration's promise and we re-pair (fresh QR), keeping

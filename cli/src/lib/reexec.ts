@@ -19,7 +19,10 @@ export const reExecSelf = (extraEnv: Record<string, string> = {}): void => {
   const child = spawn(execPath, process.argv.slice(2), {
     detached: true,
     stdio: 'inherit',
-    env: { ...process.env, ...extraEnv },
+    // HISOHISO_REEXEC tells the child's single-instance guard this is a handoff,
+    // not a duplicate — so it waits for us to release the control socket rather
+    // than refusing to start.
+    env: { ...process.env, HISOHISO_REEXEC: '1', ...extraEnv },
   });
   child.unref();
   // Give the child a beat to grab the resources we're about to release.
