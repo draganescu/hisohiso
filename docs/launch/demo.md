@@ -66,8 +66,15 @@ of the launch material does 10% of the work it should.
 00:55–01:00   End card (static):
                 hisohiso.org
                 github.com/draganescu/hisohiso
-                Built for Claude. For now.
+                Built for Claude and Codex.
 ```
+
+> **Foreground vs. always-on.** The opener uses `hisohiso daemon start` so the
+> pairing QR renders on screen — best for the demo. In real use you'd usually
+> `hisohiso daemon install` instead: a per-user background service (launchd /
+> systemd) that survives reboots and restarts on crash, so "you walk away from
+> it" is literal. Nothing visual to film there, so keep `daemon start` in the
+> shot — just don't imply the laptop has to stay logged in with a terminal open.
 
 ## What NOT to show
 
