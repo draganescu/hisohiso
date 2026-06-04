@@ -231,7 +231,10 @@ async function tick(ctx: TickCtx): Promise<void> {
   const child = spawn(EXEC_PATH, process.argv.slice(2), {
     detached: true,
     stdio: 'inherit',
-    env: process.env,
+    // HISOHISO_REEXEC tells the child's single-instance guard this is a handoff,
+    // not a duplicate — so it waits for us to release the control socket (we
+    // don't close it before spawning) rather than refusing to start.
+    env: { ...process.env, HISOHISO_REEXEC: '1' },
   });
   child.unref();
   // Give the new process a beat to grab whatever resources we held.
