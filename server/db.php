@@ -102,5 +102,25 @@ function db(): PDO
         count INTEGER NOT NULL
     );');
 
+    // Web Push subscriptions, one row per (room, browser endpoint). A device
+    // opts in per-room from the PWA; the CLI daemon later POSTs /push to fan a
+    // content-less "tickle" out to every endpoint registered for that room (see
+    // server/push.php). p256dh/auth are the subscription's own public key and
+    // auth secret — UNUSED by the payload-less send we ship today, but stored so
+    // a future encrypted-payload upgrade needs no re-subscribe. FK-cascaded off
+    // rooms so disbanding a room drops its subscriptions with everything else;
+    // the server never keeps a pointer to a device past the room's life.
+    $pdo->exec('CREATE TABLE IF NOT EXISTS push_subscriptions (
+        room_hash TEXT NOT NULL,
+        endpoint TEXT NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (room_hash, endpoint),
+        FOREIGN KEY(room_hash) REFERENCES rooms(room_hash) ON DELETE CASCADE
+    );');
+
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_push_room ON push_subscriptions(room_hash);');
+
     return $pdo;
 }

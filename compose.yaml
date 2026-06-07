@@ -18,6 +18,12 @@ services:
       - MERCURE_SUBSCRIBER_JWT_KEY=${MERCURE_SUBSCRIBER_JWT_KEY:-!ChangeMe!}
       - MERCURE_HUB_URL=http://localhost/.well-known/mercure
       - CHAT_DB_PATH=/data/chat.sqlite
+      # VAPID keys for web push, minted + cached per-worktree by scripts/dev.mjs
+      # (data/.vapid-dev.json). Absent keys simply disable push: the /push*
+      # endpoints answer 503 and the rest of the server is unaffected.
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:dev@localhost}
     # Override the FrankenPHP base image's HEALTHCHECK, which probes
     # 127.0.0.1:2019 (the Caddy admin API). We deliberately disable that via
     # `admin off` in Caddyfile, so the default check is hard-failing in dev
