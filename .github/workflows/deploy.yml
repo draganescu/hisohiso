@@ -3,6 +3,20 @@ name: Deploy to DigitalOcean
 on:
   push:
     branches: [main, staging]
+    # Only redeploy the DigitalOcean container when something it actually
+    # ships changes. The static content site under `public/**` is hosted
+    # separately on DreamHost and deploys via its own webhook (see
+    # docs/split-hosting.md), so a content-only push must NOT rebuild the
+    # container. Keep this list in sync with what the image bakes in.
+    paths:
+      - 'app/**'
+      - 'server/**'
+      - 'Caddyfile'
+      - 'Dockerfile'
+      - 'compose.yaml'
+      - 'compose.prod.yaml'
+      - 'scripts/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:

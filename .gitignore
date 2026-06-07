@@ -5,5 +5,7 @@
 /cli/dist
 .DS_Store
 .env
+.deploy-secret
+.deploy.log
 .claude/
 /compose.override.yaml

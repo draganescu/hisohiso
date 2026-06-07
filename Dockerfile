@@ -26,7 +26,6 @@ RUN { \
       echo 'expose_php=Off'; \
     } > /usr/local/etc/php/conf.d/zz-prod.ini
 
-COPY ./public /app/landing
 COPY --from=frontend /build/app/dist /app/public
 # PHP API lives under /app/public/api so FrankenPHP's worker root (/app/public)
 # can resolve it. Per-handle `root *` in Caddy doesn't propagate to FrankenPHP's
