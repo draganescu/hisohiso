@@ -8,6 +8,7 @@ import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, serverCmd } from './c
 import { info } from './commands/info.js';
 import { updateCmd } from './commands/update.js';
 import { uninstallCmd } from './commands/uninstall.js';
+import { skillsInstall, skillsStatusCmd, skillsUninstall } from './commands/skills.js';
 import { listAgents } from './lib/agents.js';
 // Single source of truth for the CLI version. release.sh bumps
 // cli/package.json and the bundled binary picks it up at build time.
@@ -115,6 +116,28 @@ program
   .action(async (opts: { clean?: boolean; dryRun?: boolean; yes?: boolean }) => {
     await uninstallCmd({ clean: opts.clean === true, dryRun: opts.dryRun === true, yes: opts.yes === true });
   });
+
+// Agent skills (SKILL.md docs) — install the CLI's bundled skills into the
+// standard skill dirs (~/.claude, ~/.codex, ~/.agents) the wrapped agent reads
+// natively. Opt-in; does not touch the agent spawn path.
+const skills = program
+  .command('skills')
+  .description('Manage the bundled agent skills the wrapped agent can load');
+
+skills
+  .command('install')
+  .description('Install/update the bundled skills into ~/.claude, ~/.codex and ~/.agents')
+  .action(skillsInstall);
+
+skills
+  .command('status')
+  .description('Show whether the bundled skills are installed and up to date')
+  .action(skillsStatusCmd);
+
+skills
+  .command('uninstall')
+  .description('Remove the bundled skills from the skill directories')
+  .action(skillsUninstall);
 
 const daemon = program
   .command('daemon')
