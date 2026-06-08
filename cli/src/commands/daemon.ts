@@ -17,6 +17,7 @@ import {
   uninstallService,
   LOG_PATH,
 } from '../lib/service.js';
+import { ensureBundledSkills } from './skills.js';
 
 export const daemonStart = async (opts: { fresh?: boolean } = {}): Promise<void> => {
   // Never run the phone-driven daemon as root (#125) — same hard gate as install.
@@ -42,6 +43,10 @@ export const daemonStart = async (opts: { fresh?: boolean } = {}): Promise<void>
     console.log('Tip: to keep this running across reboots, run `hisohiso daemon install` (it can pair for you).\n');
   }
 
+  // Make the bundled agent skills available to every agent this daemon spawns.
+  // Idempotent + non-fatal; also self-heals after a CLI auto-update.
+  await ensureBundledSkills();
+
   // Runs in foreground: shows QR for phone to join, then enters main loop.
   // Background it with `hisohiso daemon install` (launchd/systemd user service).
   await runDaemon();
@@ -60,6 +65,9 @@ export const daemonInstall = async (): Promise<void> => {
     process.exitCode = 1;
     return;
   }
+
+  // Install the bundled agent skills as part of standing the daemon up.
+  await ensureBundledSkills();
 
   if (!(await isPaired())) {
     // No TTY (e.g. a provisioning script) → can't render a QR. Keep the explicit

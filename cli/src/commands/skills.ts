@@ -44,3 +44,22 @@ export const skillsUninstall = async (): Promise<void> => {
     console.log(`  ${dir}`);
   }
 };
+
+/**
+ * Idempotently install the bundled skills wherever a wrapped agent is about to
+ * run (daemon start/install, wrap). Silent on no-op, non-fatal on error — a
+ * read-only HOME must never block the daemon or a wrap session. Because the
+ * sync only writes on change, this also self-heals after a CLI auto-update.
+ */
+export const ensureBundledSkills = async (): Promise<void> => {
+  try {
+    const { changedFiles } = await installSkills(BUNDLED_SKILLS);
+    if (changedFiles > 0) {
+      console.log(`Installed agent skills (${skillNames()}) into ~/.claude, ~/.codex, ~/.agents.`);
+    }
+  } catch (err) {
+    console.error(
+      `Note: could not install bundled agent skills (${(err as Error).message}). Continuing.`,
+    );
+  }
+};

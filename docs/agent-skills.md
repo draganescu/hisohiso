@@ -27,10 +27,15 @@ Skills for the **wrapped agent on the phone bridge**. Their content is inlined i
 `cli/src/lib/skills/bundled.ts` (the single compiled binary carries no resources
 dir — same pattern as the inline preamble in `cli/src/lib/preamble.ts`).
 
-`hisohiso skills install` writes them into `~/.claude/skills`, `~/.codex/skills`,
-and `~/.agents/skills`, where the wrapped agent finds them natively. The sync is
+They're written into `~/.claude/skills`, `~/.codex/skills`, and
+`~/.agents/skills`, where the wrapped agent finds them natively. The sync is
 idempotent and manifest-tracked (`.hisohiso-managed-files.json`), so it never
 clobbers operator edits and prunes only files it wrote.
+
+**Auto-install:** `wrap`, `daemon start`, and `daemon install` call the sync
+automatically (silent when nothing changed, non-fatal on a read-only HOME), so
+the bundled skills are present for every wrapped agent without a manual step —
+and self-heal after a CLI auto-update. The manual commands remain:
 
 ```sh
 hisohiso skills install     # install/update into the three skill dirs
@@ -54,8 +59,3 @@ model-decided, and one-shot / registered / non-Claude profiles have no skill
 loader. The inline shapes guarantee the agent can emit any block even if the
 skill isn't loaded; the skill adds depth (examples, heuristics) for rich UI.
 The JSON output contract therefore must never move out of the preamble.
-
-### Follow-up (not in this change)
-
-- **Auto-install on `daemon install`** so the bundled skills land without a
-  manual `hisohiso skills install`.
