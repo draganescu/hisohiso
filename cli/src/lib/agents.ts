@@ -16,10 +16,10 @@ export type AgentProfile = {
   buildResumeArgs?: (sessionId: string) => string[];
   // Opt-in: when true, the daemon/wrap exports HISOHISO_ROOM_SECRET into the
   // spawned agent's environment. Default (undefined/false) withholds it —
-  // the built-in profiles don't need it, and exposing the room secret to e.g.
-  // `bash` makes `env | nc …` a one-line exfiltration (finding #97). Custom
-  // registered agents that genuinely re-derive keys opt in via
-  // `daemon register --needs-room-secret`.
+  // the built-in profiles don't need it, and exposing the room secret to an
+  // arbitrary registered shell makes `env | nc …` a one-line exfiltration
+  // (finding #97). Custom registered agents that genuinely re-derive keys opt
+  // in via `daemon register --needs-room-secret`.
   needsRoomSecret?: boolean;
 };
 
@@ -40,12 +40,6 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
     mode: 'oneshot',
     appendSystemPrompt: BLOCK_PROMPT,
   },
-  'aider': {
-    command: 'aider',
-    args: ['--message'],
-    description: 'Aider (AI pair programming)',
-    mode: 'oneshot',
-  },
   'codex': {
     command: 'codex',
     args: ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
@@ -64,24 +58,6 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
     appendSystemPrompt: BLOCK_PROMPT,
     outputFormat: 'codex-ndjson',
     systemPromptMode: 'codex-config',
-  },
-  'goose': {
-    command: 'goose',
-    args: ['run', '--text'],
-    description: 'Goose (Block)',
-    mode: 'oneshot',
-  },
-  'bash': {
-    command: 'bash',
-    args: ['-c'],
-    description: 'Run shell commands',
-    mode: 'oneshot',
-  },
-  'python': {
-    command: 'python3',
-    args: ['-c'],
-    description: 'Run Python code',
-    mode: 'oneshot',
   },
 };
 

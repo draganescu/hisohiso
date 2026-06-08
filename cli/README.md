@@ -8,10 +8,12 @@ type back from your phone goes into the agent's stdin.
 > **Supported agents: Claude (Anthropic Claude Code) and Codex (OpenAI).**
 >
 > Both run as multi-turn sessions with structured-block rendering (the same
-> phone UI for diffs, buttons, confirm dialogs, etc.). The CLI also ships
-> profiles for aider, goose, bash, and python — they may work as one-shots
-> but don't get the same block-rendering or session treatment. Treat those
-> as experimental.
+> phone UI for diffs, buttons, confirm dialogs, etc.). Need something else?
+> Register any single-prompt CLI as a custom agent — see
+> [Registering custom agents](#registering-custom-agents) below.
+>
+> The daemon only offers agents whose command is actually installed on the
+> host, so the phone launcher never lists something that would fail to start.
 
 ## Install
 
@@ -184,12 +186,11 @@ isolated second daemon alongside your main one.
 | `claude-once`  | oneshot | Claude Code, single question each time             |
 | `codex`        | session | Codex CLI (OpenAI), multi-turn (`exec resume`)     |
 | `codex-once`   | oneshot | Codex CLI (OpenAI), single question each time      |
-| `aider`        | oneshot | Aider (AI pair programming) — experimental         |
-| `goose`        | oneshot | Goose (Block) — experimental                       |
-| `bash`         | oneshot | Run shell commands via `bash -c <msg>`             |
-| `python`       | oneshot | Run Python via `python3 -c <msg>`                  |
 
-`claude` and `codex` are first-class. The rest ship for tinkering.
+`claude` and `codex` are the two first-class agents. Anything else is a
+[custom agent](#registering-custom-agents) you register yourself. A profile is
+only offered (in `wrap` and on the phone launcher) when its command is actually
+installed on the host.
 
 ## Releases
 
