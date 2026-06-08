@@ -1,8 +1,14 @@
+import type { AgentProvider } from './agent-modes.js';
+
 export type AgentProfile = {
   command: string;
   args: string[];
   description: string;
   mode: 'oneshot' | 'session';
+  // Which provider's control surface this agent speaks. Drives streaming-status
+  // parsing and approval-mode flag derivation (see agent-modes / agent-stream).
+  // Absent => 'other': a plain command with no permission surface (bash/python/…).
+  provider?: AgentProvider;
   appendSystemPrompt?: string;
   // Output parser dispatch. Default 'claude-json' = single JSON {result, session_id}.
   // 'codex-ndjson' = JSONL event stream with thread.started + item.completed/agent_message.
@@ -28,9 +34,13 @@ import { BLOCK_PROMPT } from './preamble.js';
 const BUILTIN_AGENTS: Record<string, AgentProfile> = {
   'claude': {
     command: 'claude',
-    args: ['-p', '--output-format', 'json', '--dangerously-skip-permissions'],
+    // Transport flags only. Permission flags are derived per-turn from the
+    // room's approval mode (agent-modes.flagsForMode) — NO hardcoded bypass.
+    // stream-json gives us incremental events for live status (turn-status).
+    args: ['-p', '--output-format', 'stream-json', '--verbose'],
     description: 'Claude Code autonomous session (multi-turn)',
     mode: 'session',
+    provider: 'claude',
     appendSystemPrompt: BLOCK_PROMPT,
   },
   'claude-once': {
@@ -48,13 +58,16 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
   },
   'codex': {
     command: 'codex',
-    args: ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
+    // Transport flags only — sandbox/approval flags come from the room's
+    // approval mode (agent-modes.flagsForMode), NOT a hardcoded bypass.
+    args: ['exec', '--json', '--skip-git-repo-check'],
     description: 'Codex CLI (OpenAI) autonomous session (multi-turn)',
     mode: 'session',
+    provider: 'codex',
     appendSystemPrompt: BLOCK_PROMPT,
     outputFormat: 'codex-ndjson',
     systemPromptMode: 'codex-config',
-    buildResumeArgs: (id) => ['exec', 'resume', id, '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
+    buildResumeArgs: (id) => ['exec', 'resume', id, '--json', '--skip-git-repo-check'],
   },
   'codex-once': {
     command: 'codex',
@@ -88,6 +101,9 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
 export const getAgent = (name: string): AgentProfile | null => {
   return BUILTIN_AGENTS[name] ?? null;
 };
+
+// Resolve a profile's provider, defaulting to 'other' (no permission surface).
+export const providerOf = (profile: AgentProfile): AgentProvider => profile.provider ?? 'other';
 
 export const listAgents = (): Record<string, AgentProfile> => {
   return { ...BUILTIN_AGENTS };

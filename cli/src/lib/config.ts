@@ -100,6 +100,12 @@ export type ActiveRoom = {
   // and save (mirroring server OUTBOX_TTL_MS). Optional / missing => empty ledger
   // so restore() never crashes on an old rooms.json.
   seenMsgIds?: Record<string, number>;
+  // Per-room approval mode (agent-modes.ApprovalModeId). Persisted so a daemon
+  // restart preserves the operator's chosen mode. Optional / missing => the
+  // provider's safe default (plan for Claude, read-only for Codex) — never the
+  // old bypass-everything behavior. Stored as a string for tolerant reload;
+  // validated against the provider's catalog on restore.
+  approvalMode?: string;
   pid: number;
 };
 

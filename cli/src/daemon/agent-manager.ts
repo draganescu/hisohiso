@@ -2,7 +2,20 @@ import { createRoomAndJoin, encryptAndSend, quoteForAgent, type SendOptions } fr
 import { deriveMessageKey, deriveKnockKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { generatePairingCode } from '../lib/prompt.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
-import { getAgent, type AgentProfile } from '../lib/agents.js';
+import { getAgent, providerOf, type AgentProfile } from '../lib/agents.js';
+import {
+  flagsForMode,
+  defaultModeFor,
+  isValidModeFor,
+  isInteractiveMode,
+  modesFor,
+  modeMeta,
+  type AgentProvider,
+  type ApprovalModeId,
+} from '../lib/agent-modes.js';
+import { runStreamingTurn } from '../lib/agent-stream.js';
+import { statusBlock, describeStatus, type TurnStatus } from '../lib/turn-status.js';
+import { ApprovalManager, APPROVE_TOOL_PREFIX } from '../lib/approvals.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
@@ -35,6 +48,12 @@ const SEEN_MSG_MAX = 500;
 // resolved later and the in-memory pending map can't grow unbounded.
 const PENDING_KNOCK_TTL_MS = 10 * 60 * 1000;
 
+// Minimum gap between status updates pushed into a room. The room is a chat log
+// (messages append; there's no in-place replace yet), so status is rate-limited
+// to avoid spam — only meaningful tool/quiet transitions get through, and a
+// 'stuck' warning always bypasses the gate.
+const STATUS_MIN_INTERVAL_MS = 12 * 1000;
+
 // Prune a msg_id ledger to the TTL window and the count cap. Returns a fresh
 // object so callers can use it for both the in-memory Map seed and the
 // persisted record without aliasing.
@@ -60,6 +79,16 @@ type AgentSession = {
   knockKey: CryptoKey;
   sessionId: string | null;
   running: boolean;
+  // Provider this agent speaks (claude/codex/other), resolved once at attach.
+  // Drives streaming-status parsing and approval-mode flag derivation.
+  provider: AgentProvider;
+  // The room's current approval mode. Operator-changeable at any time via the
+  // /mode picker; the change takes effect on the next turn (each turn spawns
+  // fresh, so the new mode's flags are simply applied on the next spawn).
+  approvalMode: ApprovalModeId;
+  // Bridges in-turn permission requests out to the room (as a buttons block) and
+  // back (via block_response). Only used by interactive ('ask') modes.
+  approvals: ApprovalManager;
   // First-device-wins binding flag. False until the first knock is auto-admitted;
   // once true, an additional knock is routed to a control-room confirm instead of
   // being silently auto-approved or silently dropped. Persisted to
@@ -110,6 +139,10 @@ type AttachArgs = {
   // and on pre-#94 rooms => treated as false (unbound) so the first knock is
   // still auto-admitted.
   bound?: boolean;
+  // Persisted approval mode (agent-modes.ApprovalModeId as a string). Undefined
+  // on a fresh spawn() / pre-feature rooms => the provider's safe default.
+  // Validated against the provider's catalog before use.
+  approvalMode?: string;
 };
 
 export type RestoreResult = {
@@ -126,6 +159,15 @@ type PendingAgentKnock = {
   knockPubkey: string;
   knockMsgId: string;
   expiresAt: number;
+};
+
+// A phone block_response delivered into an agent room — an Allow/Deny on an
+// approval prompt, an approval-mode change, or a Stop tap on a stuck status.
+// Same shape the control room already uses for its taps.
+type AgentBlockResponse = {
+  block_id: string;
+  type: string;
+  value: string | number | boolean | string[];
 };
 
 export class AgentManager {
@@ -326,6 +368,7 @@ export class AgentManager {
           sessionId: r.sessionId,
           seenMsgIds: r.seenMsgIds,
           bound: r.bound,
+          approvalMode: r.approvalMode,
         });
 
         restored.push(r.agentId);
@@ -362,6 +405,21 @@ export class AgentManager {
     // linger. Missing => empty ledger (tolerant reload, never crashes).
     const seenSeed = pruneSeenMsgIds(args.seenMsgIds ?? {});
 
+    // Resolve the provider and the room's approval mode. A persisted mode is
+    // honored only if it's valid for this provider; otherwise fall back to the
+    // safe default (NEVER the old bypass-everything behavior).
+    const provider = providerOf(profile);
+    const resolvedMode: ApprovalModeId =
+      args.approvalMode && isValidModeFor(provider, args.approvalMode)
+        ? args.approvalMode
+        : defaultModeFor(provider);
+
+    // Approval bridge: posts the Allow/Deny prompt into THIS room and resolves
+    // when the phone's block_response arrives (routed in onChat below).
+    const approvals = new ApprovalManager((text, block) =>
+      encryptAndSend(this.server, roomHash, participantToken, messageKey, text, { blocks: [block] }),
+    );
+
     const session: AgentSession = {
       agentId,
       name: agentName,
@@ -375,6 +433,9 @@ export class AgentManager {
       knockKey,
       sessionId,
       running: false,
+      provider,
+      approvalMode: resolvedMode,
+      approvals,
       bound: args.bound ?? false,
       pending: [],
       sse: null!,
@@ -385,7 +446,7 @@ export class AgentManager {
 
     // Execute one agent turn for `text`. The onChat handler owns the turn
     // lifecycle (the `running` flag and queue draining); this is just a single
-    // spawn→parse→send cycle. `peerHandle` labels the untrusted-content envelope.
+    // spawn→stream→send cycle. `peerHandle` labels the untrusted-content envelope.
     const runTurn = async (text: string, peerHandle: string): Promise<void> => {
       try {
         // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
@@ -420,30 +481,77 @@ export class AgentManager {
         if (isResume && !session.profile.buildResumeArgs) {
           argv.push('--resume', session.sessionId!);
         }
-        argv.push(messageToSend);
 
-        const displayArgs = argv.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+        const env = {
+          HISOHISO_AGENT_ID: session.agentId,
+          HISOHISO_AGENT_NAME: session.name,
+          HISOHISO_ROOM_HASH: session.roomHash,
+          // HISOHISO_ROOM_SECRET is opt-in per profile (finding #97): withheld
+          // by default so a spawned `bash`/`python`/etc. can't `env | nc` the
+          // room secret out. Only agents registered with --needs-room-secret
+          // (or a built-in profile that sets needsRoomSecret) receive it.
+          ...(session.profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: session.roomSecret } : {}),
+        };
+
+        // Streaming providers (Claude/Codex): derive the per-turn permission
+        // flags from the room's current approval mode, then run the turn while
+        // pushing live status into the room and bridging any approval prompt.
+        if (session.provider === 'claude' || session.provider === 'codex') {
+          const mode = session.approvalMode;
+          const permFlags = flagsForMode(session.provider, mode);
+          const interactive = isInteractiveMode(session.provider, mode);
+          console.log(
+            `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${session.provider} mode=${mode}${isResume ? ' resume' : ''})`,
+          );
+
+          let lastStatusAt = 0;
+          const onStatus = (s: TurnStatus): void => {
+            // Completion is reported by the final reply; only surface the
+            // intermediate work states, rate-limited (stuck always passes).
+            if (s.kind === 'starting' || s.kind === 'working' || s.kind === 'done' || s.kind === 'failed') return;
+            const now = Date.now();
+            if (s.kind !== 'stuck' && now - lastStatusAt < STATUS_MIN_INTERVAL_MS) return;
+            lastStatusAt = now;
+            void encryptAndSend(this.server, roomHash, participantToken, messageKey, describeStatus(s), {
+              blocks: [statusBlock(agentId, s)],
+            }).catch(() => {});
+          };
+
+          const result = await runStreamingTurn({
+            command: session.profile.command,
+            argv: [...argv, ...permFlags],
+            prompt: messageToSend,
+            format: session.provider,
+            env,
+            interactive,
+            permission: (req) => session.approvals.request(req.tool, req.detail),
+            onStatus,
+          });
+          // No pending prompt should outlive its turn.
+          session.approvals.cancelAll();
+
+          if (session.profile.mode === 'session' && result.sessionId && result.sessionId !== session.sessionId) {
+            session.sessionId = result.sessionId;
+            void this.persistRooms();
+          }
+
+          await this.sendAgentOutput(roomHash, participantToken, messageKey, (result.text || '(no output)').trim());
+          if (result.code !== 0) {
+            console.error(`[${agentName}:${agentId}] turn exited code ${result.code}`);
+          }
+          return;
+        }
+
+        // Non-streaming providers (bash/python/aider/registry): unchanged
+        // buffered spawn→parse→send. No permission surface, no live status.
+        argv.push(messageToSend);
+        const displayArgs = argv.map((a) => (a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a));
         console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
 
-        const result = await runCommand(session.profile.command, argv, {
-          env: {
-            HISOHISO_AGENT_ID: session.agentId,
-            HISOHISO_AGENT_NAME: session.name,
-            HISOHISO_ROOM_HASH: session.roomHash,
-            // HISOHISO_ROOM_SECRET is opt-in per profile (finding #97): withheld
-            // by default so a spawned `bash`/`python`/etc. can't `env | nc` the
-            // room secret out. Only agents registered with --needs-room-secret
-            // (or a built-in profile that sets needsRoomSecret) receive it.
-            ...(session.profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: session.roomSecret } : {}),
-          },
-        });
+        const result = await runCommand(session.profile.command, argv, { env });
 
-        // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
-        // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
-        // capture is gated on session mode since oneshot turns don't persist one.
         let parsedText: string;
         let parsedSessionId: string | null = null;
-
         if (session.profile.outputFormat === 'codex-ndjson') {
           const parsed = parseCodexNdjson(result.stdout);
           parsedText = parsed.text;
@@ -457,46 +565,19 @@ export class AgentManager {
         }
 
         const output = (parsedText || result.stderr || '(no output)').trim();
-
         if (session.profile.mode === 'session' && parsedSessionId && parsedSessionId !== session.sessionId) {
           session.sessionId = parsedSessionId;
-          // Persist immediately so a daemon restart can pick up exactly where we are.
-          // Cheap (small JSON write); session-mode agents rotate sessionId per turn so this
-          // keeps the on-disk handle current.
           void this.persistRooms();
         }
 
-        // Try to parse block-structured output
-        const blockParsed = parseBlockOutput(output);
-        const sendText = blockParsed?.text ?? output;
-        const sendBlocks = blockParsed?.blocks ?? undefined;
-
-        console.log(`[${agentName}:${agentId}] -> ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}`);
-
-        // Send output back — split if too long
-        const MAX_MSG = 4000;
-        if (sendText.length <= MAX_MSG) {
-          await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
-        } else {
-          for (let i = 0; i < sendText.length; i += MAX_MSG) {
-            const chunk = sendText.slice(i, i + MAX_MSG);
-            await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
-          }
-        }
-
+        await this.sendAgentOutput(roomHash, participantToken, messageKey, output);
         if (result.code !== 0 && result.stderr) {
-          await encryptAndSend(
-            this.server, roomHash, participantToken, messageKey,
-            `(exit code ${result.code})`
-          );
+          await encryptAndSend(this.server, roomHash, participantToken, messageKey, `(exit code ${result.code})`);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[${agentName}:${agentId}] Error:`, msg);
-        await encryptAndSend(
-          this.server, roomHash, participantToken, messageKey,
-          `Error: ${msg}`
-        ).catch(() => {});
+        await encryptAndSend(this.server, roomHash, participantToken, messageKey, `Error: ${msg}`).catch(() => {});
       }
     };
 
@@ -621,9 +702,27 @@ export class AgentManager {
           const msgId = incomingMsgId;
           const decrypted = await decryptText(messageKey, roomHash, 'chat', msgId, encPayload);
           const parsed = JSON.parse(decrypted) as {
-            text: string;
+            text?: string;
             replies?: Array<{ text?: string; reply_to?: { quote?: string } }>;
+            block_response?: AgentBlockResponse;
+            block_responses?: AgentBlockResponse[];
           };
+
+          // Control taps (Allow/Deny on an approval, mode change, Stop on a
+          // stuck status) arrive as block_response(s). They are NOT turns —
+          // route them and return WITHOUT touching the turn loop, so an approval
+          // can resolve while a turn is still running (session.running === true).
+          const responses: AgentBlockResponse[] =
+            parsed.block_responses && parsed.block_responses.length > 0
+              ? parsed.block_responses
+              : parsed.block_response
+              ? [parsed.block_response]
+              : [];
+          if (responses.length > 0) {
+            for (const br of responses) await this.handleAgentBlockResponse(session, br);
+            return;
+          }
+
           // A batch of replies (agent-room collector): feed the whole set as ONE
           // turn so the agent reads them together, each tagged with the message it
           // answers. Without this, only the "N replies" summary text reaches the
@@ -638,10 +737,18 @@ export class AgentManager {
             const label = lines.length === 1 ? 'reply' : 'replies';
             text = `[FROM USER · ${lines.length} ${label}]\n${lines.join('\n')}`;
           } else {
-            text = parsed.text;
+            text = parsed.text ?? '';
           }
         } catch (err) {
           console.error(`[${agentName}:${agentId}] Failed to decrypt:`, err);
+          return;
+        }
+
+        // `/mode` (or `/modes`) opens the approval-mode picker — a control
+        // command, never forwarded to the agent. Everything else is a turn.
+        const command = text.trim().toLowerCase();
+        if (command === '/mode' || command === '/modes') {
+          await this.sendModePicker(session);
           return;
         }
 
@@ -690,6 +797,115 @@ export class AgentManager {
     // Wait for SSE to connect before returning — ensures the room is fully wired
     // before the caller (spawn() join-button send / restore() success report) proceeds.
     await sseReady;
+
+    // Announce the current approval mode + picker into the agent room so the
+    // operator sees how loose the agent runs and can change it at any time.
+    // Providers with no permission surface (bash/python/…) have no modes — skip.
+    if (modesFor(session.provider).length > 0) {
+      void this.sendModePicker(session);
+    }
+  }
+
+  // Send the agent's final answer back to the room: parse any block-structured
+  // output and split overlong text into ≤4000-char chunks (the first chunk
+  // carries the blocks). Shared by the streaming and buffered turn paths.
+  private async sendAgentOutput(
+    roomHash: string,
+    participantToken: string,
+    messageKey: CryptoKey,
+    output: string,
+  ): Promise<void> {
+    const blockParsed = parseBlockOutput(output);
+    const sendText = blockParsed?.text ?? output;
+    const sendBlocks = blockParsed?.blocks ?? undefined;
+
+    const MAX_MSG = 4000;
+    if (sendText.length <= MAX_MSG) {
+      await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
+    } else {
+      for (let i = 0; i < sendText.length; i += MAX_MSG) {
+        const chunk = sendText.slice(i, i + MAX_MSG);
+        await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
+      }
+    }
+  }
+
+  // Route a phone tap inside an agent room: resolve an approval prompt, change
+  // the approval mode, or stop a stuck agent. Unknown ids are ignored.
+  private async handleAgentBlockResponse(session: AgentSession, br: AgentBlockResponse): Promise<void> {
+    const { block_id, value } = br;
+
+    // Allow/Deny on an in-turn approval prompt → resolve the waiting request.
+    if (block_id.startsWith(APPROVE_TOOL_PREFIX)) {
+      const reqId = block_id.slice(APPROVE_TOOL_PREFIX.length);
+      const allow = value === 'allow' || value === true;
+      if (session.approvals.resolve(reqId, allow)) {
+        await encryptAndSend(
+          this.server, session.roomHash, session.participantToken, session.messageKey,
+          allow ? '✓ Allowed.' : '✗ Denied.',
+        ).catch(() => {});
+      }
+      return;
+    }
+
+    // Approval-mode picker tap → switch the room's mode (next turn).
+    if (block_id === 'set-mode') {
+      await this.setApprovalMode(session, String(value));
+      return;
+    }
+
+    // Stop button on a 'stuck' status carries `kill:<agentId>`.
+    if (typeof value === 'string' && value.startsWith('kill:')) {
+      const target = value.slice('kill:'.length);
+      await this.kill(target).catch((err) =>
+        console.error(`[${session.name}:${session.agentId}] stop-via-status failed:`, err),
+      );
+      return;
+    }
+  }
+
+  // Change a room's approval mode (validated against the provider's catalog) and
+  // confirm back into the room. Takes effect on the next turn — each turn spawns
+  // fresh, so the new mode's flags are applied on the next spawn.
+  private async setApprovalMode(session: AgentSession, modeId: string): Promise<void> {
+    if (!isValidModeFor(session.provider, modeId)) {
+      await encryptAndSend(
+        this.server, session.roomHash, session.participantToken, session.messageKey,
+        `Unknown mode "${modeId}".`,
+      ).catch(() => {});
+      return;
+    }
+    session.approvalMode = modeId;
+    await this.persistRooms();
+    const meta = modeMeta(session.provider, modeId);
+    await encryptAndSend(
+      this.server, session.roomHash, session.participantToken, session.messageKey,
+      `Approval mode → ${meta?.label ?? modeId}. ${meta?.description ?? ''}`.trim(),
+    ).catch(() => {});
+  }
+
+  // Post the current approval mode + a picker into an agent room. Each option's
+  // value is a mode id; the tap returns as a `set-mode` block_response.
+  private async sendModePicker(session: AgentSession): Promise<void> {
+    const modes = modesFor(session.provider);
+    if (modes.length === 0) return;
+    const current = modeMeta(session.provider, session.approvalMode);
+    const block = {
+      type: 'buttons',
+      id: 'set-mode',
+      prompt: `Approval mode: ${current?.label ?? session.approvalMode}. Tap to change:`,
+      style: 'stacked',
+      multi: false,
+      options: modes.map((m) => ({
+        label: `${m.label}${m.id === session.approvalMode ? ' ✓' : ''}`,
+        value: m.id,
+      })),
+    };
+    await encryptAndSend(
+      this.server, session.roomHash, session.participantToken, session.messageKey,
+      `Approval mode: ${current?.label ?? session.approvalMode}`,
+      { blocks: [block] },
+    ).catch(() => {});
   }
 
   // Point the manager at a freshly-paired control room. Used by the re-pair loop in
@@ -856,6 +1072,7 @@ export class AgentManager {
       subscriberJwt: s.subscriberJwt,
       sessionId: s.sessionId,
       bound: s.bound,
+      approvalMode: s.approvalMode,
       // Prune the replay ledger to the TTL window + count cap before serializing
       // so rooms.json can't grow unbounded across restarts.
       seenMsgIds: pruneSeenMsgIds(Object.fromEntries(s.seenMsgIds)),
