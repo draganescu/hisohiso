@@ -5,6 +5,7 @@ import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../l
 import { navigateTo } from '../lib/navigation';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
+import InstallPrompt from '../components/InstallPrompt';
 import { RoomRow } from '../components/RoomRow';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
@@ -166,6 +167,8 @@ const RoomsPage = () => {
             Open a channel
           </a>
         </header>
+
+        <InstallPrompt />
 
         <section className="glass-panel rounded-[28px] p-6">
           <h2 className="text-lg font-semibold tracking-[-0.015em]">Join with a link.</h2>
