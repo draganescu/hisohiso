@@ -6,26 +6,21 @@ import {
   type TurnStatus,
 } from './turn-status.js';
 
-// Run ONE agent turn while streaming, so the daemon can (a) push live status
-// into the room and (b) bridge in-turn permission requests out to the operator.
-// Replaces the buffered runCommand path for streaming providers (Claude/Codex).
+// Run ONE agent turn while streaming, so the daemon can push live status into
+// the room. Replaces the buffered runCommand path for streaming providers
+// (Claude/Codex). Agents run with full permissions (their profile carries the
+// bypass flag) — there is no in-turn approval round-trip.
 
 export type StreamFormat = 'claude' | 'codex';
 
-export type PermissionBridge = (req: { tool: string; detail: string }) => Promise<{ allow: boolean }>;
-
 export type StreamTurnArgs = {
   command: string;
-  // Transport + mode + resume + system-prompt flags. Does NOT include the prompt
-  // — the runner delivers that itself (argv for non-interactive, stdin
-  // stream-json for the interactive Claude path).
+  // Transport + resume + system-prompt flags. Does NOT include the prompt — the
+  // runner delivers that as the trailing positional arg.
   argv: string[];
   prompt: string;
   format: StreamFormat;
   env?: Record<string, string>;
-  // Ask-mode: wire the permission bridge so the agent pauses for approval.
-  interactive?: boolean;
-  permission?: PermissionBridge;
   onStatus?: (s: TurnStatus) => void;
 };
 
@@ -45,18 +40,10 @@ const HEARTBEAT_MS = 10_000;
 
 export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurnResult> => {
   const { command, format, prompt } = args;
-  const interactive = Boolean(args.interactive && format === 'claude' && args.permission);
 
-  // Build the final argv. Interactive Claude reads the prompt from stdin as a
-  // stream-json message and needs --input-format stream-json; everything else
-  // takes the prompt as the trailing positional (claude -p <prompt> / codex
-  // exec ... <prompt>), exactly as the old buffered path did.
-  const argv = [...args.argv];
-  if (interactive) {
-    argv.push('--input-format', 'stream-json');
-  } else {
-    argv.push(prompt);
-  }
+  // The prompt is the trailing positional (claude -p <prompt> / codex exec
+  // ... <prompt>), exactly as the old buffered path did.
+  const argv = [...args.argv, prompt];
 
   const handle = await spawnAgent(command, argv, {
     env: args.env,
@@ -107,10 +94,6 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
       case 'result':
         if (ev.text) results.push(ev.text);
         if (ev.isError) isError = true;
-        // Interactive runs hold stdin open for control round-trips; once the
-        // result lands there's nothing left to send, so close it to let the
-        // streaming-input process exit instead of waiting for more input.
-        if (interactive) handle.closeStdin();
         break;
       case 'error':
         errors.push(ev.message);
@@ -123,7 +106,6 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
 
   handle.onLine((line, isStderr) => {
     if (isStderr) return; // status comes from the structured stdout stream only
-    if (interactive && handleClaudeControl(line, handle, args.permission!)) return;
     const events = format === 'claude' ? parseClaudeStreamLine(line) : parseCodexStreamLine(line);
     for (const ev of events) applyEvent(ev);
   });
@@ -140,17 +122,8 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
   }, HEARTBEAT_MS);
   heartbeat.unref?.();
 
-  // Interactive Claude: deliver the prompt as a stream-json user message and
-  // leave stdin open for control-request round-trips until the result lands.
-  if (interactive) {
-    const userMsg = JSON.stringify({
-      type: 'user',
-      message: { role: 'user', content: [{ type: 'text', text: prompt }] },
-    });
-    handle.writeStdin(userMsg + '\n');
-  } else {
-    handle.closeStdin();
-  }
+  // Prompt is passed as a positional arg (above); nothing to send on stdin.
+  handle.closeStdin();
 
   const exit = await handle.onExit;
   finished = true;
@@ -160,64 +133,4 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
   emit(isError || exit.code !== 0 ? { kind: 'failed' } : { kind: 'done' });
 
   return { text, sessionId, code: exit.code, isError };
-};
-
-// --- Claude streaming permission bridge -------------------------------------
-//
-// NEEDS-LIVE-VERIFICATION: the exact control-protocol message shapes below are
-// modeled on the Claude Agent SDK's stream-json control channel and must be
-// confirmed against the installed `claude` binary before ask-mode is taken out
-// of draft. This function is ONLY reached when ask-mode is active (interactive
-// === true), so non-interactive modes (plan / auto-edits / full / codex) are
-// completely unaffected by anything in here.
-//
-// Returns true when the line was a control request we handled (and therefore
-// must NOT be fed to the normal status parser).
-const handleClaudeControl = (
-  line: string,
-  handle: { writeStdin: (s: string) => void },
-  permission: PermissionBridge,
-): boolean => {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed[0] !== '{' || !trimmed.includes('control_request')) return false;
-  let ev: Record<string, unknown>;
-  try {
-    ev = JSON.parse(trimmed) as Record<string, unknown>;
-  } catch {
-    return false;
-  }
-  if (ev.type !== 'control_request') return false;
-  const requestId = typeof ev.request_id === 'string' ? ev.request_id : '';
-  const request = ev.request as Record<string, unknown> | undefined;
-  if (!requestId || !request || request.subtype !== 'can_use_tool') return false;
-
-  const tool = typeof request.tool_name === 'string' ? request.tool_name : 'a tool';
-  const input = request.input;
-  const detail = summarizeToolInput(input);
-
-  void permission({ tool, detail }).then((decision) => {
-    const response = decision.allow
-      ? { behavior: 'allow', updatedInput: input ?? {} }
-      : { behavior: 'deny', message: 'Denied by operator' };
-    const control = JSON.stringify({
-      type: 'control_response',
-      response: { subtype: 'success', request_id: requestId, response },
-    });
-    handle.writeStdin(control + '\n');
-  });
-  return true;
-};
-
-// One-line, bounded summary of a tool's input for the approval prompt body.
-const summarizeToolInput = (input: unknown): string => {
-  if (!input || typeof input !== 'object') return '';
-  const obj = input as Record<string, unknown>;
-  const candidate =
-    (typeof obj.command === 'string' && obj.command) ||
-    (typeof obj.file_path === 'string' && obj.file_path) ||
-    (typeof obj.path === 'string' && obj.path) ||
-    (typeof obj.url === 'string' && obj.url) ||
-    '';
-  const text = candidate || JSON.stringify(obj);
-  return text.length > 200 ? `${text.slice(0, 197)}...` : text;
 };

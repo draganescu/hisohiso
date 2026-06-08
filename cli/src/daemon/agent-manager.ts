@@ -2,20 +2,9 @@ import { createRoomAndJoin, encryptAndSend, quoteForAgent, type SendOptions } fr
 import { deriveMessageKey, deriveKnockKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { generatePairingCode } from '../lib/prompt.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
-import { getAgent, providerOf, type AgentProfile } from '../lib/agents.js';
-import {
-  flagsForMode,
-  defaultModeFor,
-  isValidModeFor,
-  isInteractiveMode,
-  modesFor,
-  modeMeta,
-  type AgentProvider,
-  type ApprovalModeId,
-} from '../lib/agent-modes.js';
+import { getAgent, providerOf, type AgentProfile, type AgentProvider } from '../lib/agents.js';
 import { runStreamingTurn } from '../lib/agent-stream.js';
 import { describeStatus, type TurnStatus } from '../lib/turn-status.js';
-import { ApprovalManager, APPROVE_TOOL_PREFIX } from '../lib/approvals.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
@@ -82,13 +71,6 @@ type AgentSession = {
   // Provider this agent speaks (claude/codex/other), resolved once at attach.
   // Drives streaming-status parsing and approval-mode flag derivation.
   provider: AgentProvider;
-  // The room's current approval mode. Operator-changeable at any time via the
-  // /mode picker; the change takes effect on the next turn (each turn spawns
-  // fresh, so the new mode's flags are simply applied on the next spawn).
-  approvalMode: ApprovalModeId;
-  // Bridges in-turn permission requests out to the room (as a buttons block) and
-  // back (via block_response). Only used by interactive ('ask') modes.
-  approvals: ApprovalManager;
   // First-device-wins binding flag. False until the first knock is auto-admitted;
   // once true, an additional knock is routed to a control-room confirm instead of
   // being silently auto-approved or silently dropped. Persisted to
@@ -139,10 +121,6 @@ type AttachArgs = {
   // and on pre-#94 rooms => treated as false (unbound) so the first knock is
   // still auto-admitted.
   bound?: boolean;
-  // Persisted approval mode (agent-modes.ApprovalModeId as a string). Undefined
-  // on a fresh spawn() / pre-feature rooms => the provider's safe default.
-  // Validated against the provider's catalog before use.
-  approvalMode?: string;
 };
 
 export type RestoreResult = {
@@ -368,7 +346,6 @@ export class AgentManager {
           sessionId: r.sessionId,
           seenMsgIds: r.seenMsgIds,
           bound: r.bound,
-          approvalMode: r.approvalMode,
         });
 
         restored.push(r.agentId);
@@ -405,20 +382,9 @@ export class AgentManager {
     // linger. Missing => empty ledger (tolerant reload, never crashes).
     const seenSeed = pruneSeenMsgIds(args.seenMsgIds ?? {});
 
-    // Resolve the provider and the room's approval mode. A persisted mode is
-    // honored only if it's valid for this provider; otherwise fall back to the
-    // safe default (NEVER the old bypass-everything behavior).
+    // Which provider's control surface this agent speaks (drives the streaming
+    // vs buffered turn path + status parsing).
     const provider = providerOf(profile);
-    const resolvedMode: ApprovalModeId =
-      args.approvalMode && isValidModeFor(provider, args.approvalMode)
-        ? args.approvalMode
-        : defaultModeFor(provider);
-
-    // Approval bridge: posts the Allow/Deny prompt into THIS room and resolves
-    // when the phone's block_response arrives (routed in onChat below).
-    const approvals = new ApprovalManager((text, block) =>
-      encryptAndSend(this.server, roomHash, participantToken, messageKey, text, { blocks: [block] }),
-    );
 
     const session: AgentSession = {
       agentId,
@@ -434,8 +400,6 @@ export class AgentManager {
       sessionId,
       running: false,
       provider,
-      approvalMode: resolvedMode,
-      approvals,
       bound: args.bound ?? false,
       pending: [],
       sse: null!,
@@ -493,15 +457,12 @@ export class AgentManager {
           ...(session.profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: session.roomSecret } : {}),
         };
 
-        // Streaming providers (Claude/Codex): derive the per-turn permission
-        // flags from the room's current approval mode, then run the turn while
-        // pushing live status into the room and bridging any approval prompt.
+        // Streaming providers (Claude/Codex): run the turn with full permissions
+        // (the profile carries the provider's bypass flag, like main) while
+        // pushing live status into the room.
         if (session.provider === 'claude' || session.provider === 'codex') {
-          const mode = session.approvalMode;
-          const permFlags = flagsForMode(session.provider, mode);
-          const interactive = isInteractiveMode(session.provider, mode);
           console.log(
-            `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${session.provider} mode=${mode}${isResume ? ' resume' : ''})`,
+            `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${session.provider}${isResume ? ' resume' : ''})`,
           );
 
           let lastStatusAt = 0;
@@ -522,16 +483,12 @@ export class AgentManager {
 
           const result = await runStreamingTurn({
             command: session.profile.command,
-            argv: [...argv, ...permFlags],
+            argv,
             prompt: messageToSend,
             format: session.provider,
             env,
-            interactive,
-            permission: (req) => session.approvals.request(req.tool, req.detail),
             onStatus,
           });
-          // No pending prompt should outlive its turn.
-          session.approvals.cancelAll();
 
           if (session.profile.mode === 'session' && result.sessionId && result.sessionId !== session.sessionId) {
             session.sessionId = result.sessionId;
@@ -747,13 +704,6 @@ export class AgentManager {
           return;
         }
 
-        // `/mode` (or `/modes`) opens the approval-mode picker — a control
-        // command, never forwarded to the agent. Everything else is a turn.
-        const command = text.trim().toLowerCase();
-        if (command === '/mode' || command === '/modes') {
-          await this.sendModePicker(session);
-          return;
-        }
 
         console.log(`[${agentName}:${agentId}] <- ${text}`);
 
@@ -800,13 +750,6 @@ export class AgentManager {
     // Wait for SSE to connect before returning — ensures the room is fully wired
     // before the caller (spawn() join-button send / restore() success report) proceeds.
     await sseReady;
-
-    // Announce the current approval mode + picker into the agent room so the
-    // operator sees how loose the agent runs and can change it at any time.
-    // Providers with no permission surface (bash/python/…) have no modes — skip.
-    if (modesFor(session.provider).length > 0) {
-      void this.sendModePicker(session);
-    }
   }
 
   // Send the agent's final answer back to the room: parse any block-structured
@@ -833,31 +776,11 @@ export class AgentManager {
     }
   }
 
-  // Route a phone tap inside an agent room: resolve an approval prompt, change
-  // the approval mode, or stop a stuck agent. Unknown ids are ignored.
+  // Route a phone tap inside an agent room. Currently only the Stop button on a
+  // 'stuck' status indicator (carries `kill:<agentId>`). Unknown ids are ignored.
   private async handleAgentBlockResponse(session: AgentSession, br: AgentBlockResponse): Promise<void> {
-    const { block_id, value } = br;
+    const { value } = br;
 
-    // Allow/Deny on an in-turn approval prompt → resolve the waiting request.
-    if (block_id.startsWith(APPROVE_TOOL_PREFIX)) {
-      const reqId = block_id.slice(APPROVE_TOOL_PREFIX.length);
-      const allow = value === 'allow' || value === true;
-      if (session.approvals.resolve(reqId, allow)) {
-        await encryptAndSend(
-          this.server, session.roomHash, session.participantToken, session.messageKey,
-          allow ? '✓ Allowed.' : '✗ Denied.',
-        ).catch(() => {});
-      }
-      return;
-    }
-
-    // Approval-mode picker tap → switch the room's mode (next turn).
-    if (block_id === 'set-mode') {
-      await this.setApprovalMode(session, String(value));
-      return;
-    }
-
-    // Stop button on a 'stuck' status carries `kill:<agentId>`.
     if (typeof value === 'string' && value.startsWith('kill:')) {
       const target = value.slice('kill:'.length);
       await this.kill(target).catch((err) =>
@@ -865,50 +788,6 @@ export class AgentManager {
       );
       return;
     }
-  }
-
-  // Change a room's approval mode (validated against the provider's catalog) and
-  // confirm back into the room. Takes effect on the next turn — each turn spawns
-  // fresh, so the new mode's flags are applied on the next spawn.
-  private async setApprovalMode(session: AgentSession, modeId: string): Promise<void> {
-    if (!isValidModeFor(session.provider, modeId)) {
-      await encryptAndSend(
-        this.server, session.roomHash, session.participantToken, session.messageKey,
-        `Unknown mode "${modeId}".`,
-      ).catch(() => {});
-      return;
-    }
-    session.approvalMode = modeId;
-    await this.persistRooms();
-    const meta = modeMeta(session.provider, modeId);
-    await encryptAndSend(
-      this.server, session.roomHash, session.participantToken, session.messageKey,
-      `Approval mode → ${meta?.label ?? modeId}. ${meta?.description ?? ''}`.trim(),
-    ).catch(() => {});
-  }
-
-  // Post the current approval mode + a picker into an agent room. Each option's
-  // value is a mode id; the tap returns as a `set-mode` block_response.
-  private async sendModePicker(session: AgentSession): Promise<void> {
-    const modes = modesFor(session.provider);
-    if (modes.length === 0) return;
-    const current = modeMeta(session.provider, session.approvalMode);
-    const block = {
-      type: 'buttons',
-      id: 'set-mode',
-      prompt: `Approval mode: ${current?.label ?? session.approvalMode}. Tap to change:`,
-      style: 'stacked',
-      multi: false,
-      options: modes.map((m) => ({
-        label: `${m.label}${m.id === session.approvalMode ? ' ✓' : ''}`,
-        value: m.id,
-      })),
-    };
-    await encryptAndSend(
-      this.server, session.roomHash, session.participantToken, session.messageKey,
-      `Approval mode: ${current?.label ?? session.approvalMode}`,
-      { blocks: [block] },
-    ).catch(() => {});
   }
 
   // Point the manager at a freshly-paired control room. Used by the re-pair loop in
@@ -1075,7 +954,6 @@ export class AgentManager {
       subscriberJwt: s.subscriberJwt,
       sessionId: s.sessionId,
       bound: s.bound,
-      approvalMode: s.approvalMode,
       // Prune the replay ledger to the TTL window + count cap before serializing
       // so rooms.json can't grow unbounded across restarts.
       seenMsgIds: pruneSeenMsgIds(Object.fromEntries(s.seenMsgIds)),

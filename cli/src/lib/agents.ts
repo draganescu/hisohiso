@@ -1,13 +1,16 @@
-import type { AgentProvider } from './agent-modes.js';
+// Which provider's control surface an agent speaks. Drives streaming-status
+// parsing (see agent-stream / turn-status). 'other' = a plain command with no
+// streaming surface (bash/python/…).
+export type AgentProvider = 'claude' | 'codex' | 'other';
 
 export type AgentProfile = {
   command: string;
   args: string[];
   description: string;
   mode: 'oneshot' | 'session';
-  // Which provider's control surface this agent speaks. Drives streaming-status
-  // parsing and approval-mode flag derivation (see agent-modes / agent-stream).
-  // Absent => 'other': a plain command with no permission surface (bash/python/…).
+  // Which provider's control surface this agent speaks. Drives the streaming
+  // status parser (see agent-stream / turn-status). Absent => 'other': a plain
+  // command with no streaming surface (bash/python/…).
   provider?: AgentProvider;
   appendSystemPrompt?: string;
   // Output parser dispatch. Default 'claude-json' = single JSON {result, session_id}.
@@ -34,10 +37,9 @@ import { BLOCK_PROMPT } from './preamble.js';
 const BUILTIN_AGENTS: Record<string, AgentProfile> = {
   'claude': {
     command: 'claude',
-    // Transport flags only. Permission flags are derived per-turn from the
-    // room's approval mode (agent-modes.flagsForMode) — NO hardcoded bypass.
-    // stream-json gives us incremental events for live status (turn-status).
-    args: ['-p', '--output-format', 'stream-json', '--verbose'],
+    // stream-json gives incremental events for live status (turn-status); the
+    // bypass flag runs the agent with full permissions, like main.
+    args: ['-p', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'],
     description: 'Claude Code autonomous session (multi-turn)',
     mode: 'session',
     provider: 'claude',
@@ -58,16 +60,15 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
   },
   'codex': {
     command: 'codex',
-    // Transport flags only — sandbox/approval flags come from the room's
-    // approval mode (agent-modes.flagsForMode), NOT a hardcoded bypass.
-    args: ['exec', '--json', '--skip-git-repo-check'],
+    // Runs with the sandbox/approval bypass, like main — agents are trusted.
+    args: ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
     description: 'Codex CLI (OpenAI) autonomous session (multi-turn)',
     mode: 'session',
     provider: 'codex',
     appendSystemPrompt: BLOCK_PROMPT,
     outputFormat: 'codex-ndjson',
     systemPromptMode: 'codex-config',
-    buildResumeArgs: (id) => ['exec', 'resume', id, '--json', '--skip-git-repo-check'],
+    buildResumeArgs: (id) => ['exec', 'resume', id, '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
   },
   'codex-once': {
     command: 'codex',

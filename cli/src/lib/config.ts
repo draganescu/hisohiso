@@ -100,12 +100,6 @@ export type ActiveRoom = {
   // and save (mirroring server OUTBOX_TTL_MS). Optional / missing => empty ledger
   // so restore() never crashes on an old rooms.json.
   seenMsgIds?: Record<string, number>;
-  // Per-room approval mode (agent-modes.ApprovalModeId). Persisted so a daemon
-  // restart preserves the operator's chosen mode. Optional / missing => the
-  // provider's safe default (plan for Claude, read-only for Codex) — never the
-  // old bypass-everything behavior. Stored as a string for tolerant reload;
-  // validated against the provider's catalog on restore.
-  approvalMode?: string;
   pid: number;
 };
 
@@ -165,7 +159,7 @@ export const loadActiveRooms = async (): Promise<ActiveRoom[]> => {
 };
 
 // Serialize writes so concurrent callers never overlap. persistRooms fires on
-// every inbound chat (the seenMsgIds replay ledger) AND on approval-mode changes,
+// every inbound chat (the seenMsgIds replay ledger) and on session-id updates,
 // so two saves can run at once; with a single fixed temp path the first rename()
 // consumes rooms.json.tmp and the second fails with ENOENT. Chaining each write
 // onto the previous one keeps the fixed temp name safe. The chain stays
