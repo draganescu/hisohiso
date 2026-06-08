@@ -1,17 +1,17 @@
 <?php
 
 /**
- * GitHub push-webhook receiver for the static content site on DreamHost.
+ * Push-webhook receiver for the static marketing site.
  *
- * The content pages (this `public/` directory) are hosted on DreamHost shared
- * hosting at the apex domain, separately from the app container on DigitalOcean.
- * DreamHost can't run a persistent listener, but it serves PHP and has git over
- * SSH — so deploys are pull-based: GitHub POSTs here on every push, this script
- * verifies the HMAC signature and fast-forwards the on-disk checkout.
+ * The content pages (this `public/` directory) can be hosted at the apex domain
+ * separately from the app container. This is meant for generic web hosting that
+ * can serve PHP and run git over SSH, but cannot run a persistent listener.
+ * Deploys are pull-based: GitHub POSTs here on every push, this script verifies
+ * the HMAC signature and fast-forwards the on-disk checkout.
  *
- * Setup (one-time, over SSH on DreamHost) is documented in
+ * Setup (one-time, over SSH on the marketing host) is documented in
  * docs/split-hosting.md. In short:
- *   - clone the repo somewhere under your home dir
+ *   - clone the repo somewhere outside the served web directory
  *   - point the domain's web directory at the repo's `public/` folder
  *   - write the shared secret to `.deploy-secret` in the REPO ROOT (one dir up
  *     from this file — outside the web directory, and .gitignored)
@@ -87,7 +87,7 @@ if ($ref !== "refs/heads/$branch") {
     done(204, "ignored ref: $ref", $logFile);
 }
 
-// Shared hosting sometimes disables exec — fail loudly in the log if so.
+// Some web hosts disable exec — fail loudly in the log if so.
 if (!function_exists('shell_exec')) {
     done(500, 'shell_exec disabled — use the cron-poll fallback', $logFile);
 }

@@ -8,7 +8,7 @@
 #   2. You have verified — in a separate terminal session — that you can
 #      SSH in as that user, run `sudo -n whoami`, and `docker ps`.
 #   3. The GH Actions deploy pipeline (if used) has been switched to the
-#      new user via `gh secret set DO_USER` and a deploy has succeeded.
+#      new user via `gh secret set APP_USER` and a deploy has succeeded.
 #
 # Skipping any of those preconditions risks locking yourself out.
 #

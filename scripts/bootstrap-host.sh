@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# bootstrap-host.sh — idempotent host hardening for a hisohiso droplet
+# bootstrap-host.sh — idempotent host hardening for a hisohiso app host
 #
 # Configures everything that lives outside the Docker container:
 #   - unattended-upgrades with auto-reboot at 04:00
@@ -148,15 +148,15 @@ Next steps (do these BEFORE running lockdown-sshd.sh):
        ssh $USER_NAME@<host> 'whoami && sudo -n whoami && docker ps'
      Must print: $USER_NAME, root, and a docker container list.
 
-  2. If the GH Actions workflow deploys to this droplet, update:
-       gh secret set DO_USER --body $USER_NAME
+  2. If the deploy workflow targets this app host, update:
+       gh secret set APP_USER --body $USER_NAME
      and confirm the GH Actions SSH key is in the authorized_keys you
      just installed.
 
   3. Trigger a deploy (push a trivial commit or workflow re-run) and
      watch it succeed end-to-end as $USER_NAME.
 
-  4. Only AFTER 1-3 succeed, run on this droplet:
+  4. Only AFTER 1-3 succeed, run on this app host:
        sudo ./scripts/lockdown-sshd.sh $USER_NAME
 
 EOF

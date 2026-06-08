@@ -1,31 +1,32 @@
-# Split hosting — content site vs. app
+# Split hosting — marketing site vs. app
 
 By default everything ships in one container. This page describes the optional
-**two-host** layout:
+**two-host** layout, without tying the architecture to any specific hosting
+provider:
 
-| Host | Domain | Serves | Deploy flow |
+| Host role | Domain | Serves | Deploy flow |
 | --- | --- | --- | --- |
-| **DreamHost** (shared) | `hisohiso.org` (+ `www`) | the static content site (`public/`) | **GitHub webhook** → `_deploy.php` does `git pull` |
-| **DigitalOcean** (droplet) | `app.hisohiso.org` | the React PWA + `/api/*` + Mercure | **GitHub Actions** (`.github/workflows/deploy.yml`) |
+| **Marketing host** | `hisohiso.org` (+ `www`) | the static marketing/content site (`public/`) | push webhook → `_deploy.php` does `git pull` |
+| **App host** | `app.hisohiso.org` | the React PWA + `/api/*` + Mercure | app deploy workflow (`.github/workflows/deploy.yml`) |
 
 It's one repo. Each host pulls only its own slice, and each deploy flow only
-fires for its own paths — a marketing edit never rebuilds the container, and an
-API change never touches DreamHost.
+fires for its own paths — a marketing edit never rebuilds the app container,
+and an API change never touches the marketing host.
 
 ```mermaid
 flowchart TB
     GH[GitHub: draganescu/hisohiso] -- push public/** --> WH[webhook]
     GH -- "push app/** server/** Caddyfile …" --> GA[GitHub Actions]
-    WH -- POST /_deploy.php --> DH[DreamHost\napex: static public/]
-    GA -- SSH + compose --> DO[DigitalOcean\napp.: PWA + API + Mercure]
-    USER((browser)) --> DH
-    USER -- "open channel → /new" --> DO
-    CLI[hisohiso CLI] --> DO
+    WH -- POST /_deploy.php --> MKT[Marketing host\napex: static public/]
+    GA -- SSH + compose --> APP[App host\napp.: PWA + API + Mercure]
+    USER((browser)) --> MKT
+    USER -- "open channel → /new" --> APP
+    CLI[hisohiso CLI] --> APP
 ```
 
 ## What changed in the repo to enable this
 
-- **Container stopped serving content.** `Dockerfile` no longer `COPY`s
+- **Container stopped serving marketing content.** `Dockerfile` no longer `COPY`s
   `public/`; `compose.yaml` / `compose.prod.yaml` dropped the `./public` mount;
   the Caddyfile `@landing` block and the `www` redirect were removed. `/` on the
   app host now falls through to the React app's own landing.
@@ -33,18 +34,23 @@ flowchart TB
   (`href="/new"`) became `https://app.hisohiso.org/new`, because the React app
   no longer lives on the same origin. Internal content links stay relative.
 - **CLI default** points at `https://app.hisohiso.org`.
-- **GitHub Action path-filtered** so a `public/**`-only push doesn't redeploy DO.
-- **`public/_deploy.php`** added — the DreamHost webhook receiver.
+- **App deploy workflow path-filtered** so a `public/**`-only push doesn't
+  redeploy the app host.
+- **`public/_deploy.php`** added — a generic PHP push-hook receiver for the
+  marketing host.
 
-## DreamHost setup (one-time, over SSH)
+## Marketing host setup (one-time, over SSH)
+
+Use any web host that can serve PHP from `public/`, read a secret outside the
+served docroot, and run `git` from PHP via `shell_exec`.
 
 1. Clone the repo under your home dir (not inside a web directory):
    ```sh
    git clone https://github.com/draganescu/hisohiso.git ~/repos/hisohiso
    ```
-2. In the DreamHost panel, set `hisohiso.org`'s **web directory** to
-   `~/repos/hisohiso/public` so the served docroot *is* `public/`. Point `www`
-   at the same place (or redirect it to the apex).
+2. Set `hisohiso.org`'s **web directory** to `~/repos/hisohiso/public` so the
+   served docroot *is* `public/`. Point `www` at the same place, or redirect it
+   to the apex.
 3. Write the shared webhook secret to the **repo root** (one level above the
    docroot, so it's never web-served; it's also `.gitignored`):
    ```sh
@@ -54,7 +60,7 @@ flowchart TB
 4. Confirm PHP can shell out: `php -r 'var_dump(function_exists("shell_exec"));'`
    should print `true`. If it's `false`, use the cron fallback below.
 
-## GitHub webhook setup
+## Push webhook setup
 
 Repo → **Settings → Webhooks → Add webhook**:
 
@@ -71,32 +77,40 @@ than `main`.)
 
 ### Fallback if `shell_exec` is disabled
 
-Some shared-hosting plans block exec from PHP. If so, skip the webhook and add a
-DreamHost cron job that polls instead:
+Some web hosts block exec from PHP. If so, skip the webhook and add a cron job
+that polls instead:
 
 ```sh
 */5 * * * * cd ~/repos/hisohiso && git fetch --prune origin main && git reset --hard origin/main >> .deploy.log 2>&1
 ```
 
-## DigitalOcean changes
+## App host changes
 
-The droplet moves from the apex to the `app.` subdomain:
+The app moves from the apex to the `app.` subdomain:
 
-1. Add a DNS **A record** `app.hisohiso.org → <droplet IP>` (managed at
-   DreamHost, where your DNS lives).
-2. Set `SERVER_NAME=app.hisohiso.org` in the droplet's `.env` so Caddy fetches a
-   cert for the new hostname. (The Mercure JWT keys are injected by the Action.)
-3. Deploy as usual — push, or run `scripts/deploy.sh` on the box.
+1. Add a DNS **A record** `app.hisohiso.org → <app host IP>`.
+2. Set `SERVER_NAME=app.hisohiso.org` in the app host's `.env` so Caddy fetches
+   a cert for the new hostname. (The Mercure JWT keys are injected by the
+   deploy workflow.)
+3. Configure the deploy workflow secrets for your app host:
+   - `APP_HOST_SSH_KEY`
+   - `APP_HOST`
+   - `APP_USER`
+   - `APP_DIR`
+   - `APP_SSH_PORT` (optional; defaults to `22`)
+4. Deploy as usual — push, or run `scripts/deploy.sh` on the box.
 
 ## Cutover order (avoid downtime)
 
-1. **DreamHost first:** clone, set the web directory, secret, webhook. Verify
-   `https://hisohiso.org` still resolves to DO for now — don't move DNS yet.
+1. **Marketing host first:** clone, set the web directory, secret, webhook.
+   Verify `https://hisohiso.org` still resolves to the current app host for now
+   — don't move DNS yet.
 2. **Stand up the app subdomain:** add the `app.` A record, set `SERVER_NAME`,
    deploy the app changes. Verify `https://app.hisohiso.org` serves the PWA and
    `https://app.hisohiso.org/api/stats` responds.
-3. **Flip the apex:** repoint `hisohiso.org` (+ `www`) DNS to DreamHost. Once it
-   propagates, the apex serves the content site and `app.` serves the PWA.
+3. **Flip the apex:** repoint `hisohiso.org` (+ `www`) DNS to the marketing
+   host. Once it propagates, the apex serves the content site and `app.` serves
+   the PWA.
 4. Tell existing users / re-issue any shared room links from the `app.` host.
    Old `hisohiso.org/room#…` links break once the apex moves — only the
    `app.hisohiso.org` origin runs the React app now.

@@ -59,7 +59,7 @@ function rate_limit_secret(): string
 
 // One-way, secret-keyed tag for the client IP — the raw IP is never stored or
 // returned. REMOTE_ADDR is the real client: Caddy terminates TLS directly on
-// the droplet (compose.prod.yaml publishes 80/443 straight to the container),
+// the app host (compose.prod.yaml publishes 80/443 straight to the container),
 // so no forwarding proxy sits in front and we deliberately do NOT trust
 // X-Forwarded-For, which a client could spoof to dodge the limit. Truncated to
 // 128 bits — far beyond what's needed to avoid bucket collisions.

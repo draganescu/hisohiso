@@ -1,13 +1,13 @@
-name: Deploy to DigitalOcean
+name: Deploy app host
 
 on:
   push:
     branches: [main, staging]
-    # Only redeploy the DigitalOcean container when something it actually
-    # ships changes. The static content site under `public/**` is hosted
-    # separately on DreamHost and deploys via its own webhook (see
-    # docs/split-hosting.md), so a content-only push must NOT rebuild the
-    # container. Keep this list in sync with what the image bakes in.
+    # Only redeploy the app container when something it actually ships changes.
+    # The static content site under `public/**` is hosted separately and deploys
+    # via its own pull hook (see docs/split-hosting.md), so a content-only push
+    # must NOT rebuild the container. Keep this list in sync with what the image
+    # bakes in.
     paths:
       - 'app/**'
       - 'server/**'
@@ -26,7 +26,7 @@ jobs:
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.10.0
         with:
-          ssh-private-key: ${{ secrets.DO_SSH_KEY }}
+          ssh-private-key: ${{ secrets.APP_HOST_SSH_KEY }}
 
       # GitHub Secrets are the source of truth for the Mercure JWT keys.
       # Build a fresh .env locally with the current secret values, ship it to
@@ -36,32 +36,32 @@ jobs:
         env:
           SUB_KEY: ${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}
           PUB_KEY: ${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}
-          DO_HOST: ${{ secrets.DO_HOST }}
-          DO_USER: ${{ secrets.DO_USER }}
-          DO_APP_DIR: ${{ secrets.DO_APP_DIR }}
-          DO_SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          APP_HOST: ${{ secrets.APP_HOST }}
+          APP_USER: ${{ secrets.APP_USER }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+          APP_SSH_PORT: ${{ secrets.APP_SSH_PORT }}
         run: |
           set -euo pipefail
           if [ -z "$SUB_KEY" ] || [ -z "$PUB_KEY" ]; then
             echo "MERCURE_SUBSCRIBER_JWT_KEY / MERCURE_PUBLISHER_JWT_KEY missing in env-scoped secrets" >&2
             exit 1
           fi
-          SSH_PORT=${DO_SSH_PORT:-22}
-          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$DO_USER@$DO_HOST" "cat $DO_APP_DIR/.env" > .env.current
+          SSH_PORT=${APP_SSH_PORT:-22}
+          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$APP_USER@$APP_HOST" "cat $APP_DIR/.env" > .env.current
           grep -vE '^(MERCURE_SUBSCRIBER_JWT_KEY|MERCURE_PUBLISHER_JWT_KEY)=' .env.current > .env.new || true
           printf 'MERCURE_SUBSCRIBER_JWT_KEY=%s\n' "$SUB_KEY" >> .env.new
           printf 'MERCURE_PUBLISHER_JWT_KEY=%s\n' "$PUB_KEY"  >> .env.new
-          scp -o StrictHostKeyChecking=no -P "$SSH_PORT" .env.new "$DO_USER@$DO_HOST:$DO_APP_DIR/.env.new"
-          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$DO_USER@$DO_HOST" "mv $DO_APP_DIR/.env.new $DO_APP_DIR/.env && chmod 600 $DO_APP_DIR/.env"
+          scp -o StrictHostKeyChecking=no -P "$SSH_PORT" .env.new "$APP_USER@$APP_HOST:$APP_DIR/.env.new"
+          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$APP_USER@$APP_HOST" "mv $APP_DIR/.env.new $APP_DIR/.env && chmod 600 $APP_DIR/.env"
           rm -f .env.current .env.new
 
       - name: Deploy
         env:
           BRANCH: ${{ github.ref_name }}
-          DO_HOST: ${{ secrets.DO_HOST }}
-          DO_USER: ${{ secrets.DO_USER }}
-          DO_APP_DIR: ${{ secrets.DO_APP_DIR }}
-          DO_SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          APP_HOST: ${{ secrets.APP_HOST }}
+          APP_USER: ${{ secrets.APP_USER }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+          APP_SSH_PORT: ${{ secrets.APP_SSH_PORT }}
         run: |
-          SSH_PORT=${DO_SSH_PORT:-22}
-          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$DO_USER@$DO_HOST" "cd $DO_APP_DIR && DEPLOY_BRANCH=$BRANCH ./scripts/deploy.sh"
+          SSH_PORT=${APP_SSH_PORT:-22}
+          ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "$APP_USER@$APP_HOST" "cd $APP_DIR && DEPLOY_BRANCH=$BRANCH ./scripts/deploy.sh"

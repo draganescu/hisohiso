@@ -18,7 +18,7 @@ thing, jump to it.
 | [cli.md](cli.md) | The `hisohiso` CLI — bridging a terminal AI agent to a room on your phone. wrap mode, the always-on daemon + its control plane, and the `update` / `uninstall` lifecycle. |
 | [stack-and-server.md](stack-and-server.md) | **The stack and the recommended server setup.** What each piece is, why it's there, and how to run it in production. |
 | [host-bootstrap.md](host-bootstrap.md) | The provisioning runbook — turning a fresh Linux box into a hardened hisohiso host. |
-| [split-hosting.md](split-hosting.md) | Running the static content site and the app on **separate hosts** — apex on DreamHost (webhook deploy), app subdomain on DigitalOcean (GitHub Actions). |
+| [split-hosting.md](split-hosting.md) | Running the static marketing site and the app on **separate hosts** — apex content via pull hook, app subdomain via the app deploy workflow. |
 
 ## The one-paragraph version
 
