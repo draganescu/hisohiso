@@ -423,17 +423,28 @@ if (preg_match('#^/api/rooms/([^/]+)/message$#', $path, $matches) && $method ===
         json_response(['error' => 'missing_payload'], 400);
     }
     $sender_hash = sha256_hex($sender);
-    publish_event($room_hash, 'chat', [
-        'encrypted_payload' => $body['encrypted_payload'],
-        'msg_id' => $body['msg_id'] ?? null,
-    ], $sender_hash);
-    // catch_up is re-checked INSIDE outbox_append under a BEGIN IMMEDIATE
-    // transaction that serializes against outbox_wipe — this is the close-
-    // over of the publish→append TOCTOU window where a concurrent /settings
-    // (off) used to strand one orphan message past the operator's disable.
-    if (isset($body['msg_id']) && is_string($body['msg_id']) && $body['msg_id'] !== ''
-        && is_string($body['encrypted_payload'])) {
-        outbox_append($room_hash, $body['msg_id'], $body['encrypted_payload'], $sender_hash);
+    // Ephemeral status (e.g. an agent's live "working…" indicator) is transient:
+    // publish it as a `status` event and DO NOT append it to the outbox, so it
+    // never persists or replays on catch-up. Everything else is a chat message.
+    $ephemeral = isset($body['ephemeral']) && $body['ephemeral'] === true;
+    if ($ephemeral) {
+        publish_event($room_hash, 'status', [
+            'encrypted_payload' => $body['encrypted_payload'],
+            'msg_id' => $body['msg_id'] ?? null,
+        ], $sender_hash);
+    } else {
+        publish_event($room_hash, 'chat', [
+            'encrypted_payload' => $body['encrypted_payload'],
+            'msg_id' => $body['msg_id'] ?? null,
+        ], $sender_hash);
+        // catch_up is re-checked INSIDE outbox_append under a BEGIN IMMEDIATE
+        // transaction that serializes against outbox_wipe — this is the close-
+        // over of the publish→append TOCTOU window where a concurrent /settings
+        // (off) used to strand one orphan message past the operator's disable.
+        if (isset($body['msg_id']) && is_string($body['msg_id']) && $body['msg_id'] !== ''
+            && is_string($body['encrypted_payload'])) {
+            outbox_append($room_hash, $body['msg_id'], $body['encrypted_payload'], $sender_hash);
+        }
     }
     touch_presence($room_hash, $sender);
     touch_room($room_hash);

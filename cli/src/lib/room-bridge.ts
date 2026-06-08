@@ -75,6 +75,12 @@ export type SendOptions = {
   // machine's hostname) since the QR-pairing flow gives the phone no
   // other channel to learn a name for it.
   room_name?: string;
+  // Transient work indicator (NOT a chat message). When set, the payload carries
+  // a `status` envelope and `ephemeral` marks the send so the server publishes it
+  // as a `status` event and skips the outbox — it never persists or replays. The
+  // phone renders one in-place "agent is working" bubble that clears on the reply.
+  status?: { state: string; agent: string };
+  ephemeral?: boolean;
 };
 
 export const encryptAndSend = async (
@@ -102,9 +108,12 @@ export const encryptAndSend = async (
   if (typeof options?.room_name === 'string' && options.room_name !== '') {
     payloadObj.room_name = options.room_name;
   }
+  if (options?.status) {
+    payloadObj.status = options.status;
+  }
   const payload = JSON.stringify(payloadObj);
   const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, payload);
-  await api.sendMessage(server, roomHash, token, msgId, JSON.stringify(encrypted));
+  await api.sendMessage(server, roomHash, token, msgId, JSON.stringify(encrypted), options?.ephemeral === true);
 };
 
 export const bridgeAgentToRoom = async (

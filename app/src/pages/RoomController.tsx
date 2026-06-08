@@ -126,6 +126,11 @@ const getMessageLabel = (message: ChatMessage): string => {
   return message.handle || 'Room member';
 };
 
+// One live work-status for an agent, derived from an ephemeral `status` event.
+// `at` is the client receive time, used to expire a stale indicator if the
+// daemon goes silent without sending a final reply to clear it.
+type AgentStatus = { state: string; text: string; agent: string | null; handle: string | null; at: number };
+
 const RoomController = () => {
   const [initialContext] = useState<OptimisticContext | null>(loadInitialContext);
   const [roomSecret, setRoomSecret] = useState(() => initialContext?.roomSecret ?? readRoomSecretFromHash());
@@ -139,6 +144,11 @@ const RoomController = () => {
   const [roomPassword, setRoomPasswordState] = useState(() => initialContext?.roomPassword ?? '');
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Transient per-agent work indicator, fed by the daemon's ephemeral `status`
+  // events. Keyed by sender hash. NOT persisted and NOT part of `messages` — it
+  // renders as a single in-place "agent is working" bubble that updates as state
+  // changes and clears the moment the agent's reply lands (or it goes stale).
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [showDisband, setShowDisband] = useState(false);
@@ -420,6 +430,15 @@ const RoomController = () => {
       plaintext,
       ownTokenHash: tokenHashRef.current,
     });
+    // A real reply from this sender supersedes its transient work indicator.
+    if (from && messageRecord.direction === 'in') {
+      setAgentStatuses((prev) => {
+        if (!prev[from]) return prev;
+        const next = { ...prev };
+        delete next[from];
+        return next;
+      });
+    }
     setMessages((prev) => {
       const existing = prev.find((item) => item.id === msgId);
       if (existing) {
@@ -441,6 +460,27 @@ const RoomController = () => {
       return [...prev, messageRecord].sort((a, b) => a.timestamp - b.timestamp);
     });
   }, [cryptoKey, roomHash, persistMessage]);
+
+  // A reply clears an agent's indicator instantly; this is the backstop for when
+  // the daemon dies mid-turn and never sends one. Drop any status not refreshed
+  // within the window so a "working…" bubble can't hang around forever.
+  useEffect(() => {
+    if (Object.keys(agentStatuses).length === 0) return;
+    const STALE_MS = 30_000;
+    const timer = setInterval(() => {
+      const cutoff = Date.now() - STALE_MS;
+      setAgentStatuses((prev) => {
+        let changed = false;
+        const next: Record<string, AgentStatus> = {};
+        for (const [key, value] of Object.entries(prev)) {
+          if (value.at >= cutoff) next[key] = value;
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, [agentStatuses]);
 
   useEffect(() => {
     let active = true;
@@ -867,6 +907,47 @@ const RoomController = () => {
           await ingestEncryptedChat(msgId, payload.ts, payload.from ?? null, rawPayload);
         }
 
+        if (payload.type === 'status' && cryptoKey) {
+          const rawPayload = payload.body?.encrypted_payload;
+          const msgId = (payload.body?.msg_id as string | null) ?? '';
+          const from = payload.from ?? null;
+          if (!rawPayload || !msgId || !from) return;
+          try {
+            const parsed: EncryptedPayload =
+              typeof rawPayload === 'string' ? (JSON.parse(rawPayload) as EncryptedPayload) : (rawPayload as EncryptedPayload);
+            const plaintext = await decryptText(cryptoKey, roomHash, 'chat', msgId, parsed);
+            const env = JSON.parse(plaintext) as {
+              text?: string;
+              handle?: string | null;
+              status?: { state?: string; agent?: string };
+            };
+            const st = env.status;
+            if (!st || !st.state) return;
+            // 'done'/'failed' (or a missing reply) just clear the indicator.
+            if (st.state === 'done' || st.state === 'failed') {
+              setAgentStatuses((prev) => {
+                if (!prev[from]) return prev;
+                const next = { ...prev };
+                delete next[from];
+                return next;
+              });
+              return;
+            }
+            setAgentStatuses((prev) => ({
+              ...prev,
+              [from]: {
+                state: st.state as string,
+                text: env.text ?? '',
+                agent: st.agent ?? null,
+                handle: env.handle ?? null,
+                at: Date.now(),
+              },
+            }));
+          } catch (err) {
+            console.error('Failed to decrypt status', msgId, err);
+          }
+        }
+
         if (payload.type === 'settings') {
           const next = payload.body?.catch_up_enabled;
           if (typeof next === 'boolean') {
@@ -878,7 +959,7 @@ const RoomController = () => {
       }
     };
 
-    const eventTypes: RoomEvent['type'][] = ['chat', 'knock', 'approve', 'reject', 'destroy', 'settings', 'token'];
+    const eventTypes: RoomEvent['type'][] = ['chat', 'knock', 'approve', 'reject', 'destroy', 'settings', 'token', 'status'];
     eventTypes.forEach((type) => source.addEventListener(type, handleEvent));
 
     source.onopen = () => {
@@ -1687,6 +1768,41 @@ const RoomController = () => {
               {hasNewer && (
                 <div ref={topSentinelRef} aria-hidden="true" className="h-px w-full shrink-0" />
               )}
+
+              {/* Live work indicator: one in-place bubble per active agent, sitting
+                  where its reply will land (newest is at the top). It updates as
+                  the agent's state changes and is removed the instant the reply
+                  arrives. Only shown on the latest window, never over history. */}
+              {!hasNewer && Object.entries(agentStatuses).map(([key, st]) => (
+                <div key={`status-${key}`} className="flex w-full flex-col items-start">
+                  {st.handle && (
+                    <p className="mb-1 px-2 text-[0.6875rem] text-ink-dim">{st.handle}</p>
+                  )}
+                  <div className="message-card message-card-in max-w-[84%] rounded-[22px] rounded-bl-[7px] px-4 py-3 leading-6 text-ink sm:max-w-[72%]">
+                    <span className="flex items-center gap-2 text-[0.9375rem]">
+                      <span
+                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-ink ${
+                          st.state === 'stuck' ? '' : 'animate-pulse'
+                        }`}
+                      />
+                      <span className="whitespace-pre-line break-words">{st.text || 'Working…'}</span>
+                    </span>
+                    {st.state === 'stuck' && st.agent && (
+                      <button
+                        type="button"
+                        className="mt-2 inline-flex items-center rounded-full border border-danger px-3 py-1 text-[0.6875rem] font-medium text-danger transition-colors hover:bg-danger hover:text-on-ink"
+                        onClick={() =>
+                          void sendBlockResponses([
+                            { blockId: `stuck:${st.agent}`, type: 'buttons', value: `kill:${st.agent}` },
+                          ])
+                        }
+                      >
+                        Stop agent
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
 
               {renderedMessages.map((msg) => {
                 const isSystem = msg.type === 'system';

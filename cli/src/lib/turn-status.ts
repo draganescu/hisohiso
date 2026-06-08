@@ -140,7 +140,8 @@ const codexToolLabel = (itemType: string, item?: Record<string, unknown>): strin
   }
 };
 
-// Compact, human one-liner for a status — used as the status block's prompt.
+// Compact, human one-liner for a status — sent as the ephemeral status text the
+// phone renders in its single in-place "agent is working" indicator.
 export const describeStatus = (s: TurnStatus): string => {
   switch (s.kind) {
     case 'starting':
@@ -158,26 +159,4 @@ export const describeStatus = (s: TurnStatus): string => {
     case 'failed':
       return '✗ Failed';
   }
-};
-
-// Render a status as a room block. 'stuck' carries a Stop button so the operator
-// can kill a wedged turn straight from the status update; everything else is a
-// read-only single-step progress chip the app already knows how to render.
-export const statusBlock = (agentId: string, s: TurnStatus): unknown => {
-  if (s.kind === 'stuck') {
-    return {
-      type: 'buttons',
-      id: `stuck:${agentId}`,
-      prompt: describeStatus(s),
-      style: 'inline',
-      multi: false,
-      options: [{ label: 'Stop agent', value: `kill:${agentId}` }],
-    };
-  }
-  const active = s.kind !== 'done' && s.kind !== 'failed';
-  return {
-    type: 'progress',
-    title: describeStatus(s),
-    steps: [{ label: describeStatus(s), status: s.kind === 'failed' ? 'failed' : active ? 'active' : 'done' }],
-  };
 };

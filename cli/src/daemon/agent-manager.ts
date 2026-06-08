@@ -14,7 +14,7 @@ import {
   type ApprovalModeId,
 } from '../lib/agent-modes.js';
 import { runStreamingTurn } from '../lib/agent-stream.js';
-import { statusBlock, describeStatus, type TurnStatus } from '../lib/turn-status.js';
+import { describeStatus, type TurnStatus } from '../lib/turn-status.js';
 import { ApprovalManager, APPROVE_TOOL_PREFIX } from '../lib/approvals.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
@@ -52,7 +52,7 @@ const PENDING_KNOCK_TTL_MS = 10 * 60 * 1000;
 // (messages append; there's no in-place replace yet), so status is rate-limited
 // to avoid spam — only meaningful tool/quiet transitions get through, and a
 // 'stuck' warning always bypasses the gate.
-const STATUS_MIN_INTERVAL_MS = 12 * 1000;
+const STATUS_MIN_INTERVAL_MS = 5 * 1000;
 
 // Prune a msg_id ledger to the TTL window and the count cap. Returns a fresh
 // object so callers can use it for both the in-memory Map seed and the
@@ -506,14 +506,17 @@ export class AgentManager {
 
           let lastStatusAt = 0;
           const onStatus = (s: TurnStatus): void => {
-            // Completion is reported by the final reply; only surface the
-            // intermediate work states, rate-limited (stuck always passes).
-            if (s.kind === 'starting' || s.kind === 'working' || s.kind === 'done' || s.kind === 'failed') return;
+            // 'done'/'failed' are superseded by the final reply; every other kind
+            // is a live work state pushed to the phone as ONE transient, in-place
+            // indicator (an ephemeral `status` signal, not a chat message).
+            // Rate-limited; 'stuck' always passes so the Stop affordance appears.
+            if (s.kind === 'done' || s.kind === 'failed') return;
             const now = Date.now();
             if (s.kind !== 'stuck' && now - lastStatusAt < STATUS_MIN_INTERVAL_MS) return;
             lastStatusAt = now;
             void encryptAndSend(this.server, roomHash, participantToken, messageKey, describeStatus(s), {
-              blocks: [statusBlock(agentId, s)],
+              ephemeral: true,
+              status: { state: s.kind, agent: agentId },
             }).catch(() => {});
           };
 
