@@ -37,9 +37,13 @@ const CLAUDE_MODES: ApprovalMode[] = [
   { id: 'full', label: 'Full access', description: 'No prompts. Only when you trust the task.', interactive: false },
 ];
 
+// No 'ask' here: codex's `exec` transport is one-shot (prompt in, events out,
+// exit) so it can't answer an approval mid-run, and codex 0.137 has no `proto`
+// subcommand. Interactive approvals need the `mcp-server` transport (elicitation
+// bridge), tracked as a follow-up. Until then codex offers only non-interactive
+// sandbox modes.
 const CODEX_MODES: ApprovalMode[] = [
   { id: 'read-only', label: 'Read-only', description: 'Read-only sandbox; never runs commands.', interactive: false },
-  { id: 'ask', label: 'Ask each time', description: 'Asks before each command.', interactive: true },
   { id: 'auto', label: 'Sandboxed auto', description: 'Runs freely inside a workspace sandbox; no prompts.', interactive: false },
   { id: 'full', label: 'Full access', description: 'No sandbox, no prompts. The old default.', interactive: false },
 ];
@@ -73,12 +77,15 @@ export const isInteractiveMode = (provider: AgentProvider, id: ApprovalModeId): 
 // that used to be hardcoded in agents.ts. 'other' providers (bash/python/aider)
 // get nothing — they have no permission surface to gate.
 //
-// NOTE on 'ask' modes: Claude's `--permission-mode default` and Codex's
-// `--ask-for-approval on-request` only produce interactive prompts when the
-// daemon also bridges the request out to the room (see agent-stream
-// PermissionBridge). Without that bridge a non-interactive run would simply have
-// the tool denied. The daemon only selects an 'ask' mode together with the
+// NOTE on Claude 'ask': `--permission-mode default` only produces interactive
+// prompts when the daemon also bridges the request out to the room (see
+// agent-stream PermissionBridge). The daemon selects 'ask' together with the
 // bridge, so the two always travel together.
+//
+// NOTE on Codex: `exec` takes the approval policy via `-c approval_policy=…`.
+// The top-level `--ask-for-approval` flag does NOT exist on the `exec`
+// subcommand and makes it exit 2. exec is also one-shot and can't answer an
+// approval mid-run, so codex has no interactive 'ask' mode (see CODEX_MODES).
 export const flagsForMode = (provider: AgentProvider, id: ApprovalModeId): string[] => {
   if (provider === 'claude') {
     switch (id) {
@@ -99,15 +106,15 @@ export const flagsForMode = (provider: AgentProvider, id: ApprovalModeId): strin
   if (provider === 'codex') {
     switch (id) {
       case 'read-only':
-        return ['--sandbox', 'read-only', '--ask-for-approval', 'never'];
+        return ['--sandbox', 'read-only', '-c', 'approval_policy=never'];
       case 'auto':
-        return ['--sandbox', 'workspace-write', '--ask-for-approval', 'never'];
-      case 'ask':
-        return ['--sandbox', 'workspace-write', '--ask-for-approval', 'on-request'];
+        return ['--sandbox', 'workspace-write', '-c', 'approval_policy=never'];
       case 'full':
         return ['--dangerously-bypass-approvals-and-sandbox'];
+      // 'ask' is intentionally absent from CODEX_MODES; if a pre-existing room
+      // still carries it, fall back to the safe read-only sandbox.
       default:
-        return ['--sandbox', 'read-only', '--ask-for-approval', 'never'];
+        return ['--sandbox', 'read-only', '-c', 'approval_policy=never'];
     }
   }
   return [];
