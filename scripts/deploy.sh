@@ -8,6 +8,36 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+# Ensure a VAPID keypair exists for web push. Generated once with openssl (no
+# bun/node needed on the host) and written into .env; NEVER overwritten, since
+# rotating the key would orphan every device's existing push subscription.
+# Operators who'd rather manage keys by hand can pre-set VAPID_* and this is a
+# no-op. Leaving them unset disables push cleanly (the server answers 503).
+if ! grep -qE '^VAPID_PUBLIC_KEY=.+' .env; then
+  echo "No VAPID key in .env — generating a Web Push keypair (one-time)..."
+  tmp_pem="$(mktemp)"
+  openssl ecparam -name prime256v1 -genkey -noout -out "$tmp_pem"
+  # base64url of the 65-byte uncompressed P-256 point (last 65 bytes of the
+  # SPKI DER) is what the browser and server use; the private key is the PEM,
+  # base64-wrapped so its newlines survive a single-line env var.
+  vapid_pub="$(openssl ec -in "$tmp_pem" -pubout -outform DER 2>/dev/null | tail -c 65 | base64 | tr -d '\n' | tr '+/' '-_' | tr -d '=')"
+  vapid_priv="$(base64 < "$tmp_pem" | tr -d '\n')"
+  rm -f "$tmp_pem"
+  server_name="$(grep -E '^SERVER_NAME=' .env | head -n1 | cut -d= -f2- | tr -d '[:space:]' || true)"
+  vapid_subject="mailto:admin@${server_name:-localhost}"
+  # Drop any empty VAPID_* placeholders (e.g. copied from .env.example) before
+  # appending the real values so we never leave duplicate keys.
+  grep -vE '^VAPID_(PUBLIC_KEY|PRIVATE_KEY|SUBJECT)=' .env > .env.tmp || true
+  {
+    echo "VAPID_PUBLIC_KEY=$vapid_pub"
+    echo "VAPID_PRIVATE_KEY=$vapid_priv"
+    echo "VAPID_SUBJECT=$vapid_subject"
+  } >> .env.tmp
+  mv .env.tmp .env
+  chmod 600 .env
+  echo "VAPID keypair written to .env (web push enabled)."
+fi
+
 echo "Pulling latest code..."
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   BRANCH="${DEPLOY_BRANCH:-main}"
