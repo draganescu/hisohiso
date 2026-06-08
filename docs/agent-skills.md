@@ -38,17 +38,24 @@ hisohiso skills status      # not-installed | up-to-date | drift
 hisohiso skills uninstall   # remove them again
 ```
 
-Shipped today: **`hisohiso-blocks`** — the phone-UI block catalog plus
-block-picking heuristics.
+Shipped: **`hisohiso-blocks`** — the full phone-UI block reference (per-block
+JSON examples, a block-picker guide, and the misuse catalog).
 
-### Follow-ups (not in this change)
+## Always-on core vs. on-demand catalog
 
-- **Trim `BLOCK_PROMPT`.** Today the full block catalog is force-fed every turn
-  via `--append-system-prompt`. Once we've verified on-device that `claude -p`
-  (non-interactive) reliably loads skills, the always-on preamble can shrink to
-  the non-negotiable core (output one JSON object, act-first, security envelope)
-  and defer the catalog to the `hisohiso-blocks` skill. The JSON output contract
-  must stay in the preamble — skills are model-decided and one-shot / registered
-  / non-Claude profiles have no skill loader.
+`BLOCK_PROMPT` (appended to the wrapped agent's system prompt every turn) is
+trimmed to the **non-negotiable core**: the JSON output contract, act-first
+behavior, input handling, the security envelope, and a **compact one-line shape
+for every block**. The verbose per-block examples, the picker guide, and the
+misuse catalog live in the `hisohiso-blocks` skill and are pulled in on demand.
+
+Why keep a compact shape inline rather than defer everything: skills are
+model-decided, and one-shot / registered / non-Claude profiles have no skill
+loader. The inline shapes guarantee the agent can emit any block even if the
+skill isn't loaded; the skill adds depth (examples, heuristics) for rich UI.
+The JSON output contract therefore must never move out of the preamble.
+
+### Follow-up (not in this change)
+
 - **Auto-install on `daemon install`** so the bundled skills land without a
-  manual step.
+  manual `hisohiso skills install`.
