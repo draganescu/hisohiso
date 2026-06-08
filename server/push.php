@@ -126,7 +126,9 @@ function vapid_jwt(string $audience): string
 // Send one content-less push to a single subscription endpoint. Returns the
 // HTTP status the push service gave us (0 on transport failure). 201 = queued;
 // 404/410 = the subscription is dead and should be pruned by the caller.
-function send_web_push(string $endpoint, string $urgency = 'normal'): int
+// $jwt, when given, is a VAPID token already minted for this endpoint's
+// audience — pass it from a fan-out loop to avoid re-signing per endpoint.
+function send_web_push(string $endpoint, string $urgency = 'normal', ?string $jwt = null): int
 {
     $cfg = vapid_config();
     if ($cfg === null) {
@@ -137,9 +139,12 @@ function send_web_push(string $endpoint, string $urgency = 'normal'): int
         return 0;
     }
     $audience = $parts['scheme'] . '://' . $parts['host'];
+    // A caller fanning out to many endpoints (notify_room) passes a JWT it
+    // already minted for this audience, so we don't re-sign per endpoint.
+    $jwt = $jwt ?? vapid_jwt($audience);
 
     $headers = [
-        'Authorization: vapid t=' . vapid_jwt($audience) . ', k=' . $cfg['public'],
+        'Authorization: vapid t=' . $jwt . ', k=' . $cfg['public'],
         'TTL: 86400',
         'Urgency: ' . ($urgency === 'high' ? 'high' : 'normal'),
         'Content-Length: 0',
@@ -202,12 +207,23 @@ function notify_room(string $room_hash, string $urgency = 'normal'): int
     $stmt->execute([':room_hash' => $room_hash]);
     $endpoints = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
+    // Endpoints to the same push service share an audience, so mint the VAPID
+    // JWT once per audience (each is an openssl_sign) and reuse it across that
+    // service's endpoints.
+    $jwt_by_audience = [];
     $sent = 0;
     foreach ($endpoints as $endpoint) {
         if (!is_string($endpoint)) {
             continue;
         }
-        $status = send_web_push($endpoint, $urgency);
+        $parts = parse_url($endpoint);
+        if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            continue;
+        }
+        $audience = $parts['scheme'] . '://' . $parts['host'];
+        $jwt_by_audience[$audience] ??= vapid_jwt($audience);
+
+        $status = send_web_push($endpoint, $urgency, $jwt_by_audience[$audience]);
         if ($status === 404 || $status === 410) {
             push_subscription_delete($room_hash, $endpoint);
         } elseif ($status >= 200 && $status < 300) {

@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { basename, join } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { generateVapidKeypair } from './lib/vapid.mjs';
 
 const cwd = process.cwd();
 const hash = createHash('sha256').update(cwd).digest();
@@ -59,19 +60,7 @@ async function loadOrCreateVapid(path) {
       // fall through and regenerate a corrupt cache
     }
   }
-  const b64 = (bytes) => Buffer.from(bytes).toString('base64');
-  const b64url = (bytes) => b64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const pemWrap = (der) =>
-    `-----BEGIN PRIVATE KEY-----\n${b64(der).replace(/(.{64})/g, '$1\n')}\n-----END PRIVATE KEY-----\n`;
-
-  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  const rawPub = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
-  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
-
-  const vapid = {
-    publicKey: b64url(rawPub),
-    privateKey: b64(Buffer.from(pemWrap(pkcs8))),
-  };
+  const vapid = await generateVapidKeypair();
   mkdirSync(join(cwd, 'data'), { recursive: true });
   writeFileSync(path, JSON.stringify(vapid), { mode: 0o600 });
   return vapid;

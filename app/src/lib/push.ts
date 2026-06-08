@@ -1,3 +1,4 @@
+import { base64UrlDecode } from './crypto';
 import { fetchVapidPublicKey, postPushSubscribe, postPushUnsubscribe } from './room-session';
 
 // Per-room web-push opt-in. The server only ever sends a content-less "tickle"
@@ -22,15 +23,6 @@ export const pushSupported = (): boolean =>
   'PushManager' in window &&
   'Notification' in window;
 
-const urlBase64ToUint8Array = (base64: string): Uint8Array => {
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-  const normalized = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(normalized);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
-  return out;
-};
-
 export const getPushStatus = (roomHash: string): PushStatus => {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
@@ -54,7 +46,7 @@ const ensureSubscription = async (): Promise<PushSubscription> => {
     userVisibleOnly: true,
     // Cast mirrors app/src/lib/crypto.ts: the DOM lib types BufferSource as
     // ArrayBuffer-backed, but a Uint8Array is ArrayBufferLike under this config.
-    applicationServerKey: urlBase64ToUint8Array(key) as BufferSource,
+    applicationServerKey: base64UrlDecode(key) as BufferSource,
   });
 };
 

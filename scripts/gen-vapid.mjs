@@ -11,26 +11,15 @@
 //                     so its newlines survive a single-line env var.
 // VAPID_SUBJECT     — mailto:/https: contact (spec-required). Pass an email or
 //                     URL as the first arg; defaults to a mailto: you can edit.
+import { generateVapidKeypair } from './lib/vapid.mjs';
 
 const subjectArg = process.argv[2];
 const subject = subjectArg
   ? (subjectArg.includes('://') || subjectArg.startsWith('mailto:') ? subjectArg : `mailto:${subjectArg}`)
   : 'mailto:admin@example.com';
 
-const b64 = (bytes) => Buffer.from(bytes).toString('base64');
-const b64url = (bytes) => b64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const { publicKey, privateKey } = await generateVapidKeypair();
 
-const pemWrap = (der) => {
-  const body = b64(der).replace(/(.{64})/g, '$1\n');
-  return `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----\n`;
-};
-
-const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-const rawPub = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
-const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
-
-const pem = pemWrap(pkcs8);
-
-console.log(`VAPID_PUBLIC_KEY=${b64url(rawPub)}`);
-console.log(`VAPID_PRIVATE_KEY=${b64(Buffer.from(pem))}`);
+console.log(`VAPID_PUBLIC_KEY=${publicKey}`);
+console.log(`VAPID_PRIVATE_KEY=${privateKey}`);
 console.log(`VAPID_SUBJECT=${subject}`);
