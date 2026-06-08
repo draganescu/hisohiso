@@ -139,15 +139,6 @@ type PendingAgentKnock = {
   expiresAt: number;
 };
 
-// A phone block_response delivered into an agent room — an Allow/Deny on an
-// approval prompt, an approval-mode change, or a Stop tap on a stuck status.
-// Same shape the control room already uses for its taps.
-type AgentBlockResponse = {
-  block_id: string;
-  type: string;
-  value: string | number | boolean | string[];
-};
-
 export class AgentManager {
   private sessions = new Map<string, AgentSession>();
   private server: string;
@@ -495,9 +486,19 @@ export class AgentManager {
             void this.persistRooms();
           }
 
-          await this.sendAgentOutput(roomHash, participantToken, messageKey, (result.text || '(no output)').trim());
-          if (result.code !== 0) {
+          const streamed = (result.text || '').trim();
+          await this.sendAgentOutput(roomHash, participantToken, messageKey, streamed || '(no output)');
+          if (result.code !== 0 || result.isError) {
             console.error(`[${agentName}:${agentId}] turn exited code ${result.code}`);
+            // The buffered path surfaces "(exit code N)"; mirror that here so a
+            // hard failure that produced no result/error text isn't shown to the
+            // operator as a bare "(no output)" with no sign anything went wrong.
+            if (!streamed) {
+              await encryptAndSend(
+                this.server, roomHash, participantToken, messageKey,
+                `(turn failed${result.code != null ? `, exit code ${result.code}` : ''})`,
+              ).catch(() => {});
+            }
           }
           return;
         }
@@ -664,24 +665,12 @@ export class AgentManager {
           const parsed = JSON.parse(decrypted) as {
             text?: string;
             replies?: Array<{ text?: string; reply_to?: { quote?: string } }>;
-            block_response?: AgentBlockResponse;
-            block_responses?: AgentBlockResponse[];
           };
 
-          // Control taps (Allow/Deny on an approval, mode change, Stop on a
-          // stuck status) arrive as block_response(s). They are NOT turns —
-          // route them and return WITHOUT touching the turn loop, so an approval
-          // can resolve while a turn is still running (session.running === true).
-          const responses: AgentBlockResponse[] =
-            parsed.block_responses && parsed.block_responses.length > 0
-              ? parsed.block_responses
-              : parsed.block_response
-              ? [parsed.block_response]
-              : [];
-          if (responses.length > 0) {
-            for (const br of responses) await this.handleAgentBlockResponse(session, br);
-            return;
-          }
+          // A block selection (the user tapping an option in an agent-emitted
+          // interactive block) arrives with the choice already rendered into
+          // `text` (e.g. "[buttons] yes"), so it flows through as a normal turn
+          // and the agent receives it — exactly like main.
 
           // A batch of replies (agent-room collector): feed the whole set as ONE
           // turn so the agent reads them together, each tagged with the message it
@@ -773,20 +762,6 @@ export class AgentManager {
         const chunk = sendText.slice(i, i + MAX_MSG);
         await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
       }
-    }
-  }
-
-  // Route a phone tap inside an agent room. Currently only the Stop button on a
-  // 'stuck' status indicator (carries `kill:<agentId>`). Unknown ids are ignored.
-  private async handleAgentBlockResponse(session: AgentSession, br: AgentBlockResponse): Promise<void> {
-    const { value } = br;
-
-    if (typeof value === 'string' && value.startsWith('kill:')) {
-      const target = value.slice('kill:'.length);
-      await this.kill(target).catch((err) =>
-        console.error(`[${session.name}:${session.agentId}] stop-via-status failed:`, err),
-      );
-      return;
     }
   }
 

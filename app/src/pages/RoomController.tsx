@@ -464,8 +464,13 @@ const RoomController = () => {
   // A reply clears an agent's indicator instantly; this is the backstop for when
   // the daemon dies mid-turn and never sends one. Drop any status not refreshed
   // within the window so a "working…" bubble can't hang around forever.
+  // Depend on the boolean "are there any statuses", not the map itself, so the
+  // interval is created once when the first status arrives and torn down when the
+  // last clears — not rebuilt on every status update. The functional setState
+  // inside always sees the latest map, so the closure needs no fresher value.
+  const hasAgentStatuses = Object.keys(agentStatuses).length > 0;
   useEffect(() => {
-    if (Object.keys(agentStatuses).length === 0) return;
+    if (!hasAgentStatuses) return;
     const STALE_MS = 30_000;
     const timer = setInterval(() => {
       const cutoff = Date.now() - STALE_MS;
@@ -480,7 +485,7 @@ const RoomController = () => {
       });
     }, 5_000);
     return () => clearInterval(timer);
-  }, [agentStatuses]);
+  }, [hasAgentStatuses]);
 
   useEffect(() => {
     let active = true;
@@ -1778,28 +1783,17 @@ const RoomController = () => {
                   {st.handle && (
                     <p className="mb-1 px-2 text-[0.6875rem] text-ink-dim">{st.handle}</p>
                   )}
-                  <div className="message-card message-card-in max-w-[84%] rounded-[22px] rounded-bl-[7px] px-4 py-3 leading-6 text-ink sm:max-w-[72%]">
-                    <span className="flex items-center gap-2 text-[0.9375rem]">
-                      <span
-                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-ink ${
-                          st.state === 'stuck' ? '' : 'animate-pulse'
-                        }`}
-                      />
-                      <span className="whitespace-pre-line break-words">{st.text || 'Working…'}</span>
-                    </span>
-                    {st.state === 'stuck' && st.agent && (
-                      <button
-                        type="button"
-                        className="mt-2 inline-flex items-center rounded-full border border-danger px-3 py-1 text-[0.6875rem] font-medium text-danger transition-colors hover:bg-danger hover:text-on-ink"
-                        onClick={() =>
-                          void sendBlockResponses([
-                            { blockId: `stuck:${st.agent}`, type: 'buttons', value: `kill:${st.agent}` },
-                          ])
-                        }
-                      >
-                        Stop agent
-                      </button>
+                  <div className="message-card message-card-in inline-flex max-w-[84%] items-center gap-2.5 rounded-[22px] rounded-bl-[7px] px-4 py-3 text-[0.9375rem] text-ink-soft sm:max-w-[72%]">
+                    {st.state === 'stuck' ? (
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-danger" aria-hidden="true" />
+                    ) : (
+                      <span className="flex shrink-0 items-end gap-1" aria-hidden="true">
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.3s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft [animation-delay:-0.15s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
+                      </span>
                     )}
+                    <span className="break-words">{st.text || 'Working…'}</span>
                   </div>
                 </div>
               ))}

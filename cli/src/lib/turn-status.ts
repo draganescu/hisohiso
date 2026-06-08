@@ -53,7 +53,9 @@ export const parseClaudeStreamLine = (line: string): AgentTurnEvent[] => {
     for (const part of content) {
       if (part.type === 'tool_use') {
         out.push({ type: 'tool_start', tool: textOf(part.name) || 'tool' });
-      } else if (part.type === 'text') {
+      } else if (part.type === 'text' || part.type === 'thinking') {
+        // Count extended thinking as activity too, so a long reasoning phase
+        // reads as "working" and doesn't let the heartbeat drift to quiet/stuck.
         out.push({ type: 'assistant_text' });
       }
     }
@@ -145,18 +147,22 @@ const codexToolLabel = (itemType: string, item?: Record<string, unknown>): strin
 export const describeStatus = (s: TurnStatus): string => {
   switch (s.kind) {
     case 'starting':
-      return '● Starting…';
+      return 'Starting…';
     case 'working':
-      return '● Working…';
-    case 'tool':
-      return `⚙ ${s.tool ?? 'Running a tool'}…`;
+      return 'Working…';
+    case 'tool': {
+      const label = s.tool ?? 'Running a tool';
+      // A tool that has been running a while gets an elapsed suffix so a healthy
+      // long build reads as progressing rather than appearing frozen.
+      return s.quietSec && s.quietSec >= 20 ? `${label}… (${s.quietSec}s)` : `${label}…`;
+    }
     case 'quiet':
-      return `… Still working (${s.quietSec ?? 0}s quiet)`;
+      return `Still working (${s.quietSec ?? 0}s)`;
     case 'stuck':
-      return `⚠ No activity for ${s.quietSec ?? 0}s — possibly stuck`;
+      return `No activity for ${s.quietSec ?? 0}s — possibly stuck`;
     case 'done':
-      return '✓ Done';
+      return 'Done';
     case 'failed':
-      return '✗ Failed';
+      return 'Failed';
   }
 };

@@ -62,9 +62,13 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
   // Throttle: only forward a status when something meaningful changed, so a
   // chatty stream doesn't spam the room. The heartbeat forces quiet/stuck.
   let lastKey = '';
-  const emit = (s: TurnStatus) => {
+  // `force` bypasses the same-state dedup — the heartbeat uses it so a turn that
+  // stays in ONE state (a long tool call emits no events between tool_use and
+  // its result) still re-sends a keepalive, keeping the phone's indicator from
+  // expiring. Event-driven emits stay deduped to avoid spamming the room.
+  const emit = (s: TurnStatus, force = false) => {
     const key = `${s.kind}:${s.tool ?? ''}`;
-    if (key === lastKey && s.kind !== 'quiet' && s.kind !== 'stuck') return;
+    if (!force && key === lastKey && s.kind !== 'quiet' && s.kind !== 'stuck') return;
     lastKey = key;
     try {
       args.onStatus?.(s);
@@ -110,14 +114,23 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
     for (const ev of events) applyEvent(ev);
   });
 
-  // Heartbeat: time-based quiet/stuck escalation independent of the event stream.
+  // Heartbeat: keep the indicator alive and escalate time-based state, both
+  // independent of the event stream. While a tool is running there are NO stream
+  // events (a build/test emits nothing between tool_use and its result), so that
+  // gap is legitimate work, not a stall: re-send the tool status as a forced
+  // keepalive (with elapsed) and never call it "stuck". Only a genuine gap with
+  // NO tool active escalates to quiet/stuck. All heartbeat emits are forced so a
+  // long single state keeps refreshing the phone's bubble past its stale window.
   const heartbeat = setInterval(() => {
     if (finished) return;
     const quietMs = Date.now() - lastActivity;
-    if (quietMs >= STUCK_AFTER_MS) {
-      emit({ kind: 'stuck', quietSec: Math.round(quietMs / 1000) });
+    const quietSec = Math.round(quietMs / 1000);
+    if (currentTool) {
+      emit({ kind: 'tool', tool: currentTool, quietSec }, true);
+    } else if (quietMs >= STUCK_AFTER_MS) {
+      emit({ kind: 'stuck', quietSec }, true);
     } else if (quietMs >= QUIET_AFTER_MS) {
-      emit({ kind: currentTool ? 'tool' : 'quiet', tool: currentTool ?? undefined, quietSec: Math.round(quietMs / 1000) });
+      emit({ kind: 'quiet', quietSec }, true);
     }
   }, HEARTBEAT_MS);
   heartbeat.unref?.();
