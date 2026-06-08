@@ -5,5 +5,9 @@
 /cli/dist
 .DS_Store
 .env
-.claude/
+# Ignore local Claude config (settings.local.json, worktrees/) but track the
+# project's checked-in skills. A parent dir excluded as `.claude/` can't have
+# children re-included, so exclude its contents with `/*` and negate skills/.
+.claude/*
+!.claude/skills/
 /compose.override.yaml
