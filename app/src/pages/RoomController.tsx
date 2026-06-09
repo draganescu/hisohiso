@@ -55,6 +55,7 @@ import {
   postDisband,
   postKnock,
   postLeave,
+  postPushTrigger,
   postReject,
   postRoomSettings,
   postWrappedToken,
@@ -62,7 +63,7 @@ import {
   type OutboxMessage,
   type RoomLookupResponse,
 } from '../lib/room-session';
-import { disablePush, enablePush, getPushStatus, type PushStatus } from '../lib/push';
+import { registerRoomForPush } from '../lib/push';
 import { BlockRenderer, type BlockResponseInput } from '../components/blocks/BlockRenderer';
 import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
@@ -191,9 +192,6 @@ const RoomController = () => {
   const [emptyQrSrc, setEmptyQrSrc] = useState<string>('');
   const [catchUpEnabled, setCatchUpEnabled] = useState(false);
   const [catchUpBusy, setCatchUpBusy] = useState(false);
-  const [pushStatus, setPushStatus] = useState<PushStatus>('off');
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushError, setPushError] = useState('');
   // Reveal-on-tap for the pairing code in the room menu. Auto-hides after a few
   // seconds and on backgrounding so a phone left open on the menu doesn't sit
   // there broadcasting the code to anyone walking by. The code itself never
@@ -1164,6 +1162,10 @@ const RoomController = () => {
     const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
 
     if (response.ok) {
+      // Notify the room's other devices if they've enabled notifications
+      // (content-less; the SW suppresses it for anyone with the app open).
+      // Best-effort — never block or fail the send over a push hiccup.
+      void postPushTrigger(roomHash, token).catch(() => {});
       const messageRecord: ChatMessage = {
         id: msgId,
         room_hash: roomHash,
@@ -1363,34 +1365,13 @@ const RoomController = () => {
   }, [roomHash, token, catchUpEnabled, catchUpBusy]);
 
   // Reflect the real per-room push opt-in once we know which room this is.
+  // Notifications are an app-level switch (see NotificationSettings on the
+  // channels home). Opening a room while notifications are on registers this
+  // device's push endpoint for it, so rooms joined after enabling are covered.
   useEffect(() => {
-    if (!roomHash) return;
-    setPushStatus(getPushStatus(roomHash));
-  }, [roomHash]);
-
-  const handleTogglePush = useCallback(async () => {
-    if (!roomHash || !token || pushBusy) return;
-    if (pushStatus === 'unsupported' || pushStatus === 'denied') return;
-    setPushBusy(true);
-    setPushError('');
-    try {
-      if (pushStatus === 'on') {
-        await disablePush(roomHash, token);
-        setPushStatus('off');
-      } else {
-        await enablePush(roomHash, token);
-        setPushStatus('on');
-      }
-    } catch (err) {
-      // Surface the reason rather than silently leaving the toggle off — the
-      // common case is the browser refusing pushManager.subscribe(), which
-      // otherwise looks like "nothing happens".
-      setPushError(err instanceof Error ? err.message : 'Could not change notifications.');
-      setPushStatus(getPushStatus(roomHash));
-    } finally {
-      setPushBusy(false);
-    }
-  }, [roomHash, token, pushStatus, pushBusy]);
+    if (!roomHash || !token) return;
+    void registerRoomForPush(roomHash, token);
+  }, [roomHash, token]);
 
   const handleDeleteMessage = useCallback(async (id: string) => {
     await deleteMessage(id);
@@ -2492,36 +2473,6 @@ const RoomController = () => {
                     <span
                       className={`inline-block h-5 w-5 transform rounded-full bg-surface shadow transition-transform ${
                         catchUpEnabled ? 'translate-x-5' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-surface p-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Notifications</p>
-                    <p className="mt-1 text-xs leading-5 text-ink-soft">
-                      {pushStatus === 'unsupported'
-                        ? 'Not available on this browser.'
-                        : pushStatus === 'denied'
-                          ? 'Blocked — allow notifications for this site in your browser settings.'
-                          : 'Get pinged when an agent finishes or needs you. The alert carries no message content.'}
-                    </p>
-                    {pushError && <p className="mt-1.5 text-xs leading-5 text-danger">{pushError}</p>}
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={pushStatus === 'on'}
-                    disabled={pushBusy || !token || pushStatus === 'unsupported' || pushStatus === 'denied'}
-                    onClick={() => void handleTogglePush()}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                      pushStatus === 'on' ? 'bg-ink' : 'bg-overlay-soft'
-                    } ${pushBusy || !token || pushStatus === 'unsupported' || pushStatus === 'denied' ? 'opacity-50' : ''}`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-surface shadow transition-transform ${
-                        pushStatus === 'on' ? 'translate-x-5' : 'translate-x-0.5'
                       }`}
                     />
                   </button>

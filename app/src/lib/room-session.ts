@@ -173,6 +173,22 @@ export const postPushUnsubscribe = async (
   });
 };
 
+// Ping the room's other subscribed devices (content-less). The PWA calls this
+// after sending a chat message so a backgrounded peer gets notified — mirrors
+// what the CLI daemon does on an agent turn. The sender's own open tab is
+// suppressed by the service worker's visible-client check.
+export const postPushTrigger = async (
+  roomHash: string,
+  token: string,
+  urgency: 'normal' | 'high' = 'normal',
+): Promise<Response> => {
+  return fetch(`/api/rooms/${roomHash}/push`, {
+    method: 'POST',
+    headers: { ...jsonHeaders, 'X-Chat-Token': token },
+    body: JSON.stringify({ urgency }),
+  });
+};
+
 export const parseRoomEvent = (raw: string, expectedRoomHash: string): RoomEvent | null => {
   const payload = JSON.parse(raw) as RoomEvent;
   if (!payload || payload.room_hash !== expectedRoomHash) return null;

@@ -3,6 +3,9 @@
 /app/dist
 /cli/node_modules
 /cli/dist
+# bun is not this repo's package manager (cli uses npm + package-lock.json);
+# a stray bun.lock appears when tooling runs `bun install` in the worktree.
+bun.lock
 .DS_Store
 .env
 .claude/
