@@ -1,21 +1,20 @@
 import { base64UrlDecode } from './crypto';
-import { getToken, listRooms } from './storage';
 import { fetchVapidPublicKey, postPushSubscribe, postPushUnsubscribe } from './room-session';
 
-// App-level web-push opt-in. A browser has exactly one push subscription per
-// origin and one notification permission — both are app-wide, not per-room — so
-// this is a single device-level switch (it lives on the channels home, next to
-// the app lock), NOT a per-room toggle.
+// Per-room web-push opt-in. The server only ever sends a content-less "tickle"
+// (see server/push.php), so nothing here leaks message content. We reuse the
+// existing root-scoped service worker (app/public/sw.js) that renders the
+// generic notification.
 //
-// Delivery is still per-room on the server (a push to room X only reaches
-// devices registered for X — see server/push.php), because the privacy model
-// gives a device a separate participant token per room and no global identity.
-// So "on" registers this device's shared endpoint against every room we hold a
-// token for; opening a room later lazily registers it too. "off" unregisters
-// everywhere and unsubscribes the browser, which genuinely stops delivery (the
-// OS permission can't be revoked from script, but no pushes arrive).
+// One browser has exactly one push subscription per origin, shared across every
+// room. So "is this room subscribed?" can't be read off the browser
+// subscription — we track it per-room in localStorage and register/unregister
+// the shared endpoint against each room's server-side list independently.
+// Disabling one room therefore never tears the endpoint down for the others.
 
 export type PushStatus = 'unsupported' | 'denied' | 'on' | 'off';
+
+const roomFlagKey = (roomHash: string): string => `hisohiso.push.${roomHash}`;
 
 export const pushSupported = (): boolean =>
   typeof navigator !== 'undefined' &&
@@ -24,29 +23,43 @@ export const pushSupported = (): boolean =>
   'PushManager' in window &&
   'Notification' in window;
 
-// Notifications are "on" when permission is granted AND a browser subscription
-// exists for this origin (shared across every room).
-export const getPushStatus = async (): Promise<PushStatus> => {
+export const getPushStatus = (roomHash: string): PushStatus => {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
+  return localStorage.getItem(roomFlagKey(roomHash)) === '1' ? 'on' : 'off';
+};
+
+// Ensure a browser PushSubscription exists for this origin, creating one against
+// the server's VAPID key if needed. The same subscription is reused by every
+// room.
+const ensureSubscription = async (): Promise<PushSubscription> => {
   const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription();
-  return sub ? 'on' : 'off';
-};
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) return existing;
 
-const roomsWithTokens = (): Array<{ hash: string; token: string }> =>
-  listRooms()
-    .map((r) => ({ hash: r.roomHash, token: getToken(r.roomHash) }))
-    .filter((r): r is { hash: string; token: string } => typeof r.token === 'string' && r.token !== '');
-
-const getVapidKey = async (): Promise<Uint8Array> => {
   const res = await fetchVapidPublicKey();
-  if (!res.ok) throw new Error('Notifications are not configured on the server.');
+  if (!res.ok) {
+    throw new Error('Notifications are not configured on the server.');
+  }
   const { key } = (await res.json()) as { key: string };
-  return base64UrlDecode(key);
+  try {
+    return await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      // Cast mirrors app/src/lib/crypto.ts: the DOM lib types BufferSource as
+      // ArrayBuffer-backed, but a Uint8Array is ArrayBufferLike under this config.
+      applicationServerKey: base64UrlDecode(key) as BufferSource,
+    });
+  } catch (err) {
+    // The browser refused to register with its push service. This is the most
+    // common silent failure: it surfaces as a bare DOMException (e.g. "push
+    // service not available", or Safari rejecting push over plain HTTP). Carry
+    // the real reason out so the toggle can show why instead of doing nothing.
+    const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    throw new Error(`Your browser refused to register for push (${reason}).`);
+  }
 };
 
-export const enablePush = async (): Promise<void> => {
+export const enablePush = async (roomHash: string, token: string): Promise<void> => {
   if (!pushSupported()) throw new Error('Notifications are not supported on this device.');
 
   const permission = await Notification.requestPermission();
@@ -54,53 +67,21 @@ export const enablePush = async (): Promise<void> => {
     throw new Error('Notification permission was not granted.');
   }
 
-  const reg = await navigator.serviceWorker.ready;
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    try {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        // Cast mirrors app/src/lib/crypto.ts: BufferSource is typed
-        // ArrayBuffer-backed but a Uint8Array is ArrayBufferLike here.
-        applicationServerKey: (await getVapidKey()) as BufferSource,
-      });
-    } catch (err) {
-      // The browser refused its push service — surface the real reason instead
-      // of failing silently (e.g. Safari rejecting push on a non-HTTPS origin).
-      const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      throw new Error(`Your browser refused to register for push (${reason}).`);
-    }
+  const sub = await ensureSubscription();
+  const res = await postPushSubscribe(roomHash, token, sub.toJSON());
+  if (!res.ok) {
+    throw new Error('Could not register this channel for notifications.');
   }
-
-  // Register this device for every room we can authenticate to. Best-effort per
-  // room — a since-disbanded room (404) shouldn't block the rest.
-  const subscription = sub.toJSON();
-  await Promise.all(roomsWithTokens().map(({ hash, token }) =>
-    postPushSubscribe(hash, token, subscription).catch(() => {})));
+  localStorage.setItem(roomFlagKey(roomHash), '1');
 };
 
-export const disablePush = async (): Promise<void> => {
-  if (!pushSupported()) return;
+export const disablePush = async (roomHash: string, token: string): Promise<void> => {
+  localStorage.removeItem(roomFlagKey(roomHash));
+  // Drop only this room's server registration; the shared browser subscription
+  // stays alive for any other room that still wants notifications.
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();
-  if (!sub) return;
-
-  // Drop the endpoint's registration from every room, then unsubscribe the
-  // browser so the push service stops delivering. Order matters: unregister
-  // while we still hold the endpoint string.
-  const { endpoint } = sub;
-  await Promise.all(roomsWithTokens().map(({ hash, token }) =>
-    postPushUnsubscribe(hash, token, endpoint).catch(() => {})));
-  await sub.unsubscribe().catch(() => {});
-};
-
-// Lazily register the room you're viewing if app-level notifications are on.
-// Covers rooms joined AFTER enabling — opening the room registers it. No-op
-// when notifications are off or unsupported.
-export const registerRoomForPush = async (roomHash: string, token: string): Promise<void> => {
-  if (!pushSupported() || Notification.permission !== 'granted') return;
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription();
-  if (!sub) return;
-  await postPushSubscribe(roomHash, token, sub.toJSON()).catch(() => {});
+  if (sub) {
+    await postPushUnsubscribe(roomHash, token, sub.endpoint).catch(() => {});
+  }
 };

@@ -4,7 +4,6 @@ import jsQR from 'jsqr';
 import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
 import { navigateTo } from '../lib/navigation';
 import AppLockSettings from '../components/AppLockSettings';
-import NotificationSettings from '../components/NotificationSettings';
 import ThemeToggle from '../components/ThemeToggle';
 import InstallPrompt from '../components/InstallPrompt';
 import { RoomRow } from '../components/RoomRow';
@@ -262,8 +261,6 @@ const RoomsPage = () => {
         )}
 
         <AppLockSettings />
-
-        <NotificationSettings />
 
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 text-xs text-ink-dim">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
