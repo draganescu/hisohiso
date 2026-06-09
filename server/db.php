@@ -103,8 +103,9 @@ function db(): PDO
     );');
 
     // Web Push subscriptions, one row per (room, browser endpoint). A device
-    // opts in per-room from the PWA; the CLI daemon later POSTs /push to fan a
-    // content-less "tickle" out to every endpoint registered for that room (see
+    // opts in per-room from the PWA; later a POST /push (from the CLI daemon on
+    // an agent turn, or from the PWA on a chat message) fans a content-less
+    // "tickle" out to every endpoint registered for that room (see
     // server/push.php). p256dh/auth are the subscription's own public key and
     // auth secret — UNUSED by the payload-less send we ship today, but stored so
     // a future encrypted-payload upgrade needs no re-subscribe. FK-cascaded off

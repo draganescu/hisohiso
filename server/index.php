@@ -641,9 +641,11 @@ if (preg_match('#^/api/rooms/([^/]+)/push-unsubscribe$#', $path, $matches) && $m
     json_response(['status' => 'ok']);
 }
 
-// The CLI daemon fires this when an agent finishes a turn or needs attention.
-// Participant-token gated (the daemon holds the room's participant token), so a
-// stranger can't spam a room's devices. Fan-out is best-effort; we always 200.
+// Fan a content-less push out to the room's subscribed devices. Two callers:
+// the CLI daemon (when an agent finishes a turn or needs attention) and the PWA
+// (after sending a chat message, so a backgrounded peer gets pinged). Both hold
+// a room participant token, which gates this route so a stranger can't spam a
+// room's devices. Fan-out is best-effort; we always 200.
 if (preg_match('#^/api/rooms/([^/]+)/push$#', $path, $matches) && $method === 'POST') {
     $room_hash = $matches[1];
     if (!room_exists($room_hash)) {

@@ -5,13 +5,13 @@ declare(strict_types=1);
 // "tickle" notifications.
 //
 // We deliberately send NO encrypted payload. The push carries only the VAPID
-// JWT that proves it came from this server — zero bytes of agent content. The
+// JWT that proves it came from this server — zero bytes of message content. The
 // browser's service worker (app/public/sw.js) turns the bare wake-up into a
-// generic "an agent needs you" and the tap opens the channel list, where the
-// real, end-to-end-decrypted messages already live. So the push service
-// (Apple / Google / Mozilla) and even this server stay as blind to what the
-// agent said as the Mercure relay already is: they learn only that *some*
-// room had activity at some time, which the relay traffic already reveals.
+// generic "new activity in a channel" and the tap opens the channel list, where
+// the real, end-to-end-decrypted messages already live. So the push service
+// (Apple / Google / Mozilla) and even this server stay as blind to what was
+// said as the Mercure relay already is: they learn only that *some* room had
+// activity at some time, which the relay traffic already reveals.
 //
 // Because there's no payload, we never touch the subscription's p256dh/auth
 // keys here and don't implement RFC 8291 content encryption — that whole
@@ -204,8 +204,8 @@ function push_subscription_delete(string $room_hash, string $endpoint): void
 
 // Fan a content-less tickle out to every device subscribed to this room.
 // Dead subscriptions (404/410) are pruned inline. Returns the number queued.
-// Synchronous: a room rarely has more than one or two devices, so the daemon's
-// fire-and-forget POST /push returns in well under a second.
+// Synchronous: a room rarely has more than one or two devices, so the caller's
+// fire-and-forget POST /push (CLI daemon or PWA) returns in well under a second.
 function notify_room(string $room_hash, string $urgency = 'normal'): int
 {
     if (!push_enabled()) {
