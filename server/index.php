@@ -632,6 +632,7 @@ if (preg_match('#^/api/rooms/([^/]+)/push-unsubscribe$#', $path, $matches) && $m
         json_response(['error' => 'room_not_found'], 404);
     }
     require_participant_token($room_hash);
+    enforce_rate_limit('push_unsubscribe', 30, 60);
     $body = read_json_body();
     $endpoint = $body['endpoint'] ?? null;
     if (!is_string($endpoint) || $endpoint === '') {
