@@ -23,7 +23,8 @@ services:
       # endpoints answer 503 and the rest of the server is unaffected.
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
-      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:dev@localhost}
+      # Must be a real https:/mailto contact — Apple rejects localhost (BadJwtToken).
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-https://hisohiso.org}
     # Override the FrankenPHP base image's HEALTHCHECK, which probes
     # 127.0.0.1:2019 (the Caddy admin API). We deliberately disable that via
     # `admin off` in Caddyfile, so the default check is hard-failing in dev

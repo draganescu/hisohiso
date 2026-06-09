@@ -41,9 +41,18 @@ function vapid_config(): ?array
 
     $pub = getenv('VAPID_PUBLIC_KEY');
     $priv_b64 = getenv('VAPID_PRIVATE_KEY');
+    // Apple's push service (web.push.apple.com) rejects a VAPID JWT whose `sub`
+    // isn't a real mailto:/https: contact — a `localhost` subject returns
+    // 403 BadJwtToken and silently breaks push on iOS/Safari, while Chrome and
+    // Firefox accept it (which hides the bug in dev). Coerce an empty or
+    // localhost subject to a valid contact rather than letting every iOS push
+    // fail, and log the localhost case so a misconfigured sub is diagnosable.
     $subject = getenv('VAPID_SUBJECT');
-    if (!is_string($subject) || $subject === '') {
-        $subject = 'mailto:admin@localhost';
+    if (is_string($subject) && str_contains($subject, 'localhost')) {
+        error_log('hisohiso push: VAPID_SUBJECT "' . $subject . '" uses localhost — Apple rejects it (BadJwtToken); using https://hisohiso.org. Set a real contact.');
+    }
+    if (!is_string($subject) || $subject === '' || str_contains($subject, 'localhost')) {
+        $subject = 'https://hisohiso.org';
     }
     if (!is_string($pub) || $pub === '' || !is_string($priv_b64) || $priv_b64 === '') {
         return null;

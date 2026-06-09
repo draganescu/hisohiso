@@ -43,7 +43,9 @@ const child = spawn('docker', ['compose', 'up', '--build'], {
     MERCURE_SUBSCRIBER_JWT_KEY: subKey,
     VAPID_PUBLIC_KEY: vapid.publicKey,
     VAPID_PRIVATE_KEY: vapid.privateKey,
-    VAPID_SUBJECT: 'mailto:dev@localhost',
+    // NOT a localhost mailto: Apple rejects those (403 BadJwtToken). The sub is
+    // just an abuse contact for the push service; any real https:/mailto works.
+    VAPID_SUBJECT: 'https://hisohiso.org',
   },
 });
 
