@@ -193,6 +193,7 @@ const RoomController = () => {
   const [catchUpBusy, setCatchUpBusy] = useState(false);
   const [pushStatus, setPushStatus] = useState<PushStatus>('off');
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState('');
   // Reveal-on-tap for the pairing code in the room menu. Auto-hides after a few
   // seconds and on backgrounding so a phone left open on the menu doesn't sit
   // there broadcasting the code to anyone walking by. The code itself never
@@ -1371,6 +1372,7 @@ const RoomController = () => {
     if (!roomHash || !token || pushBusy) return;
     if (pushStatus === 'unsupported' || pushStatus === 'denied') return;
     setPushBusy(true);
+    setPushError('');
     try {
       if (pushStatus === 'on') {
         await disablePush(roomHash, token);
@@ -1379,8 +1381,11 @@ const RoomController = () => {
         await enablePush(roomHash, token);
         setPushStatus('on');
       }
-    } catch {
-      // Re-read the true state (e.g. permission ended up denied).
+    } catch (err) {
+      // Surface the reason rather than silently leaving the toggle off — the
+      // common case is the browser refusing pushManager.subscribe(), which
+      // otherwise looks like "nothing happens".
+      setPushError(err instanceof Error ? err.message : 'Could not change notifications.');
       setPushStatus(getPushStatus(roomHash));
     } finally {
       setPushBusy(false);
@@ -2502,6 +2507,7 @@ const RoomController = () => {
                           ? 'Blocked — allow notifications for this site in your browser settings.'
                           : 'Get pinged when an agent finishes or needs you. The alert carries no message content.'}
                     </p>
+                    {pushError && <p className="mt-1.5 text-xs leading-5 text-danger">{pushError}</p>}
                   </div>
                   <button
                     type="button"

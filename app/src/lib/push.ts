@@ -42,12 +42,21 @@ const ensureSubscription = async (): Promise<PushSubscription> => {
     throw new Error('Notifications are not configured on the server.');
   }
   const { key } = (await res.json()) as { key: string };
-  return reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    // Cast mirrors app/src/lib/crypto.ts: the DOM lib types BufferSource as
-    // ArrayBuffer-backed, but a Uint8Array is ArrayBufferLike under this config.
-    applicationServerKey: base64UrlDecode(key) as BufferSource,
-  });
+  try {
+    return await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      // Cast mirrors app/src/lib/crypto.ts: the DOM lib types BufferSource as
+      // ArrayBuffer-backed, but a Uint8Array is ArrayBufferLike under this config.
+      applicationServerKey: base64UrlDecode(key) as BufferSource,
+    });
+  } catch (err) {
+    // The browser refused to register with its push service. This is the most
+    // common silent failure: it surfaces as a bare DOMException (e.g. "push
+    // service not available", or Safari rejecting push over plain HTTP). Carry
+    // the real reason out so the toggle can show why instead of doing nothing.
+    const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    throw new Error(`Your browser refused to register for push (${reason}).`);
+  }
 };
 
 export const enablePush = async (roomHash: string, token: string): Promise<void> => {
