@@ -34,7 +34,7 @@ $details = openssl_pkey_get_details($pk);
 $point = "\x04" . str_pad($details['ec']['x'], 32, "\x00", STR_PAD_LEFT) . str_pad($details['ec']['y'], 32, "\x00", STR_PAD_LEFT);
 putenv('VAPID_PUBLIC_KEY=' . rtrim(strtr(base64_encode($point), '+/', '-_'), '='));
 putenv('VAPID_PRIVATE_KEY=' . base64_encode($pem));
-putenv('VAPID_SUBJECT=mailto:test@localhost');
+putenv('VAPID_SUBJECT=mailto:test@example.com');
 
 require_once $ROOT . '/utils.php';
 require_once $ROOT . '/db.php';
@@ -86,7 +86,7 @@ t('vapid_config loads from env and push is enabled', function () {
     truthy(push_enabled(), 'push should be enabled with keys present');
     $cfg = vapid_config();
     truthy(is_array($cfg) && isset($cfg['public'], $cfg['pem'], $cfg['subject']));
-    eq('mailto:test@localhost', $cfg['subject']);
+    eq('mailto:test@example.com', $cfg['subject']);
 });
 
 // ── subscription store ───────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ t('vapid_jwt produces a 3-part ES256 token bound to the audience', function () {
     eq('JWT', $header['typ']);
     $claims = json_decode(base64url_decode($parts[1]), true);
     eq('https://push.example.com', $claims['aud']);
-    eq('mailto:test@localhost', $claims['sub']);
+    eq('mailto:test@example.com', $claims['sub']);
     truthy($claims['exp'] > time(), 'exp in the future');
     truthy($claims['exp'] <= time() + 24 * 3600, 'exp under the 24h spec cap');
 });
