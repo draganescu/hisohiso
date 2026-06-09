@@ -7,8 +7,8 @@ self.addEventListener('activate', (event) => {
 });
 
 // Content-less "tickle" push. The payload is intentionally empty (see
-// server/push.php) — the server and the push service never learn what the
-// agent said, only that *some* room had activity. We render one generic
+// server/push.php) — the server and the push service never learn what was
+// said, only that *some* channel had activity. We render one generic
 // notification and let the tap open the channel list, where the live,
 // end-to-end-decrypted messages already are.
 self.addEventListener('push', (event) => {
@@ -20,10 +20,10 @@ self.addEventListener('push', (event) => {
       return;
     }
     await self.registration.showNotification('hisohiso', {
-      body: 'An agent needs you — tap to open.',
+      body: 'New activity in a channel — tap to open.',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      tag: 'hisohiso-agent',
+      tag: 'hisohiso-activity',
       renotify: true,
       data: { url: '/rooms' },
     });

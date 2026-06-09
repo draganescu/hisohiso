@@ -41,7 +41,7 @@ const NotificationSettings = () => {
       : status === 'denied'
         ? 'Blocked — allow notifications for this site in your browser settings.'
         : on
-          ? 'On — this device is alerted when an agent or a chat needs you.'
+          ? 'On — this device is alerted when a channel has new activity.'
           : 'Off — this device gets no notifications.';
 
   return (
@@ -50,9 +50,9 @@ const NotificationSettings = () => {
         <div className="min-w-0">
           <h2 className="text-lg font-semibold">Notifications</h2>
           <p className="mt-2 text-sm text-ink-soft">
-            Get a push on this device when an agent finishes or needs you, or when a
-            new message lands while the app is closed. Applies to every channel on
-            this device; the alert itself carries no message content.
+            Get a push on this device when a new message lands in any of your channels
+            while the app is closed. Applies to every channel on this device; the alert
+            itself carries no message content.
           </p>
         </div>
         <button
