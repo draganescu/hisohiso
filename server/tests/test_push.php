@@ -123,6 +123,15 @@ t('notify_room with no subscriptions sends nothing (no network)', function () us
     eq(0, notify_room($ROOM), 'zero sent, zero cURL calls');
 });
 
+t('notify_room excludes the sender endpoint (no network for the only device)', function () use ($ROOM) {
+    // One subscription, excluded by the sender → the loop skips it entirely, so
+    // there is no cURL call and nothing is sent. This is the self-notify fix:
+    // the PWA passes its own endpoint and is never pinged for its own message.
+    push_subscription_upsert($ROOM, 'https://push.example.com/self', 'p', 'a');
+    eq(0, notify_room($ROOM, 'normal', 'https://push.example.com/self'), 'sender endpoint skipped, no send');
+    push_subscription_delete($ROOM, 'https://push.example.com/self');
+});
+
 // ── VAPID JWT ────────────────────────────────────────────────────────────────
 t('vapid_jwt produces a 3-part ES256 token bound to the audience', function () {
     $jwt = vapid_jwt('https://push.example.com');

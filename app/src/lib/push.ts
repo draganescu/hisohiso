@@ -1,5 +1,5 @@
 import { base64UrlDecode } from './crypto';
-import { fetchVapidPublicKey, postPushSubscribe, postPushUnsubscribe } from './room-session';
+import { fetchVapidPublicKey, postPushSubscribe, postPushTrigger, postPushUnsubscribe } from './room-session';
 
 // Per-room web-push opt-in. The server only ever sends a content-less "tickle"
 // (see server/push.php), so nothing here leaks message content. We reuse the
@@ -84,4 +84,23 @@ export const disablePush = async (roomHash: string, token: string): Promise<void
   if (sub) {
     await postPushUnsubscribe(roomHash, token, sub.endpoint).catch(() => {});
   }
+};
+
+// Notify the room's OTHER devices that a message was sent — never the sender's
+// own device. We pass this device's push endpoint as exclude_endpoint so the
+// server skips it; you don't get a notification for your own message. Best-
+// effort and fire-and-forget: a missing subscription just means no exclusion.
+export const triggerRoomPush = async (roomHash: string, token: string): Promise<void> => {
+  let ownEndpoint: string | undefined;
+  try {
+    if (pushSupported()) {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      ownEndpoint = sub?.endpoint;
+    }
+  } catch {
+    // Couldn't resolve our endpoint — fall through and notify everyone (the SW
+    // visible-client check still suppresses our own foreground notification).
+  }
+  await postPushTrigger(roomHash, token, 'normal', ownEndpoint).catch(() => {});
 };

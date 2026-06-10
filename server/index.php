@@ -656,7 +656,11 @@ if (preg_match('#^/api/rooms/([^/]+)/push$#', $path, $matches) && $method === 'P
     enforce_rate_limit('push_send', 120, 60);
     $body = read_json_body();
     $urgency = (($body['urgency'] ?? '') === 'high') ? 'high' : 'normal';
-    $sent = push_enabled() ? notify_room($room_hash, $urgency) : 0;
+    // The PWA passes its own endpoint so the sender isn't notified of their own
+    // message; the daemon omits it (it has no push endpoint).
+    $exclude = $body['exclude_endpoint'] ?? null;
+    $exclude = is_string($exclude) && $exclude !== '' ? $exclude : null;
+    $sent = push_enabled() ? notify_room($room_hash, $urgency, $exclude) : 0;
     json_response(['status' => 'ok', 'sent' => $sent]);
 }
 
