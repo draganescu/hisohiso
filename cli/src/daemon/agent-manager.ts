@@ -3,6 +3,7 @@ import { deriveMessageKey, deriveKnockKey, sha256Hex, decryptText, beginApprove,
 import { generatePairingCode } from '../lib/prompt.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import { getAgent, type AgentProfile } from '../lib/agents.js';
+import { isCommandAvailable } from '../lib/agent-detect.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
@@ -218,6 +219,14 @@ export class AgentManager {
     }
     if (!profile) {
       throw new Error(`Unknown agent "${agentName}". Use "list" to see available agents.`);
+    }
+
+    // Guard against spawning an agent whose command isn't installed. The phone's
+    // launcher only lists installed agents, but a stale button (or a typed
+    // command) can still ask for one that's gone — fail fast with a clear
+    // message instead of minting a room and dying at process spawn with ENOENT.
+    if (!(await isCommandAvailable(profile.command))) {
+      throw new Error(`Agent "${agentName}" needs "${profile.command}", which isn't installed on this host.`);
     }
 
     // Mint a fresh 4-digit pairing code for this agent room. It's the password

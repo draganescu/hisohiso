@@ -27,8 +27,7 @@ import { writePid, removePid } from './pid.js';
 import { startUpdateLoop } from '../lib/updater.js';
 import { promptLine, generatePairingCode } from '../lib/prompt.js';
 import { deriveKnockKey } from '../lib/crypto.js';
-import { listAgents } from '../lib/agents.js';
-import { loadRegistry } from '../lib/config.js';
+import { availableAgentNames } from '../lib/agent-detect.js';
 import qrTerminal from 'qrcode-terminal';
 import { hostname } from 'node:os';
 import { startControlServer, isControlSocketLive, DaemonAlreadyRunningError, type ControlServerHandle } from './control-server.js';
@@ -487,12 +486,23 @@ type BuiltinAgentName = string;
 const buildBlock = <T extends Record<string, unknown>>(b: T): T => b;
 
 const launcherBlock = (agentNames: BuiltinAgentName[]): unknown => {
-  // Show every available agent — built-ins + registry — in one stacked
+  // Show every *installed* agent — built-ins + registry — in one stacked
   // list. Stacked (not inline) because >3 buttons inline wrap awkwardly on
   // narrow viewports, and the picker is short-lived so vertical real estate
   // is cheap. The previous Top-3 + "More…" two-step exists only as historical
   // optimization for the welcome message; tapping Spawn now goes straight
   // to the full list.
+  //
+  // Empty means nothing the daemon can spawn is on this host's PATH — render a
+  // hint instead of an empty picker so the operator knows what to do, rather
+  // than tapping a button that would ENOENT.
+  if (agentNames.length === 0) {
+    return buildBlock({
+      type: 'prose',
+      content:
+        'No supported agents found on this host. Install **Claude Code** or the **Codex CLI** (or register your own with `hisohiso daemon register`), then tap Help → Start session again.',
+    });
+  }
   return buildBlock({
     type: 'buttons',
     id: 'launcher',
@@ -588,13 +598,6 @@ const pickAgentAdjective = (seed: string): string => {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
   return AGENT_ADJECTIVES[Math.abs(h) % AGENT_ADJECTIVES.length];
-};
-
-const getAllAgentNames = async (): Promise<string[]> => {
-  const builtIn = Object.keys(listAgents());
-  const registry = await loadRegistry();
-  const registered = registry.map((r) => r.name);
-  return [...new Set([...builtIn, ...registered])];
 };
 
 // A knock against an already-bound control room, parked until the operator taps
@@ -734,7 +737,7 @@ class ControlRoom {
   }
 
   async sendWelcome(): Promise<void> {
-    const agentNames = await getAllAgentNames();
+    const agentNames = await availableAgentNames();
     await this.reply('Daemon online.', [launcherBlock(agentNames), helpButtonsBlock()]);
   }
 
@@ -746,7 +749,7 @@ class ControlRoom {
     await this.manager.reconcileAll();
     const agents = this.manager.listRunning();
     if (agents.length === 0) {
-      await this.reply('No agents running.', [launcherBlock(await getAllAgentNames())]);
+      await this.reply('No agents running.', [launcherBlock(await availableAgentNames())]);
       return;
     }
     const blocks = agents.map((a) => agentRowBlock(a.agentId, a.name));
@@ -754,7 +757,7 @@ class ControlRoom {
   }
 
   async sendHelp(): Promise<void> {
-    const agentNames = await getAllAgentNames();
+    const agentNames = await availableAgentNames();
     await this.reply(
       'Tap to act — or type a command (claude / list / kill <id> / help).',
       [helpButtonsBlock(), launcherBlock(agentNames)]
@@ -775,7 +778,7 @@ class ControlRoom {
       const msg = err instanceof Error ? err.message : String(err);
       await this.reply(
         `Could not start ${agentName}: ${msg}`,
-        [launcherBlock(await getAllAgentNames())]
+        [launcherBlock(await availableAgentNames())]
       );
       return;
     }
@@ -874,7 +877,7 @@ class ControlRoom {
 
         if (typeof value === 'string') {
           if (value === 'show-launcher') {
-            await this.reply('Pick an agent.', [launcherBlock(await getAllAgentNames())]);
+            await this.reply('Pick an agent.', [launcherBlock(await availableAgentNames())]);
             return;
           }
           if (value === 'show-list') {

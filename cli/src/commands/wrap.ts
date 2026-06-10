@@ -6,6 +6,7 @@ import * as api from '../lib/api-client.js';
 import { sha256Hex, decryptText, deriveKnockKey, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { promptLine, generatePairingCode } from '../lib/prompt.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
+import { isCommandAvailable } from '../lib/agent-detect.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
 import qrTerminal from 'qrcode-terminal';
 
@@ -30,6 +31,11 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
         console.log(`  ${name.padEnd(14)} ${a.description}`);
       }
       console.log(`\nOr use a custom command: hisohiso wrap -- <command> [args...]`);
+      process.exit(1);
+    }
+    if (!(await isCommandAvailable(builtin.command))) {
+      console.error(`Agent "${agentName}" needs "${builtin.command}", which isn't installed on this host.`);
+      console.error(`Install it and make sure it's on your PATH, then try again.`);
       process.exit(1);
     }
     profile = builtin;
