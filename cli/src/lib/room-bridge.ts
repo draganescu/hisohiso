@@ -55,7 +55,9 @@ export type SendOptions = {
   // can display 'Pairing code: 4827' next to it. The phone must type it as the
   // room password during the join flow — that's what gates k_msg/k_knock.
   // `room_kind` on the action lets the phone stamp the joined room's kind.
-  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: RoomKind };
+  // `controlRoomHash` (agent join actions only) tells the phone which control
+  // room spawned the agent, so it can group the agent under its daemon.
+  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: RoomKind; controlRoomHash?: string };
   blocks?: unknown[];
   // Room-kind discriminator carried inside the encrypted envelope. The phone
   // reads it to learn what a QR-paired room is (e.g. the control room, which

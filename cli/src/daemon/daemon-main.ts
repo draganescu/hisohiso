@@ -721,7 +721,7 @@ class ControlRoom {
   async reply(
     text: string,
     blocks?: unknown[],
-    action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: 'chat' | 'control' | 'agent' }
+    action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: 'chat' | 'control' | 'agent'; controlRoomHash?: string }
   ): Promise<void> {
     await encryptAndSend(this.server, this.state.controlRoomHash, this.state.participantToken, this.messageKey, text, {
       handle: 'hisohiso-daemon',
@@ -795,6 +795,9 @@ class ControlRoom {
         code: result.roomPassword,
         roomName,
         room_kind: 'agent',
+        // Authoritative parent link: the phone groups this agent under this
+        // control room no matter where the operator taps Join from.
+        controlRoomHash: this.state.controlRoomHash,
       }
     );
   }

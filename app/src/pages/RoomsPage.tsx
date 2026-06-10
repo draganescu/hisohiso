@@ -7,6 +7,7 @@ import { groupOpenChannels } from '../lib/room-grouping';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
 import { RoomRow } from '../components/RoomRow';
+import { GroupedChannelList } from '../components/GroupedChannelList';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -243,27 +244,7 @@ const RoomsPage = () => {
             <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
               Open channels
             </h2>
-            {groups.map(({ control, agents }) => (
-              <div key={control.roomHash} className="flex flex-col gap-1.5">
-                {renderRoomRow(control)}
-                {agents.length > 0 && (
-                  // Agents indented under their control room with a connector
-                  // rule, so "whose control is this agent under" is read at a
-                  // glance instead of inferred.
-                  <div className="ml-[1.4rem] flex flex-col gap-1.5 border-l border-rule pl-3">
-                    {agents.map(renderRoomRow)}
-                  </div>
-                )}
-              </div>
-            ))}
-            {orphanAgents.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <h3 className="px-1 text-[0.625rem] font-medium uppercase tracking-[0.28em] text-ink-dim">
-                  Agents · control unknown
-                </h3>
-                {orphanAgents.map(renderRoomRow)}
-              </div>
-            )}
+            <GroupedChannelList groups={groups} orphanAgents={orphanAgents} renderRow={renderRoomRow} />
           </section>
         )}
 
