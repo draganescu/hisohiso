@@ -90,17 +90,25 @@ export const disablePush = async (roomHash: string, token: string): Promise<void
 // own device. We pass this device's push endpoint as exclude_endpoint so the
 // server skips it; you don't get a notification for your own message. Best-
 // effort and fire-and-forget: a missing subscription just means no exclusion.
+//
+// We only attach our endpoint when notifications are ON for THIS room. In that
+// case the server already has it (push-subscribe registered it for this room),
+// so nothing new is revealed and there's a real self-notification to suppress.
+// For rooms we never enabled, our endpoint isn't in the room's list — there's
+// nothing to exclude — so sending it would only leak it for a room the server
+// didn't already associate it with. (The per-origin subscription is shared
+// across rooms, so without this gate we'd leak it on every send.)
 export const triggerRoomPush = async (roomHash: string, token: string): Promise<void> => {
   let ownEndpoint: string | undefined;
-  try {
-    if (pushSupported()) {
+  if (getPushStatus(roomHash) === 'on') {
+    try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       ownEndpoint = sub?.endpoint;
+    } catch {
+      // Couldn't resolve our endpoint — fall through and notify everyone (the SW
+      // visible-client check still suppresses our own foreground notification).
     }
-  } catch {
-    // Couldn't resolve our endpoint — fall through and notify everyone (the SW
-    // visible-client check still suppresses our own foreground notification).
   }
   await postPushTrigger(roomHash, token, 'normal', ownEndpoint).catch(() => {});
 };
