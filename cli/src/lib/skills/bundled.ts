@@ -1,4 +1,4 @@
-import type { BundledSkill } from '../skill-sync.js';
+import { installSkills, type BundledSkill } from '../skill-sync.js';
 
 // Canonical content for the skills hisohiso ships with the CLI. Inlined as
 // strings (like DEFAULT_PREAMBLE / BLOCK_PROMPT in lib/preamble.ts) so the
@@ -184,3 +184,23 @@ To add a NEW block type, follow the \`hisohiso-add-block-type\` skill.
 export const BUNDLED_SKILLS: readonly BundledSkill[] = [
   { name: 'hisohiso-blocks', files: { 'SKILL.md': HISOHISO_BLOCKS_SKILL } },
 ];
+
+/**
+ * Idempotently install the bundled skills wherever a wrapped agent is about to
+ * run (daemon start/install, wrap). Silent on no-op, non-fatal on error — a
+ * read-only HOME must never block the daemon or a wrap session. Because the
+ * sync only writes on change, this also self-heals after a CLI auto-update.
+ */
+export const ensureBundledSkills = async (): Promise<void> => {
+  try {
+    const { changedFiles } = await installSkills(BUNDLED_SKILLS);
+    if (changedFiles > 0) {
+      const names = BUNDLED_SKILLS.map((s) => s.name).join(', ');
+      console.log(`Installed agent skills (${names}) into ~/.claude, ~/.codex, ~/.agents.`);
+    }
+  } catch (err) {
+    console.error(
+      `Note: could not install bundled agent skills (${(err as Error).message}). Continuing.`,
+    );
+  }
+};

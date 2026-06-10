@@ -17,7 +17,7 @@ import {
   uninstallService,
   LOG_PATH,
 } from '../lib/service.js';
-import { ensureBundledSkills } from './skills.js';
+import { ensureBundledSkills } from '../lib/skills/bundled.js';
 
 export const daemonStart = async (opts: { fresh?: boolean } = {}): Promise<void> => {
   // Never run the phone-driven daemon as root (#125) — same hard gate as install.

@@ -50,6 +50,11 @@ function sha256(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
+function sameHashes(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+}
+
 async function readManifest(skillDir: string): Promise<ManagedManifest | null> {
   const raw = await fs
     .readFile(path.join(skillDir, MANAGED_MANIFEST), 'utf-8')
@@ -97,12 +102,15 @@ async function syncSkillIntoDir(skill: BundledSkill, skillDir: string): Promise<
     changed++;
   }
 
-  const manifest: ManagedManifest = { version: 1, files: nextHashes };
-  const manifestBody = `${JSON.stringify(manifest, null, 2)}\n`;
-  const manifestPath = path.join(skillDir, MANAGED_MANIFEST);
-  if ((await fs.readFile(manifestPath, 'utf-8').catch(() => null)) !== manifestBody) {
+  // Rewrite the manifest only when the tracked set changed — reuse `previous`
+  // (already read above) instead of reading the file back.
+  if (!previous || !sameHashes(previous.files, nextHashes)) {
     await fs.mkdir(skillDir, { recursive: true });
-    await fs.writeFile(manifestPath, manifestBody);
+    const manifest: ManagedManifest = { version: 1, files: nextHashes };
+    await fs.writeFile(
+      path.join(skillDir, MANAGED_MANIFEST),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
   }
   return changed;
 }
@@ -111,17 +119,14 @@ async function syncSkillIntoDir(skill: BundledSkill, skillDir: string): Promise<
 export async function installSkills(
   skills: readonly BundledSkill[],
   targetDirs: readonly string[] = skillTargetDirs(),
-): Promise<{ changedFiles: number; skillDirs: string[] }> {
+): Promise<{ changedFiles: number }> {
   let changedFiles = 0;
-  const skillDirs: string[] = [];
   for (const dir of targetDirs) {
     for (const skill of skills) {
-      const skillDir = path.join(dir, skill.name);
-      changedFiles += await syncSkillIntoDir(skill, skillDir);
-      skillDirs.push(skillDir);
+      changedFiles += await syncSkillIntoDir(skill, path.join(dir, skill.name));
     }
   }
-  return { changedFiles, skillDirs };
+  return { changedFiles };
 }
 
 /** Remove every bundled skill from every target dir (uninstall). */
@@ -154,6 +159,7 @@ export async function skillsStatus(
   targetDirs: readonly string[] = skillTargetDirs(),
 ): Promise<SkillStatus> {
   const targets: SkillStatus['targets'] = [];
+  let state: SkillState = 'up-to-date'; // worst seen; precedence not-installed > drift
   for (const dir of targetDirs) {
     let dirState: SkillState = 'up-to-date';
     for (const skill of skills) {
@@ -165,13 +171,8 @@ export async function skillsStatus(
       if (s === 'drift') dirState = 'drift';
     }
     targets.push({ dir, state: dirState });
+    if (dirState === 'not-installed') state = 'not-installed';
+    else if (dirState === 'drift' && state === 'up-to-date') state = 'drift';
   }
-
-  const states = new Set(targets.map((t) => t.state));
-  const state: SkillState = states.has('not-installed')
-    ? 'not-installed'
-    : states.has('drift')
-      ? 'drift'
-      : 'up-to-date';
   return { state, targets };
 }
