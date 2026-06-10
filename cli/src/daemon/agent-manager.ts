@@ -60,6 +60,11 @@ type AgentSession = {
   knockKey: CryptoKey;
   sessionId: string | null;
   running: boolean;
+  // Whether the most recently completed turn's reply carried a block that needs
+  // the operator (a decision/confirm). Drives the urgency of the "done" push we
+  // fire when the turn (and any drained follow-ups) settle: high for attention,
+  // normal otherwise. Last turn in a drain batch wins.
+  lastReplyNeedsAttention: boolean;
   // First-device-wins binding flag. False until the first knock is auto-admitted;
   // once true, an additional knock is routed to a control-room confirm instead of
   // being silently auto-approved or silently dropped. Persisted to
@@ -375,6 +380,7 @@ export class AgentManager {
       knockKey,
       sessionId,
       running: false,
+      lastReplyNeedsAttention: false,
       bound: args.bound ?? false,
       pending: [],
       sse: null!,
@@ -386,7 +392,14 @@ export class AgentManager {
     // Execute one agent turn for `text`. The onChat handler owns the turn
     // lifecycle (the `running` flag and queue draining); this is just a single
     // spawn→parse→send cycle. `peerHandle` labels the untrusted-content envelope.
+    // Block types that mean the agent is waiting on the operator to decide
+    // something — these escalate the post-turn push to high urgency.
+    const ATTENTION_BLOCKS = new Set([
+      'confirm-danger', 'buttons', 'checklist', 'swipe', 'slider', 'sortable', 'run-command', 'commit',
+    ]);
+
     const runTurn = async (text: string, peerHandle: string): Promise<void> => {
+      session.lastReplyNeedsAttention = false;
       try {
         // Per-turn arg construction. buildResumeArgs fully overrides base args for resume turns
         // (codex's `exec resume <id>` is a subcommand, not a flag append). Default resume
@@ -471,6 +484,9 @@ export class AgentManager {
         const sendText = blockParsed?.text ?? output;
         const sendBlocks = blockParsed?.blocks ?? undefined;
 
+        session.lastReplyNeedsAttention = Array.isArray(sendBlocks)
+          && sendBlocks.some((b) => ATTENTION_BLOCKS.has((b as { type?: string })?.type ?? ''));
+
         console.log(`[${agentName}:${agentId}] -> ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}`);
 
         // Send output back — split if too long
@@ -493,6 +509,8 @@ export class AgentManager {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[${agentName}:${agentId}] Error:`, msg);
+        // A failed turn is worth surfacing — escalate the post-turn push.
+        session.lastReplyNeedsAttention = true;
         await encryptAndSend(
           this.server, roomHash, participantToken, messageKey,
           `Error: ${msg}`
@@ -575,6 +593,8 @@ export class AgentManager {
               ],
             }
           );
+          // A pending device-admit needs the operator — wake the control room.
+          void api.triggerPush(this.server, this.controlRoomHash, this.controlToken, 'high');
           return;
         }
         const ok = await this.approveAgentKnock(agentId, knockPubkey, knockMsgId);
@@ -674,6 +694,15 @@ export class AgentManager {
         } finally {
           session.running = false;
         }
+
+        // The agent has drained all queued work and is idle again — ping the
+        // phone (content-less; high urgency if the last reply needs a decision).
+        // Fire-and-forget so a slow/unconfigured push service can't stall the
+        // SSE handler.
+        void api.triggerPush(
+          this.server, roomHash, participantToken,
+          session.lastReplyNeedsAttention ? 'high' : 'normal'
+        );
       },
       onOpen: () => {
         console.log(`[${agentName}:${agentId}] SSE connected.`);

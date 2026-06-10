@@ -131,6 +131,25 @@ export const sendMessage = async (
   return res.json() as Promise<MessageResponse>;
 };
 
+// Fire a content-less push "tickle" for a room. The phone's service worker
+// turns this into a generic "an agent needs you" notification; no agent text
+// ever crosses the wire (see server/push.php). Best-effort by design — a
+// server without VAPID configured answers 503, an unreachable server throws,
+// and neither must disturb the turn loop, so this swallows everything and
+// callers fire-and-forget.
+export const triggerPush = async (
+  server: string,
+  roomHash: string,
+  token: string,
+  urgency: 'normal' | 'high' = 'normal'
+): Promise<void> => {
+  try {
+    await jsonPost(`${server}/api/rooms/${roomHash}/push`, { urgency }, token);
+  } catch {
+    // ignore — push is a nicety, not part of message delivery.
+  }
+};
+
 export const sendPresence = async (
   server: string,
   roomHash: string,

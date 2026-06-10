@@ -6,6 +6,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mercure.php';
 require_once __DIR__ . '/outbox.php';
 require_once __DIR__ . '/rate_limit.php';
+require_once __DIR__ . '/push.php';
 
 // Without this, an uncaught PDOException (SQLite busy past the 5s busy_timeout
 // under heavy room-switch contention) or any other Throwable from a handler
@@ -582,6 +583,81 @@ if (preg_match('#^/api/rooms/([^/]+)/disband$#', $path, $matches) && $method ===
     // only to the lobby topic) also tears down their lobby waiting UI.
     publish_room_and_lobby($room_hash, 'destroy', [], sha256_hex($sender));
     json_response(['status' => 'ok']);
+}
+
+// --- Web push (content-less "tickle" notifications) ---
+// See server/push.php for the privacy model: the server fans out a payload-less
+// wake-up, never any agent content.
+
+// Public: the browser needs the VAPID application server key to subscribe.
+if ($path === '/api/push/vapid-public-key' && $method === 'GET') {
+    enforce_rate_limit('vapid_key', 120, 60);
+    $cfg = vapid_config();
+    if ($cfg === null) {
+        json_response(['error' => 'push_disabled'], 503);
+    }
+    json_response(['key' => $cfg['public']]);
+}
+
+// A device opts into notifications for this room. Participant-token gated so
+// only a paired member can register an endpoint against the room.
+if (preg_match('#^/api/rooms/([^/]+)/push-subscribe$#', $path, $matches) && $method === 'POST') {
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    require_participant_token($room_hash);
+    enforce_rate_limit('push_subscribe', 30, 60);
+    if (!push_enabled()) {
+        json_response(['error' => 'push_disabled'], 503);
+    }
+    $body = read_json_body();
+    $sub = $body['subscription'] ?? null;
+    $endpoint = is_array($sub) ? ($sub['endpoint'] ?? null) : null;
+    $keys = is_array($sub) ? ($sub['keys'] ?? null) : null;
+    $p256dh = is_array($keys) ? ($keys['p256dh'] ?? null) : null;
+    $auth = is_array($keys) ? ($keys['auth'] ?? null) : null;
+    if (!is_string($endpoint) || strncmp($endpoint, 'https://', 8) !== 0
+        || !is_string($p256dh) || !is_string($auth)) {
+        json_response(['error' => 'invalid_subscription'], 400);
+    }
+    push_subscription_upsert($room_hash, $endpoint, $p256dh, $auth);
+    json_response(['status' => 'ok']);
+}
+
+// A device opts back out. Idempotent — deleting a row that isn't there is fine.
+if (preg_match('#^/api/rooms/([^/]+)/push-unsubscribe$#', $path, $matches) && $method === 'POST') {
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    require_participant_token($room_hash);
+    enforce_rate_limit('push_unsubscribe', 30, 60);
+    $body = read_json_body();
+    $endpoint = $body['endpoint'] ?? null;
+    if (!is_string($endpoint) || $endpoint === '') {
+        json_response(['error' => 'missing_endpoint'], 400);
+    }
+    push_subscription_delete($room_hash, $endpoint);
+    json_response(['status' => 'ok']);
+}
+
+// Fan a content-less push out to the room's subscribed devices. Two callers:
+// the CLI daemon (when an agent finishes a turn or needs attention) and the PWA
+// (after sending a chat message, so a backgrounded peer gets pinged). Both hold
+// a room participant token, which gates this route so a stranger can't spam a
+// room's devices. Fan-out is best-effort; we always 200.
+if (preg_match('#^/api/rooms/([^/]+)/push$#', $path, $matches) && $method === 'POST') {
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    require_participant_token($room_hash);
+    enforce_rate_limit('push_send', 120, 60);
+    $body = read_json_body();
+    $urgency = (($body['urgency'] ?? '') === 'high') ? 'high' : 'normal';
+    $sent = push_enabled() ? notify_room($room_hash, $urgency) : 0;
+    json_response(['status' => 'ok', 'sent' => $sent]);
 }
 
 json_response(['error' => 'not_found'], 404);

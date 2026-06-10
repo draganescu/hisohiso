@@ -14,6 +14,12 @@ services:
       - MERCURE_SUBSCRIBER_JWT_KEY=${MERCURE_SUBSCRIBER_JWT_KEY}
       - MERCURE_HUB_URL=${MERCURE_HUB_URL}
       - CHAT_DB_PATH=/data/chat.sqlite
+      # Web push (VAPID). Mint once with `bun scripts/gen-vapid.mjs <contact>`
+      # and put the three lines in .env. Leaving them unset disables push
+      # cleanly (the /push* endpoints answer 503); nothing else is affected.
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
     restart: unless-stopped
     # The FrankenPHP image's default HEALTHCHECK probes 127.0.0.1:2019 (the
     # Caddy admin API), which we deliberately disable via `admin off` in
