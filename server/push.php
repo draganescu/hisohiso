@@ -206,7 +206,11 @@ function push_subscription_delete(string $room_hash, string $endpoint): void
 // Dead subscriptions (404/410) are pruned inline. Returns the number queued.
 // Synchronous: a room rarely has more than one or two devices, so the caller's
 // fire-and-forget POST /push (CLI daemon or PWA) returns in well under a second.
-function notify_room(string $room_hash, string $urgency = 'normal'): int
+//
+// $exclude_endpoint skips one device — the PWA passes its OWN endpoint when it
+// triggers a push after sending a chat message, so the sender is never notified
+// of their own message. (The CLI daemon has no endpoint and passes null.)
+function notify_room(string $room_hash, string $urgency = 'normal', ?string $exclude_endpoint = null): int
 {
     if (!push_enabled()) {
         return 0;
@@ -223,6 +227,10 @@ function notify_room(string $room_hash, string $urgency = 'normal'): int
     $sent = 0;
     foreach ($endpoints as $endpoint) {
         if (!is_string($endpoint)) {
+            continue;
+        }
+        // Never notify the sender's own device of their own message.
+        if ($exclude_endpoint !== null && $endpoint === $exclude_endpoint) {
             continue;
         }
         $parts = parse_url($endpoint);

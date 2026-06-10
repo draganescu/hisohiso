@@ -175,17 +175,19 @@ export const postPushUnsubscribe = async (
 
 // Ping the room's other subscribed devices (content-less). The PWA calls this
 // after sending a chat message so a backgrounded peer gets notified — mirrors
-// what the CLI daemon does on an agent turn. The sender's own open tab is
-// suppressed by the service worker's visible-client check.
+// what the CLI daemon does on an agent turn. `excludeEndpoint` is the sender's
+// own push endpoint, so the server skips it and you're never notified of your
+// own message (the SW visible-client check is only a secondary guard).
 export const postPushTrigger = async (
   roomHash: string,
   token: string,
   urgency: 'normal' | 'high' = 'normal',
+  excludeEndpoint?: string,
 ): Promise<Response> => {
   return fetch(`/api/rooms/${roomHash}/push`, {
     method: 'POST',
     headers: { ...jsonHeaders, 'X-Chat-Token': token },
-    body: JSON.stringify({ urgency }),
+    body: JSON.stringify({ urgency, ...(excludeEndpoint ? { exclude_endpoint: excludeEndpoint } : {}) }),
   });
 };
 

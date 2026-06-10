@@ -55,7 +55,6 @@ import {
   postDisband,
   postKnock,
   postLeave,
-  postPushTrigger,
   postReject,
   postRoomSettings,
   postWrappedToken,
@@ -63,7 +62,7 @@ import {
   type OutboxMessage,
   type RoomLookupResponse,
 } from '../lib/room-session';
-import { disablePush, enablePush, getPushStatus, type PushStatus } from '../lib/push';
+import { disablePush, enablePush, getPushStatus, triggerRoomPush, type PushStatus } from '../lib/push';
 import { BlockRenderer, type BlockResponseInput } from '../components/blocks/BlockRenderer';
 import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
@@ -1165,10 +1164,10 @@ const RoomController = () => {
     const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
 
     if (response.ok) {
-      // Notify the room's other devices if they've enabled notifications
-      // (content-less; the SW suppresses it for anyone with the app open).
-      // Best-effort — never block or fail the send over a push hiccup.
-      void postPushTrigger(roomHash, token).catch(() => {});
+      // Notify the room's OTHER devices — never the sender's own (triggerRoomPush
+      // excludes this device's endpoint server-side). Best-effort; never blocks
+      // or fails the send over a push hiccup.
+      void triggerRoomPush(roomHash, token);
       const messageRecord: ChatMessage = {
         id: msgId,
         room_hash: roomHash,
