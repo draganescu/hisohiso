@@ -15,10 +15,10 @@ const LOGS_DIR = join(CONFIG_DIR, 'logs');
 // The detached daemon listens here; CLI verbs (status/pair/admit) connect.
 const SOCKET_FILE = join(CONFIG_DIR, 'daemon.sock');
 
-// The PWA + API now live on the app subdomain; the apex (hisohiso.org) serves
-// the static content site on a separate host. Self-hosters override this with
+// The apex serves the PWA + API; the static content site lives on a separate
+// host at www.hisohiso.org. Self-hosters override this with
 // `hisohiso server https://your-host`.
-const DEFAULT_SERVER = 'https://app.hisohiso.org';
+const DEFAULT_SERVER = 'https://hisohiso.org';
 
 export { CONFIG_DIR, CONFIG_FILE, REGISTRY_FILE, ROOMS_FILE, PID_FILE, LOGS_DIR, SOCKET_FILE, DEFAULT_SERVER };
 

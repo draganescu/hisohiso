@@ -6,8 +6,8 @@ provider:
 
 | Host role | Domain | Serves | Deploy flow |
 | --- | --- | --- | --- |
-| **Marketing host** | `hisohiso.org` (+ `www`) | the static marketing/content site (`public/`) | push webhook → `_deploy.php` does `git pull` |
-| **App host** | `app.hisohiso.org` | the React PWA + `/api/*` + Mercure | app deploy workflow (`.github/workflows/deploy.yml`) |
+| **App host** | `hisohiso.org` (apex) | the React PWA + `/api/*` + Mercure | app deploy workflow (`.github/workflows/deploy.yml`) |
+| **Marketing host** | `www.hisohiso.org` | the static marketing/content site (`public/`) | push webhook → `_deploy.php` does `git pull` |
 
 It's one repo. Each host pulls only its own slice, and each deploy flow only
 fires for its own paths — a marketing edit never rebuilds the app container,
@@ -17,23 +17,30 @@ and an API change never touches the marketing host.
 flowchart TB
     GH[GitHub: draganescu/hisohiso] -- push public/** --> WH[webhook]
     GH -- "push app/** server/** Caddyfile …" --> GA[GitHub Actions]
-    WH -- POST /_deploy.php --> MKT[Marketing host\napex: static public/]
-    GA -- SSH + compose --> APP[App host\napp.: PWA + API + Mercure]
+    WH -- POST /_deploy.php --> MKT[Marketing host\nwww.: static public/]
+    GA -- SSH + compose --> APP[App host\napex: PWA + API + Mercure]
     USER((browser)) --> MKT
     USER -- "open channel → /new" --> APP
     CLI[hisohiso CLI] --> APP
 ```
 
+The apex keeps the app on purpose: existing `hisohiso.org/room#…` links, paired
+phones, and CLI configs all keep working — the split only moves the static
+pages out to `www`.
+
 ## What changed in the repo to enable this
 
 - **Container stopped serving marketing content.** `Dockerfile` no longer `COPY`s
   `public/`; `compose.yaml` / `compose.prod.yaml` dropped the `./public` mount;
-  the Caddyfile `@landing` block and the `www` redirect were removed. `/` on the
-  app host now falls through to the React app's own landing.
+  the Caddyfile `@landing` block and the `www → apex` redirect were removed
+  (`www` now points at the marketing host instead). `/` on the app host falls
+  through to the React app's own landing.
 - **Cross-host links made absolute.** The content pages' "open channel" CTAs
-  (`href="/new"`) became `https://app.hisohiso.org/new`, because the React app
-  no longer lives on the same origin. Internal content links stay relative.
-- **CLI default** points at `https://app.hisohiso.org`.
+  (`href="/new"`) became `https://hisohiso.org/new`, because the React app no
+  longer lives on the same origin as the content site. Their `og:image` URLs
+  point at `www` (the apex no longer serves `og.png`). Internal content links
+  stay relative.
+- **CLI default** stays `https://hisohiso.org`.
 - **App deploy workflow path-filtered** so a `public/**`-only push doesn't
   redeploy the app host.
 - **`public/_deploy.php`** added — a generic PHP push-hook receiver for the
@@ -48,9 +55,8 @@ served docroot, and run `git` from PHP via `shell_exec`.
    ```sh
    git clone https://github.com/draganescu/hisohiso.git ~/repos/hisohiso
    ```
-2. Set `hisohiso.org`'s **web directory** to `~/repos/hisohiso/public` so the
-   served docroot *is* `public/`. Point `www` at the same place, or redirect it
-   to the apex.
+2. Set `www.hisohiso.org`'s **web directory** to `~/repos/hisohiso/public` so
+   the served docroot *is* `public/`.
 3. Write the shared webhook secret to the **repo root** (one level above the
    docroot, so it's never web-served; it's also `.gitignored`):
    ```sh
@@ -64,7 +70,7 @@ served docroot, and run `git` from PHP via `shell_exec`.
 
 Repo → **Settings → Webhooks → Add webhook**:
 
-- **Payload URL:** `https://hisohiso.org/_deploy.php`
+- **Payload URL:** `https://www.hisohiso.org/_deploy.php`
 - **Content type:** `application/json`
 - **Secret:** the same value you wrote to `.deploy-secret`
 - **Events:** "Just the push event"
@@ -86,31 +92,37 @@ that polls instead:
 
 ## App host changes
 
-The app moves from the apex to the `app.` subdomain:
+The app stays on the apex — no DNS or `SERVER_NAME` change on the app host.
+What does change:
 
-1. Add a DNS **A record** `app.hisohiso.org → <app host IP>`.
-2. Set `SERVER_NAME=app.hisohiso.org` in the app host's `.env` so Caddy fetches
-   a cert for the new hostname. (The Mercure JWT keys are injected by the
-   deploy workflow.)
-3. Configure the deploy workflow secrets for your app host:
+1. Configure the deploy workflow secrets for your app host (renamed to be
+   provider-neutral):
    - `APP_HOST_SSH_KEY`
    - `APP_HOST`
    - `APP_USER`
    - `APP_DIR`
    - `APP_SSH_PORT` (optional; defaults to `22`)
-4. Deploy as usual — push, or run `scripts/deploy.sh` on the box.
+2. Deploy as usual — push, or run `scripts/deploy.sh` on the box. After this
+   deploy the container no longer serves the content pages or answers for
+   `www`.
 
 ## Cutover order (avoid downtime)
 
-1. **Marketing host first:** clone, set the web directory, secret, webhook.
-   Verify `https://hisohiso.org` still resolves to the current app host for now
-   — don't move DNS yet.
-2. **Stand up the app subdomain:** add the `app.` A record, set `SERVER_NAME`,
-   deploy the app changes. Verify `https://app.hisohiso.org` serves the PWA and
-   `https://app.hisohiso.org/api/stats` responds.
-3. **Flip the apex:** repoint `hisohiso.org` (+ `www`) DNS to the marketing
-   host. Once it propagates, the apex serves the content site and `app.` serves
-   the PWA.
-4. Tell existing users / re-issue any shared room links from the `app.` host.
-   Old `hisohiso.org/room#…` links break once the apex moves — only the
-   `app.hisohiso.org` origin runs the React app now.
+1. **Marketing host first:** clone, set the web directory for
+   `www.hisohiso.org`, write the secret, add the webhook. The host will serve
+   it as soon as DNS arrives.
+2. **Move `www` DNS:** repoint `www.hisohiso.org` from the app host to the
+   marketing host. Until the app changes deploy, the old container still
+   redirects any stragglers hitting it for `www` to the apex — harmless.
+3. **Deploy the app changes:** merge this PR / push — the container rebuild
+   drops the landing pages and the `www` site block. Verify
+   `https://hisohiso.org/rooms` serves the PWA and
+   `https://hisohiso.org/api/stats` responds.
+4. **Verify the split:** `https://www.hisohiso.org` serves the content site,
+   its "open channel" CTAs land on `https://hisohiso.org/new`, and an old
+   `hisohiso.org/room#…` link still opens.
+
+Do **not** deploy the app changes before moving `www` DNS: once the container
+drops the `www` block, Caddy has no certificate or site for `www` requests
+that still resolve to the app host, and they'll fail TLS instead of
+redirecting.

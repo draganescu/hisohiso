@@ -15,7 +15,7 @@
  *   - point the domain's web directory at the repo's `public/` folder
  *   - write the shared secret to `.deploy-secret` in the REPO ROOT (one dir up
  *     from this file — outside the web directory, and .gitignored)
- *   - add a GitHub webhook → https://hisohiso.org/_deploy.php, content-type
+ *   - add a GitHub webhook → https://www.hisohiso.org/_deploy.php, content-type
  *     application/json, secret = the same value, events = "push"
  *
  * Security model: the endpoint is public (GitHub must reach it), so it does

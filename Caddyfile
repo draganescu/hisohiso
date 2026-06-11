@@ -82,9 +82,9 @@
 	}
 
 	# NOTE: the landing page + static content pages (formerly served here from
-	# /app/landing) now live on a separate marketing host at the apex domain.
-	# This container serves only the React app + /api/* + Mercure under the
-	# app subdomain. `/` falls through to the React app's own landing.
+	# /app/landing) now live on a separate marketing host at www.hisohiso.org.
+	# This container serves only the React app + /api/* + Mercure on the apex.
+	# `/` falls through to the React app's own landing.
 
 	# React app (rooms)
 	handle {
