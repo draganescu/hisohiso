@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import AppLock from './components/AppLock';
 import RoomsPage from './pages/RoomsPage';
 import RoomCreator from './pages/RoomCreator';
@@ -7,16 +6,11 @@ import RoomController from './pages/RoomController';
 import NotFound from './pages/NotFound';
 import { useTheme } from './lib/theme';
 
-// The `/` route is owned by the static marketing site (served by Caddy from
-// /app/landing), not the React app. If anyone lands here through a stale path
-// or in dev, send them to the marketing page so they see the canonical pitch
-// instead of an orphaned PWA-flavored copy.
-const LandingRedirect = () => {
-  useEffect(() => {
-    window.location.replace('/');
-  }, []);
-  return null;
-};
+// `/` used to escape the SPA to the static landing Caddy served at the root.
+// The landing moved to the marketing host (www.hisohiso.org), so the root now
+// belongs to the app — send it to the rooms list. (The old full-page
+// `location.replace('/')` would reload `/` forever now that the SPA owns it.)
+const LandingRedirect = () => <Navigate to="/rooms" replace />;
 
 const App = () => {
   // Subscribed at the root so the persisted choice and the system-preference
