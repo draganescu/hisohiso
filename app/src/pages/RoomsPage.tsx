@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
 import { navigateTo } from '../lib/navigation';
+import { groupOpenChannels } from '../lib/room-grouping';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
 import InstallPrompt from '../components/InstallPrompt';
 import { RoomRow } from '../components/RoomRow';
+import { GroupedChannelList } from '../components/GroupedChannelList';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -146,9 +148,9 @@ const RoomsPage = () => {
     />
   );
 
-  // Open channels = the live operator surface (the daemon control room and the
-  // agent rooms it spawned). Plain peer conversations list separately below.
-  const openChannels = rooms.filter((room) => room.kind !== 'chat');
+  // Open channels = the live operator surface, grouped so each daemon's control
+  // room owns the agents it spawned. Plain peer conversations list separately.
+  const { groups, orphanAgents, hasAny: hasOpenChannels } = groupOpenChannels(rooms);
   const conversations = rooms.filter((room) => room.kind === 'chat');
 
   return (
@@ -240,18 +242,18 @@ const RoomsPage = () => {
           </div>
         )}
 
-        {openChannels.length > 0 && (
-          <section className="flex flex-col gap-3">
+        {hasOpenChannels && (
+          <section className="flex flex-col gap-5">
             <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
               Open channels
             </h2>
-            {openChannels.map(renderRoomRow)}
+            <GroupedChannelList groups={groups} orphanAgents={orphanAgents} renderRow={renderRoomRow} />
           </section>
         )}
 
         {conversations.length > 0 && (
           <section className="flex flex-col gap-3">
-            {openChannels.length > 0 && (
+            {hasOpenChannels && (
               <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
                 Conversations
               </h2>

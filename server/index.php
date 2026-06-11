@@ -424,17 +424,38 @@ if (preg_match('#^/api/rooms/([^/]+)/message$#', $path, $matches) && $method ===
         json_response(['error' => 'missing_payload'], 400);
     }
     $sender_hash = sha256_hex($sender);
-    publish_event($room_hash, 'chat', [
-        'encrypted_payload' => $body['encrypted_payload'],
-        'msg_id' => $body['msg_id'] ?? null,
-    ], $sender_hash);
-    // catch_up is re-checked INSIDE outbox_append under a BEGIN IMMEDIATE
-    // transaction that serializes against outbox_wipe — this is the close-
-    // over of the publish→append TOCTOU window where a concurrent /settings
-    // (off) used to strand one orphan message past the operator's disable.
-    if (isset($body['msg_id']) && is_string($body['msg_id']) && $body['msg_id'] !== ''
-        && is_string($body['encrypted_payload'])) {
-        outbox_append($room_hash, $body['msg_id'], $body['encrypted_payload'], $sender_hash);
+    // Ephemeral status (e.g. an agent's live "working…" indicator) is transient:
+    // publish it as a `status` event and DO NOT append it to the outbox, so it
+    // never persists or replays on catch-up. Everything else is a chat message.
+    //
+    // Trust model: a `status` event is authenticated only as "from a room
+    // participant" (require_participant_token above), exactly like `chat`. In the
+    // flat room model the relay cannot tell the agent's daemon apart from a phone,
+    // so any member could publish a forged status (spoof a fake "working"/"stuck"
+    // bubble) just as any member can already forge a chat message — this is the
+    // same boundary, not a new one. The ephemeral flag only skips outbox
+    // persistence; since `status` is rendered as a transient indicator and never
+    // as chat history, it cannot be used to inject hidden/persistent content.
+    // Per-agent authenticity would require participant roles (out of scope here).
+    $ephemeral = isset($body['ephemeral']) && $body['ephemeral'] === true;
+    if ($ephemeral) {
+        publish_event($room_hash, 'status', [
+            'encrypted_payload' => $body['encrypted_payload'],
+            'msg_id' => $body['msg_id'] ?? null,
+        ], $sender_hash);
+    } else {
+        publish_event($room_hash, 'chat', [
+            'encrypted_payload' => $body['encrypted_payload'],
+            'msg_id' => $body['msg_id'] ?? null,
+        ], $sender_hash);
+        // catch_up is re-checked INSIDE outbox_append under a BEGIN IMMEDIATE
+        // transaction that serializes against outbox_wipe — this is the close-
+        // over of the publish→append TOCTOU window where a concurrent /settings
+        // (off) used to strand one orphan message past the operator's disable.
+        if (isset($body['msg_id']) && is_string($body['msg_id']) && $body['msg_id'] !== ''
+            && is_string($body['encrypted_payload'])) {
+            outbox_append($room_hash, $body['msg_id'], $body['encrypted_payload'], $sender_hash);
+        }
     }
     touch_presence($room_hash, $sender);
     touch_room($room_hash);

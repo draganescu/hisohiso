@@ -9,6 +9,11 @@ export type AgentHandle = {
   closeStdin: () => void;
   onLine: (callback: (line: string, isStderr: boolean) => void) => void;
   onExit: Promise<{ code: number | null; signal: string | null }>;
+  // Resolves when the stdout line reader has flushed and closed. The 'exit'
+  // event can fire before readline emits the final buffered line, so callers
+  // that need the last line (e.g. a streaming provider's terminal `result`
+  // event) must await this AFTER onExit, not race on exit alone.
+  stdoutClosed: Promise<void>;
   kill: () => void;
   pid: number | undefined;
 };
@@ -274,14 +279,24 @@ export const spawnAgent = async (
 
   const lineCallbacks: Array<(line: string, isStderr: boolean) => void> = [];
 
+  // Resolves when stdout's reader closes (EOF), so callers can wait for the last
+  // line to flush after the process exits. Resolved immediately if there is no
+  // stdout stream to read.
+  let resolveStdoutClosed: () => void;
+  const stdoutClosed = new Promise<void>((resolve) => { resolveStdoutClosed = resolve; });
+
   const setupLineReader = (stream: Readable | null, isStderr: boolean) => {
-    if (!stream) return;
+    if (!stream) {
+      if (!isStderr) resolveStdoutClosed();
+      return;
+    }
     const rl = createInterface({ input: stream });
     rl.on('line', (line) => {
       for (const cb of lineCallbacks) {
         cb(line, isStderr);
       }
     });
+    if (!isStderr) rl.on('close', () => resolveStdoutClosed());
   };
 
   setupLineReader(child.stdout, false);
@@ -297,6 +312,17 @@ export const spawnAgent = async (
     child.on('exit', (code, signal) => {
       resolve({ code, signal });
     });
+    // A spawn failure (ENOENT / EACCES) emits 'error' and never 'exit'. Without
+    // this handler the promise would hang forever (the turn never completes,
+    // session stays "running") AND Node would throw the unhandled 'error' as an
+    // uncaught exception, taking down the daemon. Surface the message on the
+    // stderr line stream and resolve with a non-zero code so callers fail the
+    // turn cleanly. (runCommand has the same handler; spawnAgent lacked it.)
+    child.on('error', (err) => {
+      for (const cb of lineCallbacks) cb(`spawn error: ${err.message}`, true);
+      resolveStdoutClosed();
+      resolve({ code: 1, signal: null });
+    });
   });
 
   return {
@@ -310,6 +336,7 @@ export const spawnAgent = async (
       lineCallbacks.push(callback);
     },
     onExit: exitPromise,
+    stdoutClosed,
     kill: () => {
       child.kill('SIGTERM');
     },

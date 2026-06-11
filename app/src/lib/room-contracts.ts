@@ -2,7 +2,7 @@ export type RoomState = 'INIT' | 'LOBBY_WAITING' | 'LOBBY_EMPTY' | 'PARTICIPANT'
 
 export type RoomEvent = {
   v: number;
-  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy' | 'settings' | 'token';
+  type: 'chat' | 'knock' | 'approve' | 'reject' | 'destroy' | 'settings' | 'token' | 'status';
   room_hash: string;
   from?: string | null;
   ts: number;

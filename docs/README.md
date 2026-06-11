@@ -18,6 +18,7 @@ thing, jump to it.
 | [cli.md](cli.md) | The `hisohiso` CLI — bridging a terminal AI agent to a room on your phone. wrap mode, the always-on daemon + its control plane, and the `update` / `uninstall` lifecycle. |
 | [stack-and-server.md](stack-and-server.md) | **The stack and the recommended server setup.** What each piece is, why it's there, and how to run it in production. |
 | [host-bootstrap.md](host-bootstrap.md) | The provisioning runbook — turning a fresh Linux box into a hardened hisohiso host. |
+| [local-worktree-testing.md](local-worktree-testing.md) | **Testing a PR locally** — bring up a branch's Docker relay (detached), point an isolated daemon at it, and pair from a real terminal. Per-worktree, side-by-side stacks. |
 
 ## The one-paragraph version
 

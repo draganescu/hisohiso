@@ -55,7 +55,9 @@ export type SendOptions = {
   // can display 'Pairing code: 4827' next to it. The phone must type it as the
   // room password during the join flow — that's what gates k_msg/k_knock.
   // `room_kind` on the action lets the phone stamp the joined room's kind.
-  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: RoomKind };
+  // `controlRoomHash` (agent join actions only) tells the phone which control
+  // room spawned the agent, so it can group the agent under its daemon.
+  action?: { type: string; roomSecret: string; label: string; code?: string; roomName?: string; room_kind?: RoomKind; controlRoomHash?: string };
   blocks?: unknown[];
   // Room-kind discriminator carried inside the encrypted envelope. The phone
   // reads it to learn what a QR-paired room is (e.g. the control room, which
@@ -75,6 +77,14 @@ export type SendOptions = {
   // machine's hostname) since the QR-pairing flow gives the phone no
   // other channel to learn a name for it.
   room_name?: string;
+  // Transient work indicator (NOT a chat message). When set, the payload carries
+  // a `status` envelope and `ephemeral` marks the send so the server publishes it
+  // as a `status` event and skips the outbox — it never persists or replays. The
+  // phone renders one in-place "agent is working" bubble, updates it on each
+  // status, and clears it on the terminal `done`/`failed`. `seq` is a per-agent
+  // monotonic counter so the phone can discard a status that arrives out of order.
+  status?: { state: string; seq: number };
+  ephemeral?: boolean;
 };
 
 export const encryptAndSend = async (
@@ -102,9 +112,12 @@ export const encryptAndSend = async (
   if (typeof options?.room_name === 'string' && options.room_name !== '') {
     payloadObj.room_name = options.room_name;
   }
+  if (options?.status) {
+    payloadObj.status = options.status;
+  }
   const payload = JSON.stringify(payloadObj);
   const encrypted = await encryptText(messageKey, roomHash, 'chat', msgId, payload);
-  await api.sendMessage(server, roomHash, token, msgId, JSON.stringify(encrypted));
+  await api.sendMessage(server, roomHash, token, msgId, JSON.stringify(encrypted), options?.ephemeral === true);
 };
 
 export const bridgeAgentToRoom = async (
