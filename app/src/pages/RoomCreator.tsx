@@ -128,7 +128,7 @@ const RoomCreator = () => {
             </button>
 
             <p className="mt-4 text-center text-xs text-ink-dim">
-              <a className="underline decoration-rule underline-offset-4 hover:text-ink" href="/security/">
+              <a className="underline decoration-rule underline-offset-4 hover:text-ink" href="https://www.hisohiso.org/security/">
                 How the encryption works
               </a>
             </p>

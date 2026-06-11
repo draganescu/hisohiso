@@ -158,7 +158,9 @@ const RoomsPage = () => {
       <div className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-10 sm:px-6 sm:py-16">
         <header className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
+            <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">
+              <a href="https://www.hisohiso.org/" className="hover:text-ink">hisohiso</a>
+            </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Your channels.</h1>
             <p className="mt-2 text-sm text-ink-soft">Stored on this device only.</p>
           </div>
@@ -266,10 +268,10 @@ const RoomsPage = () => {
 
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 text-xs text-ink-dim">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/">
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://www.hisohiso.org/">
               What is hisohiso?
             </a>
-            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="/security/">
+            <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://www.hisohiso.org/security/">
               Protocol
             </a>
             <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://github.com/draganescu/hisohiso">
