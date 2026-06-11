@@ -1,8 +1,17 @@
+// Which provider's control surface an agent speaks. Drives streaming-status
+// parsing (see agent-stream / turn-status). 'other' = a plain command with no
+// streaming surface (bash/python/…).
+export type AgentProvider = 'claude' | 'codex' | 'other';
+
 export type AgentProfile = {
   command: string;
   args: string[];
   description: string;
   mode: 'oneshot' | 'session';
+  // Which provider's control surface this agent speaks. Drives the streaming
+  // status parser (see agent-stream / turn-status). Absent => 'other': a plain
+  // command with no streaming surface (bash/python/…).
+  provider?: AgentProvider;
   appendSystemPrompt?: string;
   // Output parser dispatch. Default 'claude-json' = single JSON {result, session_id}.
   // 'codex-ndjson' = JSONL event stream with thread.started + item.completed/agent_message.
@@ -28,9 +37,12 @@ import { BLOCK_PROMPT } from './preamble.js';
 const BUILTIN_AGENTS: Record<string, AgentProfile> = {
   'claude': {
     command: 'claude',
-    args: ['-p', '--output-format', 'json', '--dangerously-skip-permissions'],
+    // stream-json gives incremental events for live status (turn-status); the
+    // bypass flag runs the agent with full permissions, like main.
+    args: ['-p', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'],
     description: 'Claude Code autonomous session (multi-turn)',
     mode: 'session',
+    provider: 'claude',
     appendSystemPrompt: BLOCK_PROMPT,
   },
   'claude-once': {
@@ -42,9 +54,11 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
   },
   'codex': {
     command: 'codex',
+    // Runs with the sandbox/approval bypass, like main — agents are trusted.
     args: ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
     description: 'Codex CLI (OpenAI) autonomous session (multi-turn)',
     mode: 'session',
+    provider: 'codex',
     appendSystemPrompt: BLOCK_PROMPT,
     outputFormat: 'codex-ndjson',
     systemPromptMode: 'codex-config',
@@ -64,6 +78,9 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
 export const getAgent = (name: string): AgentProfile | null => {
   return BUILTIN_AGENTS[name] ?? null;
 };
+
+// Resolve a profile's provider, defaulting to 'other' (no permission surface).
+export const providerOf = (profile: AgentProfile): AgentProvider => profile.provider ?? 'other';
 
 export const listAgents = (): Record<string, AgentProfile> => {
   return { ...BUILTIN_AGENTS };

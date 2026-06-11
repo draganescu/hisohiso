@@ -2,8 +2,10 @@ import { createRoomAndJoin, encryptAndSend, quoteForAgent, type SendOptions } fr
 import { deriveMessageKey, deriveKnockKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { generatePairingCode } from '../lib/prompt.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
-import { getAgent, type AgentProfile } from '../lib/agents.js';
+import { getAgent, providerOf, type AgentProfile } from '../lib/agents.js';
 import { isCommandAvailable } from '../lib/agent-detect.js';
+import { runStreamingTurn } from '../lib/agent-stream.js';
+import { describeStatus, type TurnStatus } from '../lib/turn-status.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
@@ -36,6 +38,12 @@ const SEEN_MSG_MAX = 500;
 // resolved later and the in-memory pending map can't grow unbounded.
 const PENDING_KNOCK_TTL_MS = 10 * 60 * 1000;
 
+// Block types that mean the agent is waiting on the operator to decide
+// something — these escalate the post-turn push to high urgency.
+const ATTENTION_BLOCKS = new Set([
+  'confirm-danger', 'buttons', 'checklist', 'swipe', 'slider', 'sortable', 'run-command', 'commit',
+]);
+
 // Prune a msg_id ledger to the TTL window and the count cap. Returns a fresh
 // object so callers can use it for both the in-memory Map seed and the
 // persisted record without aliasing.
@@ -66,6 +74,10 @@ type AgentSession = {
   // fire when the turn (and any drained follow-ups) settle: high for attention,
   // normal otherwise. Last turn in a drain batch wins.
   lastReplyNeedsAttention: boolean;
+  // Monotonic counter stamped on each ephemeral status send so the phone can
+  // discard a status that arrives out of order (e.g. a late 'tool' landing after
+  // the turn's terminal 'done'). In-memory only; resets are harmless.
+  statusSeq: number;
   // First-device-wins binding flag. False until the first knock is auto-admitted;
   // once true, an additional knock is routed to a control-room confirm instead of
   // being silently auto-approved or silently dropped. Persisted to
@@ -376,6 +388,11 @@ export class AgentManager {
     // linger. Missing => empty ledger (tolerant reload, never crashes).
     const seenSeed = pruneSeenMsgIds(args.seenMsgIds ?? {});
 
+    // Which provider's control surface this agent speaks (drives the streaming
+    // vs buffered turn path + status parsing). Derived from the profile each
+    // turn — not stored on the session, since the profile already is.
+    const provider = providerOf(profile);
+
     const session: AgentSession = {
       agentId,
       name: agentName,
@@ -390,6 +407,7 @@ export class AgentManager {
       sessionId,
       running: false,
       lastReplyNeedsAttention: false,
+      statusSeq: 0,
       bound: args.bound ?? false,
       pending: [],
       sse: null!,
@@ -400,13 +418,7 @@ export class AgentManager {
 
     // Execute one agent turn for `text`. The onChat handler owns the turn
     // lifecycle (the `running` flag and queue draining); this is just a single
-    // spawn→parse→send cycle. `peerHandle` labels the untrusted-content envelope.
-    // Block types that mean the agent is waiting on the operator to decide
-    // something — these escalate the post-turn push to high urgency.
-    const ATTENTION_BLOCKS = new Set([
-      'confirm-danger', 'buttons', 'checklist', 'swipe', 'slider', 'sortable', 'run-command', 'commit',
-    ]);
-
+    // spawn→stream→send cycle. `peerHandle` labels the untrusted-content envelope.
     const runTurn = async (text: string, peerHandle: string): Promise<void> => {
       session.lastReplyNeedsAttention = false;
       try {
@@ -442,30 +454,83 @@ export class AgentManager {
         if (isResume && !session.profile.buildResumeArgs) {
           argv.push('--resume', session.sessionId!);
         }
-        argv.push(messageToSend);
 
-        const displayArgs = argv.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+        const env = {
+          HISOHISO_AGENT_ID: session.agentId,
+          HISOHISO_AGENT_NAME: session.name,
+          HISOHISO_ROOM_HASH: session.roomHash,
+          // HISOHISO_ROOM_SECRET is opt-in per profile (finding #97): withheld
+          // by default so a spawned `bash`/`python`/etc. can't `env | nc` the
+          // room secret out. Only agents registered with --needs-room-secret
+          // (or a built-in profile that sets needsRoomSecret) receive it.
+          ...(session.profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: session.roomSecret } : {}),
+        };
+
+        // Streaming providers (Claude/Codex): run the turn with full permissions
+        // (the profile carries the provider's bypass flag, like main) while
+        // pushing live status into the room.
+        if (provider === 'claude' || provider === 'codex') {
+          console.log(
+            `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${provider}${isResume ? ' resume' : ''})`,
+          );
+
+          // Forward every status from the runner (it already dedups by state and
+          // heartbeats, so this is the single cadence source) as ONE transient,
+          // in-place indicator on the phone — an ephemeral `status` signal, never
+          // a chat message. The terminal 'done'/'failed' IS sent: it's the
+          // explicit clear, so the indicator no longer rides on the reply (an
+          // intermediate "queued"/"exit code" chat can't prematurely clear it,
+          // and a dropped reply can't strand it). A monotonic seq lets the phone
+          // discard a status that arrives out of order (a late 'tool' after 'done').
+          const onStatus = (s: TurnStatus): void => {
+            const seq = ++session.statusSeq;
+            void encryptAndSend(this.server, roomHash, participantToken, messageKey, describeStatus(s), {
+              ephemeral: true,
+              status: { state: s.kind, seq },
+            }).catch(() => {});
+          };
+
+          const result = await runStreamingTurn({
+            command: session.profile.command,
+            argv,
+            prompt: messageToSend,
+            format: provider,
+            env,
+            onStatus,
+          });
+
+          if (session.profile.mode === 'session' && result.sessionId && result.sessionId !== session.sessionId) {
+            session.sessionId = result.sessionId;
+            void this.persistRooms();
+          }
+
+          const streamed = (result.text || '').trim();
+          session.lastReplyNeedsAttention = await this.sendAgentOutput(roomHash, participantToken, messageKey, streamed || '(no output)');
+          if (result.code !== 0 || result.isError) {
+            console.error(`[${agentName}:${agentId}] turn exited code ${result.code}`);
+            // The buffered path surfaces "(exit code N)"; mirror that here so a
+            // hard failure that produced no result/error text isn't shown to the
+            // operator as a bare "(no output)" with no sign anything went wrong.
+            if (!streamed) {
+              await encryptAndSend(
+                this.server, roomHash, participantToken, messageKey,
+                `(turn failed${result.code != null ? `, exit code ${result.code}` : ''})`,
+              ).catch(() => {});
+            }
+          }
+          return;
+        }
+
+        // Non-streaming providers (bash/python/aider/registry): unchanged
+        // buffered spawn→parse→send. No permission surface, no live status.
+        argv.push(messageToSend);
+        const displayArgs = argv.map((a) => (a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a));
         console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
 
-        const result = await runCommand(session.profile.command, argv, {
-          env: {
-            HISOHISO_AGENT_ID: session.agentId,
-            HISOHISO_AGENT_NAME: session.name,
-            HISOHISO_ROOM_HASH: session.roomHash,
-            // HISOHISO_ROOM_SECRET is opt-in per profile (finding #97): withheld
-            // by default so a spawned `bash`/`python`/etc. can't `env | nc` the
-            // room secret out. Only agents registered with --needs-room-secret
-            // (or a built-in profile that sets needsRoomSecret) receive it.
-            ...(session.profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: session.roomSecret } : {}),
-          },
-        });
+        const result = await runCommand(session.profile.command, argv, { env });
 
-        // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
-        // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
-        // capture is gated on session mode since oneshot turns don't persist one.
         let parsedText: string;
         let parsedSessionId: string | null = null;
-
         if (session.profile.outputFormat === 'codex-ndjson') {
           const parsed = parseCodexNdjson(result.stdout);
           parsedText = parsed.text;
@@ -479,51 +544,21 @@ export class AgentManager {
         }
 
         const output = (parsedText || result.stderr || '(no output)').trim();
-
         if (session.profile.mode === 'session' && parsedSessionId && parsedSessionId !== session.sessionId) {
           session.sessionId = parsedSessionId;
-          // Persist immediately so a daemon restart can pick up exactly where we are.
-          // Cheap (small JSON write); session-mode agents rotate sessionId per turn so this
-          // keeps the on-disk handle current.
           void this.persistRooms();
         }
 
-        // Try to parse block-structured output
-        const blockParsed = parseBlockOutput(output);
-        const sendText = blockParsed?.text ?? output;
-        const sendBlocks = blockParsed?.blocks ?? undefined;
-
-        session.lastReplyNeedsAttention = Array.isArray(sendBlocks)
-          && sendBlocks.some((b) => ATTENTION_BLOCKS.has((b as { type?: string })?.type ?? ''));
-
-        console.log(`[${agentName}:${agentId}] -> ${sendText.slice(0, 120)}${sendText.length > 120 ? '...' : ''}${sendBlocks ? ` [${sendBlocks.length} blocks]` : ''}`);
-
-        // Send output back — split if too long
-        const MAX_MSG = 4000;
-        if (sendText.length <= MAX_MSG) {
-          await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
-        } else {
-          for (let i = 0; i < sendText.length; i += MAX_MSG) {
-            const chunk = sendText.slice(i, i + MAX_MSG);
-            await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
-          }
-        }
-
+        session.lastReplyNeedsAttention = await this.sendAgentOutput(roomHash, participantToken, messageKey, output);
         if (result.code !== 0 && result.stderr) {
-          await encryptAndSend(
-            this.server, roomHash, participantToken, messageKey,
-            `(exit code ${result.code})`
-          );
+          await encryptAndSend(this.server, roomHash, participantToken, messageKey, `(exit code ${result.code})`);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[${agentName}:${agentId}] Error:`, msg);
         // A failed turn is worth surfacing — escalate the post-turn push.
         session.lastReplyNeedsAttention = true;
-        await encryptAndSend(
-          this.server, roomHash, participantToken, messageKey,
-          `Error: ${msg}`
-        ).catch(() => {});
+        await encryptAndSend(this.server, roomHash, participantToken, messageKey, `Error: ${msg}`).catch(() => {});
       }
     };
 
@@ -650,9 +685,15 @@ export class AgentManager {
           const msgId = incomingMsgId;
           const decrypted = await decryptText(messageKey, roomHash, 'chat', msgId, encPayload);
           const parsed = JSON.parse(decrypted) as {
-            text: string;
+            text?: string;
             replies?: Array<{ text?: string; reply_to?: { quote?: string } }>;
           };
+
+          // A block selection (the user tapping an option in an agent-emitted
+          // interactive block) arrives with the choice already rendered into
+          // `text` (e.g. "[buttons] yes"), so it flows through as a normal turn
+          // and the agent receives it — exactly like main.
+
           // A batch of replies (agent-room collector): feed the whole set as ONE
           // turn so the agent reads them together, each tagged with the message it
           // answers. Without this, only the "N replies" summary text reaches the
@@ -667,12 +708,13 @@ export class AgentManager {
             const label = lines.length === 1 ? 'reply' : 'replies';
             text = `[FROM USER · ${lines.length} ${label}]\n${lines.join('\n')}`;
           } else {
-            text = parsed.text;
+            text = parsed.text ?? '';
           }
         } catch (err) {
           console.error(`[${agentName}:${agentId}] Failed to decrypt:`, err);
           return;
         }
+
 
         console.log(`[${agentName}:${agentId}] <- ${text}`);
 
@@ -728,6 +770,35 @@ export class AgentManager {
     // Wait for SSE to connect before returning — ensures the room is fully wired
     // before the caller (spawn() join-button send / restore() success report) proceeds.
     await sseReady;
+  }
+
+  // Send the agent's final answer back to the room: parse any block-structured
+  // output and split overlong text into ≤4000-char chunks (the first chunk
+  // carries the blocks). Shared by the streaming and buffered turn paths.
+  // Returns whether the reply carried a block that needs the operator's
+  // attention (drives the urgency of the post-turn push).
+  private async sendAgentOutput(
+    roomHash: string,
+    participantToken: string,
+    messageKey: CryptoKey,
+    output: string,
+  ): Promise<boolean> {
+    const blockParsed = parseBlockOutput(output);
+    const sendText = blockParsed?.text ?? output;
+    const sendBlocks = blockParsed?.blocks ?? undefined;
+
+    const MAX_MSG = 4000;
+    if (sendText.length <= MAX_MSG) {
+      await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
+    } else {
+      for (let i = 0; i < sendText.length; i += MAX_MSG) {
+        const chunk = sendText.slice(i, i + MAX_MSG);
+        await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
+      }
+    }
+
+    return Array.isArray(sendBlocks)
+      && sendBlocks.some((b) => ATTENTION_BLOCKS.has((b as { type?: string })?.type ?? ''));
   }
 
   // Point the manager at a freshly-paired control room. Used by the re-pair loop in

@@ -121,11 +121,16 @@ export const sendMessage = async (
   roomHash: string,
   token: string,
   msgId: string,
-  encryptedPayload: string
+  encryptedPayload: string,
+  ephemeral = false
 ): Promise<MessageResponse> => {
   const res = await jsonPost(`${server}/api/rooms/${roomHash}/message`, {
     msg_id: msgId,
     encrypted_payload: encryptedPayload,
+    // Ephemeral = a transient status signal: the server publishes it as a
+    // `status` event and does NOT append it to the outbox, so it never persists
+    // or replays on catch-up.
+    ...(ephemeral ? { ephemeral: true } : {}),
   }, token);
   if (!res.ok) throw new Error(`sendMessage failed: ${res.status}`);
   return res.json() as Promise<MessageResponse>;
