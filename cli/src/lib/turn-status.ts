@@ -28,17 +28,24 @@ export type TurnStatus = {
 
 const textOf = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+// Decode one stream line to a JSON object, or null for blanks / non-`{` lines /
+// malformed JSON (both providers occasionally print plain warnings inline). One
+// guard shared by both stream parsers instead of three copies.
+const tryParseLine = (line: string): Record<string, unknown> | null => {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed[0] !== '{') return null;
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
 // Parse one Claude `--output-format stream-json` line into normalized events.
 // Tolerant: unknown shapes and non-JSON lines yield [].
 export const parseClaudeStreamLine = (line: string): AgentTurnEvent[] => {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed[0] !== '{') return [];
-  let ev: Record<string, unknown>;
-  try {
-    ev = JSON.parse(trimmed) as Record<string, unknown>;
-  } catch {
-    return [];
-  }
+  const ev = tryParseLine(line);
+  if (!ev) return [];
   const out: AgentTurnEvent[] = [];
   const type = ev.type as string | undefined;
 
@@ -81,14 +88,8 @@ export const parseClaudeStreamLine = (line: string): AgentTurnEvent[] => {
 // Parse one Codex `--json` ndjson line into normalized events. Mirrors the
 // event shapes already handled by parseCodexNdjson, but line-at-a-time.
 export const parseCodexStreamLine = (line: string): AgentTurnEvent[] => {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed[0] !== '{') return [];
-  let ev: Record<string, unknown>;
-  try {
-    ev = JSON.parse(trimmed) as Record<string, unknown>;
-  } catch {
-    return [];
-  }
+  const ev = tryParseLine(line);
+  if (!ev) return [];
   const out: AgentTurnEvent[] = [];
   const type = ev.type as string | undefined;
 
