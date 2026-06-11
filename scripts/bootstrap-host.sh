@@ -149,7 +149,7 @@ Next steps (do these BEFORE running lockdown-sshd.sh):
      Must print: $USER_NAME, root, and a docker container list.
 
   2. If the deploy workflow targets this app host, update:
-       gh secret set APP_USER --body $USER_NAME
+       gh secret set DO_USER --body $USER_NAME
      and confirm the GH Actions SSH key is in the authorized_keys you
      just installed.
 
