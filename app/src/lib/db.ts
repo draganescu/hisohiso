@@ -16,6 +16,12 @@ export type MessageAction = {
   // Kind of the room being joined, so the phone stamps it correctly on join.
   // Daemon-spawned agent rooms carry 'agent'.
   room_kind?: RoomKind;
+  // For agent-room join actions: the roomHash of the control room (daemon) that
+  // spawned this agent. Lets the phone group the agent under its daemon
+  // authoritatively, regardless of where the Join was tapped from. Daemons
+  // predating this field omit it — the phone then falls back to inferring the
+  // parent from the control room the Join was tapped in (see joinActionRoom).
+  controlRoomHash?: string;
 };
 
 // A reply's pointer to the message it answers. The quote is a bounded preview

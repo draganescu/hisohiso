@@ -39,6 +39,8 @@ import {
   type RoomKind,
   type StoredRoom
 } from '../lib/storage';
+import { groupOpenChannels } from '../lib/room-grouping';
+import { GroupedChannelList } from '../components/GroupedChannelList';
 import { createRoomEventSource } from '../lib/mercure';
 import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction, type ReplyEntry } from '../lib/db';
 import type { BlockResponse } from '../lib/blocks';
@@ -267,7 +269,16 @@ const RoomController = () => {
     const nextHash = await deriveRoomHash(nextSecret);
     // Stamp the kind the daemon declared on the action (agent rooms carry
     // 'agent'); upsertRoom only ever sharpens away from the 'chat' default.
-    upsertRoom(nextHash, nextSecret, null, action.room_kind);
+    // Record the agent's parent control room so the channels list can group it
+    // under the daemon that controls it. Prefer the hash the daemon stamps on
+    // the action (authoritative, works no matter where Join was tapped); fall
+    // back — for daemons predating that field — to inferring it from the
+    // current room when we're joining an agent from inside its control room.
+    const parentControlHash =
+      action.room_kind === 'agent'
+        ? action.controlRoomHash ?? (roomKind === 'control' ? roomHash : undefined)
+        : undefined;
+    upsertRoom(nextHash, nextSecret, null, action.room_kind, parentControlHash);
 
     // Daemon-supplied name applies only when no nickname is set — mirrors the
     // control-room hostname stamp. So a `join:` rebroadcast (operator taps the
@@ -282,7 +293,7 @@ const RoomController = () => {
     }
 
     navigateToRoom(nextSecret);
-  }, [navigateToRoom]);
+  }, [navigateToRoom, roomHash, roomKind]);
 
   useEffect(() => {
     if (!showEmptyState || !shareUrl) {
@@ -2608,8 +2619,10 @@ const RoomController = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-1 rounded-[14px] border border-rule bg-surface p-2">
-                    {allRooms.map((r) => {
+                  (() => {
+                    const { groups, orphanAgents, hasAny } = groupOpenChannels(allRooms);
+                    const chats = allRooms.filter((r) => r.kind === 'chat');
+                    const switcherRow = (r: StoredRoom) => {
                       const isCurrent = r.roomHash === roomHash;
                       return (
                         <RoomRow
@@ -2625,8 +2638,31 @@ const RoomController = () => {
                           }}
                         />
                       );
-                    })}
-                  </div>
+                    };
+                    return (
+                      <div className="flex flex-col gap-4">
+                        {hasAny && (
+                          <div className="flex flex-col gap-3 rounded-[14px] border border-rule bg-surface p-2">
+                            <GroupedChannelList
+                              groups={groups}
+                              orphanAgents={orphanAgents}
+                              renderRow={switcherRow}
+                            />
+                          </div>
+                        )}
+                        {chats.length > 0 && (
+                          <div className="flex flex-col gap-1.5 rounded-[14px] border border-rule bg-surface p-2">
+                            {hasAny && (
+                              <p className="px-1 text-[0.625rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
+                                Conversations
+                              </p>
+                            )}
+                            {chats.map(switcherRow)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 )}
 
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
