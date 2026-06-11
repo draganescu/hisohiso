@@ -23,7 +23,7 @@ cd /opt/no-more-bubble-color
 
 # Curate the keys the new deploy user will get. Typically:
 #   - Your personal admin key
-#   - The deploy workflow SSH key (whatever you have in the APP_HOST_SSH_KEY secret)
+#   - The deploy workflow SSH key (whatever you have in the DO_SSH_KEY secret)
 cat > /tmp/deploy-keys <<'EOF'
 ssh-ed25519 AAAA...your-admin-key... admin
 ssh-ed25519 AAAA...github-actions-key... gh-actions
@@ -78,7 +78,7 @@ Must succeed. If it doesn't, debug from your existing root session.
 Then update the GH Actions deploy user:
 
 ```bash
-gh secret set APP_USER --body deploy --repo <owner>/<repo>
+gh secret set DO_USER --body deploy --repo <owner>/<repo>
 ```
 
 Push any trivial commit (or re-run the last deploy workflow). The workflow must succeed end-to-end as `deploy`. If it doesn't, fix and retry before continuing.

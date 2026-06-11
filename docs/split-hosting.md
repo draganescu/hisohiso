@@ -95,13 +95,12 @@ that polls instead:
 The app stays on the apex — no DNS or `SERVER_NAME` change on the app host.
 What does change:
 
-1. Configure the deploy workflow secrets for your app host (renamed to be
-   provider-neutral):
-   - `APP_HOST_SSH_KEY`
-   - `APP_HOST`
-   - `APP_USER`
-   - `APP_DIR`
-   - `APP_SSH_PORT` (optional; defaults to `22`)
+1. Confirm the deploy workflow secrets for your app host are set:
+   - `DO_SSH_KEY`
+   - `DO_HOST`
+   - `DO_USER`
+   - `DO_APP_DIR`
+   - `DO_SSH_PORT` (optional; defaults to `22`)
 2. Deploy as usual — push, or run `scripts/deploy.sh` on the box. After this
    deploy the container no longer serves the content pages or answers for
    `www`.
