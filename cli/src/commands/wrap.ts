@@ -8,10 +8,12 @@ import { promptLine, generatePairingCode } from '../lib/prompt.js';
 import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
 import { isCommandAvailable } from '../lib/agent-detect.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
+import { ensureBundledSkills } from '../lib/skills/bundled.js';
 import qrTerminal from 'qrcode-terminal';
 
 export const wrap = async (agentName: string, customCommand?: string[]): Promise<void> => {
   await ensureConfigDir();
+  await ensureBundledSkills();
   const server = await getServer();
 
   // Resolve agent profile
