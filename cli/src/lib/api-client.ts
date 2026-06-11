@@ -121,14 +121,38 @@ export const sendMessage = async (
   roomHash: string,
   token: string,
   msgId: string,
-  encryptedPayload: string
+  encryptedPayload: string,
+  ephemeral = false
 ): Promise<MessageResponse> => {
   const res = await jsonPost(`${server}/api/rooms/${roomHash}/message`, {
     msg_id: msgId,
     encrypted_payload: encryptedPayload,
+    // Ephemeral = a transient status signal: the server publishes it as a
+    // `status` event and does NOT append it to the outbox, so it never persists
+    // or replays on catch-up.
+    ...(ephemeral ? { ephemeral: true } : {}),
   }, token);
   if (!res.ok) throw new Error(`sendMessage failed: ${res.status}`);
   return res.json() as Promise<MessageResponse>;
+};
+
+// Fire a content-less push "tickle" for a room. The phone's service worker
+// turns this into a generic "an agent needs you" notification; no agent text
+// ever crosses the wire (see server/push.php). Best-effort by design — a
+// server without VAPID configured answers 503, an unreachable server throws,
+// and neither must disturb the turn loop, so this swallows everything and
+// callers fire-and-forget.
+export const triggerPush = async (
+  server: string,
+  roomHash: string,
+  token: string,
+  urgency: 'normal' | 'high' = 'normal'
+): Promise<void> => {
+  try {
+    await jsonPost(`${server}/api/rooms/${roomHash}/push`, { urgency }, token);
+  } catch {
+    // ignore — push is a nicety, not part of message delivery.
+  }
 };
 
 export const sendPresence = async (

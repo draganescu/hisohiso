@@ -45,8 +45,8 @@ routes ciphertext). Opt-in 24h encrypted outbox per room if you want
 offline catch-up. Self-host the server if you want; the whole stack
 is GPLv3.
 
-Today it officially supports Claude Code. Other agents (aider, codex
-CLI, goose, bash, python) ship but are experimental.
+Today it supports Claude Code and the Codex CLI as first-class agents.
+You can also register any single-prompt CLI as a custom agent.
 
 Install is `curl … | sh` and the app is a PWA — no app store. If that's
 a dealbreaker, this isn't built for you yet. If you live in a terminal

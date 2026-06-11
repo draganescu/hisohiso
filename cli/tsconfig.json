@@ -10,7 +10,8 @@
     "rootDir": "src",
     "declaration": true,
     "resolveJsonModule": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["node", "bun-types"]
   },
   "include": ["src/**/*"]
 }

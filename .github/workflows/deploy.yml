@@ -18,6 +18,12 @@ on:
       - 'scripts/**'
       - '.github/workflows/deploy.yml'
 
+# Serialize deploys: two quick pushes (e.g. a PR merge followed by a release
+# push) otherwise race over the same compose containers on the droplet.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

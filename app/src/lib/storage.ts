@@ -178,6 +178,13 @@ export type StoredRoom = {
   handle?: string | null;
   nickname?: string | null;
   color?: string;
+  // For 'agent' rooms: the roomHash of the control room (daemon) that spawned
+  // it. Learned when the operator taps "Join" from inside that control room —
+  // see joinActionRoom. Lets the channels list group each agent under the
+  // daemon that controls it. Absent on chat/control rooms, and on agent rooms
+  // joined before this link existed (they surface as "control unknown" until
+  // re-joined from a control room).
+  controlRoomHash?: string | null;
 };
 
 const generatePastelColor = (): string => {
@@ -234,7 +241,8 @@ export const upsertRoom = (
   roomHash: string,
   roomSecret: string,
   handle?: string | null,
-  kind?: RoomKind
+  kind?: RoomKind,
+  controlRoomHash?: string | null
 ): void => {
   const rooms = readRooms();
   const now = Math.floor(Date.now() / 1000);
@@ -251,6 +259,12 @@ export const upsertRoom = (
     if (kind && kind !== 'chat') {
       existing.kind = kind;
     }
+    // Same sharpen-once rule for the parent control link: learn it on the
+    // first Join from a control room, but a later orphan upsert (no parent
+    // known) never clears an established link.
+    if (controlRoomHash && !existing.controlRoomHash) {
+      existing.controlRoomHash = controlRoomHash;
+    }
   } else {
     rooms.push({
       roomHash,
@@ -258,7 +272,8 @@ export const upsertRoom = (
       lastSeen: now,
       kind: kind ?? 'chat',
       handle: typeof handle === 'string' ? handle : null,
-      color: generatePastelColor()
+      color: generatePastelColor(),
+      controlRoomHash: controlRoomHash ?? null
     });
   }
   rooms.sort((a, b) => b.lastSeen - a.lastSeen);

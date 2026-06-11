@@ -142,6 +142,55 @@ export const postRoomSettings = async (
   });
 };
 
+// --- Web push (content-less notifications) ---
+
+// Public: the VAPID application server key the browser needs to subscribe.
+export const fetchVapidPublicKey = async (options: ApiRequestOptions = {}): Promise<Response> => {
+  return fetch('/api/push/vapid-public-key', { signal: options.signal });
+};
+
+export const postPushSubscribe = async (
+  roomHash: string,
+  token: string,
+  subscription: PushSubscriptionJSON,
+): Promise<Response> => {
+  return fetch(`/api/rooms/${roomHash}/push-subscribe`, {
+    method: 'POST',
+    headers: { ...jsonHeaders, 'X-Chat-Token': token },
+    body: JSON.stringify({ subscription }),
+  });
+};
+
+export const postPushUnsubscribe = async (
+  roomHash: string,
+  token: string,
+  endpoint: string,
+): Promise<Response> => {
+  return fetch(`/api/rooms/${roomHash}/push-unsubscribe`, {
+    method: 'POST',
+    headers: { ...jsonHeaders, 'X-Chat-Token': token },
+    body: JSON.stringify({ endpoint }),
+  });
+};
+
+// Ping the room's other subscribed devices (content-less). The PWA calls this
+// after sending a chat message so a backgrounded peer gets notified — mirrors
+// what the CLI daemon does on an agent turn. `excludeEndpoint` is the sender's
+// own push endpoint, so the server skips it and you're never notified of your
+// own message (the SW visible-client check is only a secondary guard).
+export const postPushTrigger = async (
+  roomHash: string,
+  token: string,
+  urgency: 'normal' | 'high' = 'normal',
+  excludeEndpoint?: string,
+): Promise<Response> => {
+  return fetch(`/api/rooms/${roomHash}/push`, {
+    method: 'POST',
+    headers: { ...jsonHeaders, 'X-Chat-Token': token },
+    body: JSON.stringify({ urgency, ...(excludeEndpoint ? { exclude_endpoint: excludeEndpoint } : {}) }),
+  });
+};
+
 export const parseRoomEvent = (raw: string, expectedRoomHash: string): RoomEvent | null => {
   const payload = JSON.parse(raw) as RoomEvent;
   if (!payload || payload.room_hash !== expectedRoomHash) return null;

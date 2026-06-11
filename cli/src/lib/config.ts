@@ -161,15 +161,27 @@ export const loadActiveRooms = async (): Promise<ActiveRoom[]> => {
   }
 };
 
-export const saveActiveRooms = async (rooms: ActiveRoom[]): Promise<void> => {
-  await ensureConfigDir();
-  // Atomic write: persistRooms now fires on every inbound chat (the seenMsgIds
-  // replay ledger), so a bare writeFile could truncate rooms.json mid-write and
-  // lose ALL restorable rooms on a crash. Write to a sibling temp file then
-  // rename() over the target — rename is atomic on the same filesystem.
-  const tmp = ROOMS_FILE + '.tmp';
-  await writeFile(tmp, JSON.stringify(rooms, null, 2) + '\n', 'utf-8');
-  await rename(tmp, ROOMS_FILE);
+// Serialize writes so concurrent callers never overlap. persistRooms fires on
+// every inbound chat (the seenMsgIds replay ledger) and on session-id updates,
+// so two saves can run at once; with a single fixed temp path the first rename()
+// consumes rooms.json.tmp and the second fails with ENOENT. Chaining each write
+// onto the previous one keeps the fixed temp name safe. The chain stays
+// resolvable even if a write throws (.catch), while each caller still awaits —
+// and sees the error of — its own write.
+let roomsWriteChain: Promise<void> = Promise.resolve();
+export const saveActiveRooms = (rooms: ActiveRoom[]): Promise<void> => {
+  const run = async (): Promise<void> => {
+    await ensureConfigDir();
+    // Atomic write: a bare writeFile could truncate rooms.json mid-write and lose
+    // ALL restorable rooms on a crash. Write to a sibling temp file then rename()
+    // over the target — rename is atomic on the same filesystem.
+    const tmp = ROOMS_FILE + '.tmp';
+    await writeFile(tmp, JSON.stringify(rooms, null, 2) + '\n', 'utf-8');
+    await rename(tmp, ROOMS_FILE);
+  };
+  const result = roomsWriteChain.then(run, run);
+  roomsWriteChain = result.catch(() => {});
+  return result;
 };
 
 // Best-effort delete of the persisted daemon state + rooms files. Used by
