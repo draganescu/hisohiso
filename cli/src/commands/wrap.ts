@@ -5,8 +5,9 @@ import { subscribeToRoom, type RoomEvent } from '../lib/sse-client.js';
 import * as api from '../lib/api-client.js';
 import { sha256Hex, decryptText, deriveKnockKey, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { promptLine, generatePairingCode } from '../lib/prompt.js';
-import { getAgent, listAgents, type AgentProfile } from '../lib/agents.js';
+import { getAgent, listAgents, providerOf, type AgentProfile } from '../lib/agents.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
+import { runStreamingTurn } from '../lib/agent-stream.js';
 import qrTerminal from 'qrcode-terminal';
 
 export const wrap = async (agentName: string, customCommand?: string[]): Promise<void> => {
@@ -176,48 +177,65 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     if (isResume && !profile.buildResumeArgs) {
       args.push('--resume', sessionId!);
     }
-    args.push(messageToSend);
 
-    const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
-    console.log(`  $ ${profile.command} ${displayArgs.join(' ')}`);
+    const env = {
+      HISOHISO_AGENT_ID: room.roomHash.slice(0, 12),
+      HISOHISO_AGENT_NAME: agentName,
+      HISOHISO_ROOM_HASH: room.roomHash,
+      // Opt-in per profile (finding #97): withheld by default so the wrapped
+      // command can't trivially exfiltrate the room secret via its env. The
+      // built-in profiles don't set needsRoomSecret; ad-hoc `wrap -- <cmd>`
+      // commands likewise don't receive it.
+      ...(profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: room.roomSecret } : {}),
+    };
 
-    const result = await runCommand(profile.command, args, {
-      env: {
-        HISOHISO_AGENT_ID: room.roomHash.slice(0, 12),
-        HISOHISO_AGENT_NAME: agentName,
-        HISOHISO_ROOM_HASH: room.roomHash,
-        // Opt-in per profile (finding #97): withheld by default so the wrapped
-        // command can't trivially exfiltrate the room secret via its env. The
-        // built-in profiles don't set needsRoomSecret; ad-hoc `wrap -- <cmd>`
-        // commands likewise don't receive it.
-        ...(profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: room.roomSecret } : {}),
-      },
-    });
+    // Claude/Codex emit a JSONL event stream (stream-json / --json), which the
+    // buffered parseJsonOutput can't read — it would dump raw events to the room
+    // and never capture the session id, so --resume would never engage. Use the
+    // same streaming runner the daemon uses. Other commands keep the buffered path.
+    const provider = providerOf(profile);
+    let output: string;
+    let exitNote: string | null = null;
 
-    // Parser dispatch is driven by profile.outputFormat regardless of mode — oneshot
-    // profiles can still emit structured output (e.g. codex-once uses `--json`). sessionId
-    // capture is gated on session mode since oneshot turns don't persist one.
-    let parsedText: string;
-    let parsedSessionId: string | null = null;
-
-    if (profile.outputFormat === 'codex-ndjson') {
-      const parsed = parseCodexNdjson(result.stdout);
-      parsedText = parsed.text;
-      parsedSessionId = parsed.sessionId;
-    } else if (profile.mode === 'session') {
-      // Default for session mode: Claude's single-JSON {result, session_id} shape.
-      const parsed = parseJsonOutput(result.stdout);
-      parsedText = parsed.text;
-      parsedSessionId = parsed.sessionId;
+    if (provider === 'claude' || provider === 'codex') {
+      console.log(`  $ ${profile.command} (provider=${provider}${isResume ? ' resume' : ''})`);
+      const result = await runStreamingTurn({ command: profile.command, argv: args, prompt: messageToSend, format: provider, env });
+      if (profile.mode === 'session' && result.sessionId) {
+        sessionId = result.sessionId;
+        console.log(`  [session: ${sessionId}]`);
+      }
+      output = (result.text || '(no output)').trim();
+      if (result.code !== 0 && !result.text) {
+        exitNote = `(turn failed${result.code != null ? `, exit code ${result.code}` : ''})`;
+      }
     } else {
-      parsedText = result.stdout;
-    }
+      args.push(messageToSend);
+      const displayArgs = args.map(a => a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a);
+      console.log(`  $ ${profile.command} ${displayArgs.join(' ')}`);
 
-    const output = (parsedText || result.stderr || '(no output)').trim();
+      const result = await runCommand(profile.command, args, { env });
 
-    if (profile.mode === 'session' && parsedSessionId) {
-      sessionId = parsedSessionId;
-      console.log(`  [session: ${sessionId}]`);
+      // oneshot profiles can still emit structured output (e.g. codex-once uses
+      // `--json`); sessionId capture is gated on session mode.
+      let parsedText: string;
+      let parsedSessionId: string | null = null;
+      if (profile.outputFormat === 'codex-ndjson') {
+        const parsed = parseCodexNdjson(result.stdout);
+        parsedText = parsed.text;
+        parsedSessionId = parsed.sessionId;
+      } else if (profile.mode === 'session') {
+        const parsed = parseJsonOutput(result.stdout);
+        parsedText = parsed.text;
+        parsedSessionId = parsed.sessionId;
+      } else {
+        parsedText = result.stdout;
+      }
+      output = (parsedText || result.stderr || '(no output)').trim();
+      if (profile.mode === 'session' && parsedSessionId) {
+        sessionId = parsedSessionId;
+        console.log(`  [session: ${sessionId}]`);
+      }
+      if (result.code !== 0 && result.stderr) exitNote = `(exit code ${result.code})`;
     }
 
     // Try to parse block-structured output from Claude
@@ -239,9 +257,8 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
       }
     }
 
-    if (result.code !== 0 && result.stderr) {
-      await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey,
-        `(exit code ${result.code})`);
+    if (exitNote) {
+      await encryptAndSend(server, room.roomHash, room.participantToken, room.messageKey, exitNote);
     }
   };
 

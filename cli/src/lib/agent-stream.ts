@@ -52,6 +52,7 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
 
   const results: string[] = [];
   const errors: string[] = [];
+  const stderrLines: string[] = [];
   let sessionId: string | null = null;
   let isError = false;
 
@@ -109,7 +110,13 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
   emit({ kind: 'starting' });
 
   handle.onLine((line, isStderr) => {
-    if (isStderr) return; // status comes from the structured stdout stream only
+    if (isStderr) {
+      // Keep stderr as a last-resort diagnostic: a provider that dies with a
+      // message on stderr but emits no structured result/error event would
+      // otherwise surface only "(no output)" to the operator.
+      if (line.trim()) stderrLines.push(line);
+      return;
+    }
     const events = format === 'claude' ? parseClaudeStreamLine(line) : parseCodexStreamLine(line);
     for (const ev of events) applyEvent(ev);
   });
@@ -125,10 +132,15 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
     if (finished) return;
     const quietMs = Date.now() - lastActivity;
     const quietSec = Math.round(quietMs / 1000);
-    if (currentTool) {
+    // A tool that has emitted nothing for the full stuck window is genuinely
+    // wedged — escalate to 'stuck' even though a tool is "active", so a hung
+    // command (the case the Stop affordance exists for) actually surfaces.
+    // Below that window a running tool reads as live work (keepalive), so a
+    // long-but-healthy build never false-flags as stuck.
+    if (quietMs >= STUCK_AFTER_MS) {
+      emit({ kind: 'stuck', tool: currentTool ?? undefined, quietSec }, true);
+    } else if (currentTool) {
       emit({ kind: 'tool', tool: currentTool, quietSec }, true);
-    } else if (quietMs >= STUCK_AFTER_MS) {
-      emit({ kind: 'stuck', quietSec }, true);
     } else if (quietMs >= QUIET_AFTER_MS) {
       emit({ kind: 'quiet', quietSec }, true);
     }
@@ -139,10 +151,19 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
   handle.closeStdin();
 
   const exit = await handle.onExit;
+  // The final stdout line (Claude's terminal `result`, Codex's last
+  // agent_message carrying the answer + session id) can flush AFTER 'exit'.
+  // Wait for the reader to close so we don't drop it and report "(no output)".
+  await handle.stdoutClosed;
   finished = true;
   clearInterval(heartbeat);
 
-  const text = results.length > 0 ? results.join('\n\n').trim() : errors.join('\n').trim();
+  const text =
+    results.length > 0
+      ? results.join('\n\n').trim()
+      : errors.length > 0
+        ? errors.join('\n').trim()
+        : stderrLines.join('\n').trim();
   emit(isError || exit.code !== 0 ? { kind: 'failed' } : { kind: 'done' });
 
   return { text, sessionId, code: exit.code, isError };

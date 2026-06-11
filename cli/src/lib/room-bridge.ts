@@ -78,8 +78,10 @@ export type SendOptions = {
   // Transient work indicator (NOT a chat message). When set, the payload carries
   // a `status` envelope and `ephemeral` marks the send so the server publishes it
   // as a `status` event and skips the outbox — it never persists or replays. The
-  // phone renders one in-place "agent is working" bubble that clears on the reply.
-  status?: { state: string; agent: string };
+  // phone renders one in-place "agent is working" bubble, updates it on each
+  // status, and clears it on the terminal `done`/`failed`. `seq` is a per-agent
+  // monotonic counter so the phone can discard a status that arrives out of order.
+  status?: { state: string; seq: number };
   ephemeral?: boolean;
 };
 

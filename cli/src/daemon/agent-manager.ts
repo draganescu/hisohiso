@@ -2,7 +2,7 @@ import { createRoomAndJoin, encryptAndSend, quoteForAgent, type SendOptions } fr
 import { deriveMessageKey, deriveKnockKey, sha256Hex, decryptText, beginApprove, type EncryptedPayload } from '../lib/crypto.js';
 import { generatePairingCode } from '../lib/prompt.js';
 import { runCommand, parseJsonOutput, parseCodexNdjson, parseBlockOutput } from '../lib/agent-process.js';
-import { getAgent, providerOf, type AgentProfile, type AgentProvider } from '../lib/agents.js';
+import { getAgent, providerOf, type AgentProfile } from '../lib/agents.js';
 import { runStreamingTurn } from '../lib/agent-stream.js';
 import { describeStatus, type TurnStatus } from '../lib/turn-status.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
@@ -37,12 +37,6 @@ const SEEN_MSG_MAX = 500;
 // resolved later and the in-memory pending map can't grow unbounded.
 const PENDING_KNOCK_TTL_MS = 10 * 60 * 1000;
 
-// Minimum gap between status updates pushed into a room. The room is a chat log
-// (messages append; there's no in-place replace yet), so status is rate-limited
-// to avoid spam — only meaningful tool/quiet transitions get through, and a
-// 'stuck' warning always bypasses the gate.
-const STATUS_MIN_INTERVAL_MS = 5 * 1000;
-
 // Prune a msg_id ledger to the TTL window and the count cap. Returns a fresh
 // object so callers can use it for both the in-memory Map seed and the
 // persisted record without aliasing.
@@ -68,9 +62,10 @@ type AgentSession = {
   knockKey: CryptoKey;
   sessionId: string | null;
   running: boolean;
-  // Provider this agent speaks (claude/codex/other), resolved once at attach.
-  // Drives streaming-status parsing and approval-mode flag derivation.
-  provider: AgentProvider;
+  // Monotonic counter stamped on each ephemeral status send so the phone can
+  // discard a status that arrives out of order (e.g. a late 'tool' landing after
+  // the turn's terminal 'done'). In-memory only; resets are harmless.
+  statusSeq: number;
   // First-device-wins binding flag. False until the first knock is auto-admitted;
   // once true, an additional knock is routed to a control-room confirm instead of
   // being silently auto-approved or silently dropped. Persisted to
@@ -374,7 +369,8 @@ export class AgentManager {
     const seenSeed = pruneSeenMsgIds(args.seenMsgIds ?? {});
 
     // Which provider's control surface this agent speaks (drives the streaming
-    // vs buffered turn path + status parsing).
+    // vs buffered turn path + status parsing). Derived from the profile each
+    // turn — not stored on the session, since the profile already is.
     const provider = providerOf(profile);
 
     const session: AgentSession = {
@@ -390,7 +386,7 @@ export class AgentManager {
       knockKey,
       sessionId,
       running: false,
-      provider,
+      statusSeq: 0,
       bound: args.bound ?? false,
       pending: [],
       sse: null!,
@@ -451,24 +447,24 @@ export class AgentManager {
         // Streaming providers (Claude/Codex): run the turn with full permissions
         // (the profile carries the provider's bypass flag, like main) while
         // pushing live status into the room.
-        if (session.provider === 'claude' || session.provider === 'codex') {
+        if (provider === 'claude' || provider === 'codex') {
           console.log(
-            `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${session.provider}${isResume ? ' resume' : ''})`,
+            `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${provider}${isResume ? ' resume' : ''})`,
           );
 
-          let lastStatusAt = 0;
+          // Forward every status from the runner (it already dedups by state and
+          // heartbeats, so this is the single cadence source) as ONE transient,
+          // in-place indicator on the phone — an ephemeral `status` signal, never
+          // a chat message. The terminal 'done'/'failed' IS sent: it's the
+          // explicit clear, so the indicator no longer rides on the reply (an
+          // intermediate "queued"/"exit code" chat can't prematurely clear it,
+          // and a dropped reply can't strand it). A monotonic seq lets the phone
+          // discard a status that arrives out of order (a late 'tool' after 'done').
           const onStatus = (s: TurnStatus): void => {
-            // 'done'/'failed' are superseded by the final reply; every other kind
-            // is a live work state pushed to the phone as ONE transient, in-place
-            // indicator (an ephemeral `status` signal, not a chat message).
-            // Rate-limited; 'stuck' always passes so the Stop affordance appears.
-            if (s.kind === 'done' || s.kind === 'failed') return;
-            const now = Date.now();
-            if (s.kind !== 'stuck' && now - lastStatusAt < STATUS_MIN_INTERVAL_MS) return;
-            lastStatusAt = now;
+            const seq = ++session.statusSeq;
             void encryptAndSend(this.server, roomHash, participantToken, messageKey, describeStatus(s), {
               ephemeral: true,
-              status: { state: s.kind, agent: agentId },
+              status: { state: s.kind, seq },
             }).catch(() => {});
           };
 
@@ -476,7 +472,7 @@ export class AgentManager {
             command: session.profile.command,
             argv,
             prompt: messageToSend,
-            format: session.provider,
+            format: provider,
             env,
             onStatus,
           });

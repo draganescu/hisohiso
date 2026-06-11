@@ -128,8 +128,8 @@ const getMessageLabel = (message: ChatMessage): string => {
 
 // One live work-status for an agent, derived from an ephemeral `status` event.
 // `at` is the client receive time, used to expire a stale indicator if the
-// daemon goes silent without sending a final reply to clear it.
-type AgentStatus = { state: string; text: string; agent: string | null; handle: string | null; at: number };
+// daemon goes silent without sending a terminal status to clear it.
+type AgentStatus = { state: string; text: string; handle: string | null; at: number };
 
 const RoomController = () => {
   const [initialContext] = useState<OptimisticContext | null>(loadInitialContext);
@@ -147,8 +147,12 @@ const RoomController = () => {
   // Transient per-agent work indicator, fed by the daemon's ephemeral `status`
   // events. Keyed by sender hash. NOT persisted and NOT part of `messages` — it
   // renders as a single in-place "agent is working" bubble that updates as state
-  // changes and clears the moment the agent's reply lands (or it goes stale).
+  // changes and clears on the agent's terminal status (or goes stale).
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
+  // Highest status `seq` applied per sender hash, so a status that arrives out of
+  // order (e.g. a late 'tool' landing after the turn's terminal 'done') is
+  // discarded instead of resurrecting a cleared indicator.
+  const statusSeqRef = useRef<Record<string, number>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [showDisband, setShowDisband] = useState(false);
@@ -343,6 +347,8 @@ const RoomController = () => {
     setLobbyJwt(null);
     setKnocks([]);
     setMessages([]);
+    setAgentStatuses({});
+    statusSeqRef.current = {};
     setMessage('');
     setChatInput('');
     setShowComposer(false);
@@ -430,15 +436,10 @@ const RoomController = () => {
       plaintext,
       ownTokenHash: tokenHashRef.current,
     });
-    // A real reply from this sender supersedes its transient work indicator.
-    if (from && messageRecord.direction === 'in') {
-      setAgentStatuses((prev) => {
-        if (!prev[from]) return prev;
-        const next = { ...prev };
-        delete next[from];
-        return next;
-      });
-    }
+    // NOTE: the work indicator is NOT cleared here. Clearing is driven by the
+    // daemon's terminal `done`/`failed` status event (see the status handler),
+    // so intermediate daemon chats ("queued", "exit code N") that share this
+    // sender hash can't prematurely dismiss a still-running agent's bubble.
     setMessages((prev) => {
       const existing = prev.find((item) => item.id === msgId);
       if (existing) {
@@ -461,8 +462,8 @@ const RoomController = () => {
     });
   }, [cryptoKey, roomHash, persistMessage]);
 
-  // A reply clears an agent's indicator instantly; this is the backstop for when
-  // the daemon dies mid-turn and never sends one. Drop any status not refreshed
+  // The terminal 'done'/'failed' status clears an agent's indicator; this is the
+  // backstop for when the daemon dies mid-turn and never sends one. Drop any status not refreshed
   // within the window so a "working…" bubble can't hang around forever.
   // Depend on the boolean "are there any statuses", not the map itself, so the
   // interval is created once when the first status arrives and torn down when the
@@ -610,6 +611,8 @@ const RoomController = () => {
           setKnockNotice('');
           setKnocks([]);
           setMessages([]);
+          setAgentStatuses({});
+          statusSeqRef.current = {};
           setSelectedId(null);
           setShowQr(false);
           setShowDisband(false);
@@ -924,11 +927,19 @@ const RoomController = () => {
             const env = JSON.parse(plaintext) as {
               text?: string;
               handle?: string | null;
-              status?: { state?: string; agent?: string };
+              status?: { state?: string; seq?: number };
             };
             const st = env.status;
             if (!st || !st.state) return;
-            // 'done'/'failed' (or a missing reply) just clear the indicator.
+            // Discard out-of-order status: a late 'tool' must not resurrect an
+            // indicator the terminal 'done' already cleared. seq is monotonic
+            // per sender; ignore anything not newer than the last we applied.
+            if (typeof st.seq === 'number') {
+              const lastSeq = statusSeqRef.current[from];
+              if (lastSeq !== undefined && st.seq <= lastSeq) return;
+              statusSeqRef.current[from] = st.seq;
+            }
+            // 'done'/'failed' is the explicit clear at turn end.
             if (st.state === 'done' || st.state === 'failed') {
               setAgentStatuses((prev) => {
                 if (!prev[from]) return prev;
@@ -943,7 +954,6 @@ const RoomController = () => {
               [from]: {
                 state: st.state as string,
                 text: env.text ?? '',
-                agent: st.agent ?? null,
                 handle: env.handle ?? null,
                 at: Date.now(),
               },
