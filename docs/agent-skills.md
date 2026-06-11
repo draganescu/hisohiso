@@ -4,24 +4,9 @@ hisohiso wraps a *real* agent binary (`claude` / `codex`) in the operator's
 working directory — it doesn't reimplement one. So those agents already discover
 [skills](https://docs.anthropic.com/en/docs/claude-code/skills) natively from
 their standard skill directories. hisohiso leans on that instead of inventing a
-new mechanism. There are two delivery paths.
+new mechanism.
 
-## 1. Repo-committed dev skills (`.claude/skills/`)
-
-Skills for working **on hisohiso itself**. They're version-controlled and load
-automatically for any agent run inside this repo:
-
-| Skill | Purpose |
-| --- | --- |
-| `hisohiso-release-cli` | Cut a CLI release (4 binaries, tag, GitHub Release with assets). |
-| `hisohiso-dev-stack` | Run the stack locally, run tests, run the CLI from source. |
-| `hisohiso-add-block-type` | The four layers to touch when adding a phone-UI block. |
-| `hisohiso-crypto` | Reference for the E2E protocol (KDF, handshake, AAD, auth). |
-
-> `.claude/` is otherwise gitignored; `.gitignore` carries a scoped exception so
-> only `.claude/skills/` is tracked (local `settings.local.json` stays ignored).
-
-## 2. Bundled skills shipped with the CLI
+## Bundled skills shipped with the CLI
 
 Skills for the **wrapped agent on the phone bridge**. Their content is inlined in
 `cli/src/lib/skills/bundled.ts` (the single compiled binary carries no resources

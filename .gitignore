@@ -5,7 +5,5 @@
 /cli/dist
 .DS_Store
 .env
-# Local Claude state is ignored, but committed agent skills live in .claude/skills
-.claude/*
-!.claude/skills/
+.claude/
 /compose.override.yaml
