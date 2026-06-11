@@ -81,13 +81,10 @@
 		php
 	}
 
-	# Landing page + static docs/skills pages
-	@landing path / /styles.css /app.js /icons/* /og.png /skills/* /alternatives /alternatives/* /claude /claude/* /codex /codex/* /coding-agents /coding-agents/* /hermes /hermes/* /security /security/*
-	handle @landing {
-		header Cache-Control "no-cache, must-revalidate"
-		root * /app/landing
-		file_server
-	}
+	# NOTE: the landing page + static content pages (formerly served here from
+	# /app/landing) now live on a separate marketing host at www.hisohiso.org.
+	# This container serves only the React app + /api/* + Mercure on the apex.
+	# `/` falls through to the React app's own landing.
 
 	# React app (rooms)
 	handle {
@@ -104,8 +101,4 @@
 		try_files {path} /index.html
 		file_server
 	}
-}
-
-www.hisohiso.org {
-	redir https://hisohiso.org{uri} 308
 }

@@ -92,9 +92,8 @@ the `!ChangeMe!` placeholder — better a loud 500 than a silent compromise.
 
 ## Recommended production setup
 
-The recommended shape is a **single small Linux VM** (a DigitalOcean droplet is
-what `hisohiso.org` runs on), Docker installed, this repo cloned, `.env`
-filled in. The state is so small that one box with snapshots is plenty — there's
+The recommended shape is a **single small Linux VM**, Docker installed, this repo
+cloned, `.env` filled in. The state is so small that one box with snapshots is plenty — there's
 no database server, no cache, no queue to scale out.
 
 ```mermaid
@@ -147,7 +146,7 @@ down SSH) is scripted and documented in
 ### Backups
 
 The entire authoritative state is the `/data` volume (the SQLite file plus any
-per-room outbox files). Snapshot the volume — DigitalOcean snapshots or a
+per-room outbox files). Snapshot the volume — provider snapshots or a
 `borg`/`restic` job to another host. There's nothing else to back up; message
 history lives on users' devices, not on the server.
 

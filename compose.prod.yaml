@@ -45,9 +45,9 @@ services:
       - no-new-privileges:true
     volumes:
       - ./data:/data
-      # Code and landing assets are baked into the image at build time;
-      # the bind-mount is for live-reload during local dev. Mounting them
-      # read-only in production prevents a compromised container from
-      # overwriting PHP source on the host (persistent backdoor surface).
+      # The PHP API source is baked into the image at build time; the
+      # bind-mount is for live-reload during local dev. Mounting it read-only
+      # in production prevents a compromised container from overwriting PHP
+      # source on the host (persistent backdoor surface). The static content
+      # pages used to be mounted here too — they now live on a separate host.
       - ./server:/app/public/api:ro
-      - ./public:/app/landing:ro
