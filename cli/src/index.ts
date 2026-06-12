@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
-import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, serverCmd } from './commands/control.js';
+import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, restartCmd, serverCmd } from './commands/control.js';
 import { info } from './commands/info.js';
 import { updateCmd } from './commands/update.js';
 import { uninstallCmd } from './commands/uninstall.js';
@@ -155,6 +155,11 @@ daemon
   .command('stop')
   .description('Stop the daemon')
   .action(daemonStop);
+
+daemon
+  .command('restart')
+  .description('Restart the running daemon in place (works for the background service; pairing and agent rooms preserved)')
+  .action(restartCmd);
 
 daemon
   .command('install')
