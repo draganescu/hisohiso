@@ -229,6 +229,16 @@ export const runDaemon = async (): Promise<void> => {
     return { message: 'Repairing: disbanded all rooms; re-pairing with a fresh control room. Run `hisohiso pair` once it is back.' };
   };
 
+  // `restart` — plain in-place recycle, NO teardown: daemon-state.json and
+  // rooms.json stay, so the boot path reuses the paired control room and
+  // re-attaches agent rooms (same guarantees as the auto-updater's re-exec).
+  // Carrying the knock is only a safety net for the edge where the saved
+  // control room turns out dead and the boot path has to re-pair.
+  const doRestart = async (): Promise<{ message: string }> => {
+    scheduleReExec(state.sessionKnockMessage);
+    return { message: 'Restarting in place — pairing and agent rooms preserved. `hisohiso daemon status` in a few seconds to confirm.' };
+  };
+
   // `server <url>` — move hosts. The live rooms exist only on the OLD server and
   // can't migrate, so this is a teardown + re-pair on the new host (reusing the
   // boot path), not a hot config reload. Disband old → persist new → re-exec.
@@ -265,6 +275,7 @@ export const runDaemon = async (): Promise<void> => {
     deny: (id) => resolvePending(id, false),
     repair: () => doRepair(),
     server: (url) => doServer(url),
+    restart: () => doRestart(),
   }).catch((err) => {
     if (err instanceof DaemonAlreadyRunningError) {
       // Lost a start race against another daemon between the preflight probe and

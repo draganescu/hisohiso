@@ -44,6 +44,7 @@ export type ControlHandlers = {
   deny: (knockMsgId?: string) => Promise<unknown> | unknown;
   repair: () => Promise<unknown> | unknown;
   server: (url: string) => Promise<unknown> | unknown;
+  restart: () => Promise<unknown> | unknown;
 };
 
 export type ControlServerHandle = { close: () => Promise<void> };
@@ -62,6 +63,8 @@ const dispatch = async (h: ControlHandlers, req: ControlRequest): Promise<unknow
       return h.repair();
     case 'server':
       return h.server(req.url);
+    case 'restart':
+      return h.restart();
     default:
       throw new Error(`unknown control op: ${(req as { op: string }).op}`);
   }

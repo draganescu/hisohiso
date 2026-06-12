@@ -18,7 +18,11 @@ export type ControlRequest =
   | { op: 'deny'; knockMsgId?: string }
   // Destructive (#134 pt2): both tear down rooms server-side then re-exec.
   | { op: 'repair' }
-  | { op: 'server'; url: string };
+  | { op: 'server'; url: string }
+  // Non-destructive in-place re-exec: rooms and pairing preserved. Used by
+  // `daemon restart` and by `update` to move a backgrounded daemon onto a
+  // freshly-swapped binary without any launchd/systemd interaction.
+  | { op: 'restart' };
 
 export type AgentSummary = { agentId: string; name: string };
 export type PendingDevice = { knockMsgId: string; expiresAt: number };

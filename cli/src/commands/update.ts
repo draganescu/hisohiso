@@ -12,6 +12,7 @@
 
 import { checkLatest, applyUpdate } from '../lib/updater.js';
 import { isDaemonRunning } from '../daemon/pid.js';
+import { sendControlRequest, type ReExecResult } from '../lib/control-plane.js';
 
 export const updateCmd = async (opts: { check?: boolean } = {}): Promise<void> => {
   if (opts.check === true) {
@@ -35,11 +36,21 @@ export const updateCmd = async (opts: { check?: boolean } = {}): Promise<void> =
     case 'updated':
       console.log(`Updated hisohiso ${res.from} → ${res.to}.`);
       if (await isDaemonRunning()) {
-        console.log(
-          'A daemon is running on the previous binary — restart it to pick up the new version:\n' +
-            '  hisohiso daemon stop && hisohiso daemon start\n' +
-            '(or just wait for its next auto-update tick).'
-        );
+        // Bounce the running daemon onto the new binary via the in-place
+        // re-exec verb — pairing and agent rooms survive, and it works for a
+        // backgrounded (launchd/systemd) daemon that has no TTY to restart
+        // from. Daemons older than this verb reply "unknown control op";
+        // fall back to telling the operator.
+        try {
+          await sendControlRequest<ReExecResult>({ op: 'restart' });
+          console.log('Restarted the running daemon on the new binary.');
+        } catch {
+          console.log(
+            'A daemon is running on the previous binary — restart it to pick up the new version:\n' +
+              '  hisohiso daemon restart\n' +
+              '(or just wait for its next auto-update tick).'
+          );
+        }
       }
       break;
     case 'already-latest':

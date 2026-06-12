@@ -107,6 +107,24 @@ const resolveDevice = async (op: 'admit' | 'deny', knockMsgId?: string): Promise
 export const admitCmd = async (knockMsgId?: string): Promise<void> => resolveDevice('admit', knockMsgId);
 export const denyCmd = async (knockMsgId?: string): Promise<void> => resolveDevice('deny', knockMsgId);
 
+// Non-destructive in-place re-exec: pairing and agent rooms survive. The only
+// way to bounce a backgrounded (launchd/systemd) daemon without poking the
+// service manager — `stop` alone leaves it to the service's restart throttle,
+// and `start` in a terminal lands you a foreground daemon you didn't want.
+export const restartCmd = async (): Promise<void> => {
+  try {
+    const r = await sendControlRequest<ReExecResult>({ op: 'restart' });
+    console.log(r.message);
+  } catch (err) {
+    if (err instanceof DaemonUnreachableError) {
+      console.log(notRunningHint);
+      return;
+    }
+    console.error(`restart failed: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+};
+
 // Destructive (#134 pt2): disband ALL rooms and re-pair from scratch. The daemon
 // re-execs ~0.5s after replying.
 export const repairCmd = async (opts: { yes?: boolean } = {}): Promise<void> => {

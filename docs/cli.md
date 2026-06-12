@@ -46,6 +46,7 @@ session.
 ```sh
 hisohiso daemon start     # foreground; prints the control-room QR on first run
 hisohiso daemon status
+hisohiso daemon restart   # in-place re-exec; works for the background service too
 hisohiso daemon stop
 ```
 
@@ -97,6 +98,7 @@ Unix control socket and degrade gracefully when it's down:
 | `hisohiso status` | The live picture: control room, running agents, devices awaiting admission |
 | `hisohiso pair` | Re-render the QR + pairing code (e.g. to add another phone) |
 | `hisohiso admit` / `deny` | Resolve a device waiting to join the control room |
+| `hisohiso daemon restart` | Bounce the running daemon in place — pairing and agent rooms preserved; the way to restart a backgrounded daemon (and what `update` does for you) |
 | `hisohiso repair` | Disband every room and re-pair from scratch |
 | `hisohiso server <url>` | Migrate a running daemon to a new server (disband on the old host, re-pair on the new) |
 
