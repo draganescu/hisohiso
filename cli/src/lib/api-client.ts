@@ -88,6 +88,21 @@ export const sendKnock = async (
   return res.json() as Promise<KnockResponse>;
 };
 
+// Re-mint a subscriber JWT for an existing participant (the PWA's
+// room-session.ts has used this since the endpoint shipped; the daemon uses it
+// so a stored JWT past its 7-day TTL never forces a re-pair). Gated by the
+// participant token — does not create a participant.
+export const refreshSubscriberJwt = async (
+  server: string,
+  roomHash: string,
+  token: string
+): Promise<string> => {
+  const res = await jsonPost(`${server}/api/rooms/${roomHash}/sub-token`, {}, token);
+  if (!res.ok) throw new Error(`refreshSubscriberJwt failed: ${res.status}`);
+  const data = await res.json() as { subscriber_jwt: string };
+  return data.subscriber_jwt;
+};
+
 export const approveKnock = async (
   server: string,
   roomHash: string,

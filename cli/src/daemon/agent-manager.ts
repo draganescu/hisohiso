@@ -8,6 +8,7 @@ import { runStreamingTurn } from '../lib/agent-stream.js';
 import { describeStatus, type TurnStatus } from '../lib/turn-status.js';
 import { loadRegistry, saveActiveRooms, type ActiveRoom } from '../lib/config.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
+import { jwtExpiresWithin, SUBSCRIBER_JWT_REFRESH_MARGIN_MS } from '../lib/jwt.js';
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
 import * as api from '../lib/api-client.js';
 
@@ -326,6 +327,22 @@ export class AgentManager {
           dropped.push(r.agentId);
           details.push(`${r.name} (${r.agentId}): missing subscriber JWT (pre-v0.4.2 room); re-spawn after upgrade`);
           continue;
+        }
+
+        // The subscriber JWT carries the server's 7-day TTL but the
+        // participant token doesn't expire — re-mint via /sub-token rather
+        // than subscribing dead (Mercure 401s and the room goes silently
+        // deaf). A refresh failure means the participant row is gone
+        // server-side, so the room is unrecoverable: drop it.
+        if (jwtExpiresWithin(r.subscriberJwt, SUBSCRIBER_JWT_REFRESH_MARGIN_MS)) {
+          try {
+            r.subscriberJwt = await api.refreshSubscriberJwt(this.server, r.roomHash, r.participantToken);
+            console.log(`[${r.name}:${r.agentId}] Subscriber JWT expired/expiring — refreshed.`);
+          } catch {
+            dropped.push(r.agentId);
+            details.push(`${r.name} (${r.agentId}): subscriber JWT expired and refresh failed; respawn`);
+            continue;
+          }
         }
 
         // Pre-v0.4.5 rooms on disk have no roomPassword. Drop rather than try
@@ -761,6 +778,22 @@ export class AgentManager {
       },
       onError: (err) => {
         console.error(`[${agentName}:${agentId}] SSE error:`, err);
+      },
+    }, {
+      // Self-heal a mid-run subscriber JWT expiry (7-day server TTL): the
+      // participant token stays valid, so re-mint and persist instead of
+      // letting Mercure 401 the room deaf.
+      refreshJwt: async () => {
+        try {
+          const next = await api.refreshSubscriberJwt(this.server, roomHash, participantToken);
+          session.subscriberJwt = next;
+          void this.persistRooms();
+          console.log(`[${agentName}:${agentId}] Subscriber JWT refreshed.`);
+          return next;
+        } catch (err) {
+          console.error(`[${agentName}:${agentId}] Subscriber JWT refresh failed:`, err instanceof Error ? err.message : String(err));
+          return null;
+        }
       },
     });
 

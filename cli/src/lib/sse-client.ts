@@ -98,15 +98,33 @@ const stallWatchdogFetch = async (
   });
 };
 
-export const subscribeToRoom = (server: string, roomHash: string, jwt: string, handlers: SSEHandlers): SSESubscription => {
+export type SubscribeOptions = {
+  // Called when the hub rejects the subscription with a 401 — the stored
+  // subscriber JWT expired (7-day server TTL). Should return a fresh JWT
+  // (typically POST /sub-token, persisting it) or null to give up. While this
+  // is wired, an expired JWT self-heals instead of retrying into 401 forever.
+  refreshJwt?: () => Promise<string | null>;
+};
+
+// Floor between refresh attempts so a refresh that yields another 401 (e.g.
+// the participant row is gone — only a re-pair can fix that) can't hot-loop
+// against the API.
+const JWT_REFRESH_RETRY_MS = 30_000;
+
+export const subscribeToRoom = (
+  server: string,
+  roomHash: string,
+  jwt: string,
+  handlers: SSEHandlers,
+  options?: SubscribeOptions
+): SSESubscription => {
   const topic = encodeURIComponent(`room:${roomHash}`);
   const url = `${server}/.well-known/mercure?topic=${topic}`;
-  const es = new EventSource(url, {
-    fetch: (input, init) => stallWatchdogFetch(input, {
-      ...init,
-      headers: { ...(init?.headers || {}), Authorization: `Bearer ${jwt}` },
-    }),
-  });
+  let currentJwt = jwt;
+  let closed = false;
+  let refreshing = false;
+  let lastRefreshAt = 0;
+  let es: EventSource;
 
   const dispatch = (event: MessageEvent) => {
     try {
@@ -126,27 +144,65 @@ export const subscribeToRoom = (server: string, roomHash: string, jwt: string, h
     }
   };
 
-  // Mercure sends named SSE events (event: chat, event: knock, etc.)
-  es.addEventListener('chat', dispatch);
-  es.addEventListener('knock', dispatch);
-  es.addEventListener('approve', dispatch);
-  es.addEventListener('reject', dispatch);
-  es.addEventListener('destroy', dispatch);
-  es.addEventListener('token', dispatch);
+  const connect = (): void => {
+    es = new EventSource(url, {
+      fetch: (input, init) => stallWatchdogFetch(input, {
+        ...init,
+        // Read the live binding, not a snapshot — every reconnect attempt
+        // picks up a JWT refreshed since the EventSource was created.
+        headers: { ...(init?.headers || {}), Authorization: `Bearer ${currentJwt}` },
+      }),
+    });
 
-  // Some Mercure configs also send unnamed events
-  es.onmessage = dispatch;
+    // Mercure sends named SSE events (event: chat, event: knock, etc.)
+    es.addEventListener('chat', dispatch);
+    es.addEventListener('knock', dispatch);
+    es.addEventListener('approve', dispatch);
+    es.addEventListener('reject', dispatch);
+    es.addEventListener('destroy', dispatch);
+    es.addEventListener('token', dispatch);
 
-  es.onopen = () => handlers.onOpen?.();
-  es.onerror = () => {
-    // EventSource fires error on every reconnect attempt — this is normal.
-    // Only surface it if the connection is fully closed (readyState === 2).
-    if (es.readyState === 2) {
-      handlers.onError?.('SSE connection closed');
-    }
+    // Some Mercure configs also send unnamed events
+    es.onmessage = dispatch;
+
+    es.onopen = () => handlers.onOpen?.();
+    es.onerror = (err: unknown) => {
+      // The hub 401s an expired subscriber JWT. Refresh and reconnect rather
+      // than retrying with the dead token — without this a daemon paired more
+      // than 7 days ago goes silently deaf (presence still works, so the phone
+      // even shows it online).
+      const code = (err as { code?: number } | null)?.code;
+      if (code === 401 && options?.refreshJwt && !refreshing && !closed
+        && Date.now() - lastRefreshAt >= JWT_REFRESH_RETRY_MS) {
+        refreshing = true;
+        lastRefreshAt = Date.now();
+        void options.refreshJwt()
+          .then((next) => {
+            refreshing = false;
+            if (closed || !next) return;
+            currentJwt = next;
+            // Recreate rather than rely on the auto-retry: a 401'd EventSource
+            // may already be fully closed (readyState 2) and never retry.
+            es.close();
+            connect();
+          })
+          .catch(() => { refreshing = false; });
+        return;
+      }
+      // EventSource fires error on every reconnect attempt — this is normal.
+      // Only surface it if the connection is fully closed (readyState === 2).
+      if (es.readyState === 2) {
+        handlers.onError?.('SSE connection closed');
+      }
+    };
   };
 
+  connect();
+
   return {
-    close: () => es.close(),
+    close: () => {
+      closed = true;
+      es.close();
+    },
   };
 };
