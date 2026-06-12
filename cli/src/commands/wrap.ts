@@ -354,6 +354,20 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     onError: (err) => {
       console.error('[bridge] SSE error:', typeof err === 'string' ? err : 'reconnecting...');
     },
+  }, {
+    // A wrap session left running past the subscriber JWT's 7-day TTL would go
+    // silently deaf on the next reconnect — re-mint with the still-valid
+    // participant token instead. In-memory only; wrap rooms don't persist.
+    refreshJwt: async () => {
+      try {
+        const next = await api.refreshSubscriberJwt(server, room.roomHash, room.participantToken);
+        console.log('[bridge] subscriber JWT refreshed');
+        return next;
+      } catch (err) {
+        console.error('[bridge] subscriber JWT refresh failed:', err instanceof Error ? err.message : String(err));
+        return null;
+      }
+    },
   });
 
   // Keep alive

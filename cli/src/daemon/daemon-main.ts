@@ -20,6 +20,7 @@ import {
 } from '../lib/crypto.js';
 import * as api from '../lib/api-client.js';
 import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/sse-client.js';
+import { jwtExpiresWithin, SUBSCRIBER_JWT_REFRESH_MARGIN_MS } from '../lib/jwt.js';
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
 import { encryptAndSend } from '../lib/room-bridge.js';
 import { AgentManager, type RestoreResult } from './agent-manager.js';
@@ -463,6 +464,23 @@ export const runDaemon = async (): Promise<void> => {
         },
         onOpen: () => {
           console.log('Control room SSE connected.');
+        },
+      }, {
+        // The subscriber JWT expires after 7 days; a daemon that stays up
+        // across that line gets 401'd by Mercure on its next reconnect. The
+        // participant token is still valid, so re-mint in place — the phone
+        // notices nothing.
+        refreshJwt: async () => {
+          try {
+            const next = await api.refreshSubscriberJwt(server, iterState.controlRoomHash, iterState.participantToken);
+            iterState.subscriberJwt = next;
+            await saveDaemonState(iterState);
+            console.log('Control room subscriber JWT refreshed.');
+            return next;
+          } catch (err) {
+            console.error('Control room subscriber JWT refresh failed (re-pair may be needed):', err instanceof Error ? err.message : String(err));
+            return null;
+          }
         },
       });
       currentSse = sse;
@@ -979,6 +997,17 @@ export const setupControlRoom = async (
       // the weak 4-digit code alive under the new PBKDF2 derivation (still
       // offline-crackable). Force a fresh pair so a high-entropy code is minted.
       throw new Error('saved state predates KDF v1 — re-pairing to mint a high-entropy code');
+    }
+    // The stored subscriber JWT has a 7-day server TTL; the participant token
+    // does not expire. A daemon restarting past (or near) that TTL would
+    // subscribe with a dead JWT — Mercure 401s it and the control room goes
+    // deaf while presence keeps the daemon looking online. Re-mint through
+    // /sub-token instead; if even that fails the room is unrecoverable and we
+    // fall through to a fresh pair.
+    if (jwtExpiresWithin(saved.subscriberJwt, SUBSCRIBER_JWT_REFRESH_MARGIN_MS)) {
+      console.log('Control room subscriber JWT expired/expiring — refreshing.');
+      saved.subscriberJwt = await api.refreshSubscriberJwt(server, saved.controlRoomHash, saved.participantToken);
+      await saveDaemonState(saved);
     }
     console.log('Reusing previously paired control room (no QR scan needed).');
     const messageKey = await deriveMessageKey(saved.controlRoomSecret, saved.controlRoomPassword);
