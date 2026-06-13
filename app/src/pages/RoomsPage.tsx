@@ -156,7 +156,7 @@ const RoomsPage = () => {
   return (
     <main className="app-page app-chrome text-ink">
       <div className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-10 sm:px-6 sm:py-16">
-        <header className="flex items-start justify-between gap-4">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">
               <a href="https://www.hisohiso.org/" className="hover:text-ink">hisohiso</a>
@@ -165,7 +165,7 @@ const RoomsPage = () => {
             <p className="mt-2 text-sm text-ink-soft">Stored on this device only.</p>
           </div>
           <a
-            className="mt-1 shrink-0 rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+            className="w-full shrink-0 rounded-full border border-ink bg-filled px-5 py-2.5 text-center text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink sm:mt-1 sm:w-auto sm:text-left"
             href="/new"
           >
             Open a channel
