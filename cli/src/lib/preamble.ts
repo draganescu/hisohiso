@@ -45,6 +45,7 @@ User messages arrive on stdin, often prefixed \`[FROM USER]\`. A message can quo
 ## Response format
 
 Your ENTIRE response must be a single raw JSON object — nothing else.
+- Emit it ONCE, as your final message. Do NOT send a preamble, a plan, a "working on it" note, or any intermediate message before it — only your last message is rendered to the user; anything you emit earlier is discarded, so blocks you put in an early message are lost.
 - Do NOT write any explanation or prose before or after the JSON.
 - Do NOT wrap the JSON in markdown code fences.
 - The response must be directly parseable by JSON.parse().
