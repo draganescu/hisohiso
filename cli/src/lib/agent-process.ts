@@ -220,6 +220,58 @@ const extractJsonContent = (text: string): string | null => {
 };
 
 /**
+ * Scan `text` for every complete top-level JSON object and keep the ones shaped
+ * like a block envelope (an object with a string `text` field). Codex emits one
+ * `agent_message` per preamble PLUS the final answer, and the daemon joins them
+ * with "\n\n" (see parseCodexNdjson / parseCodexStreamLine). Because BLOCK_PROMPT
+ * tells the agent its ENTIRE response must be one raw JSON object, a codex turn
+ * can carry several envelopes back to back — a leading preamble
+ * (`{"text":"Inspecting…"}`) ahead of the real answer
+ * (`{"text":"…","blocks":[…]}`). Returning all of them lets the caller pick the
+ * final answer instead of the first preamble, which would otherwise shadow the
+ * answer's blocks and silently drop them (#187).
+ */
+const findBlockEnvelopes = (text: string): Array<{ text: string; blocks: unknown[] | null }> => {
+  const envelopes: Array<{ text: string; blocks: unknown[] | null }> = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let objStart = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}' && depth > 0) {
+      depth--;
+      if (depth === 0 && objStart >= 0) {
+        try {
+          const obj = JSON.parse(text.substring(objStart, i + 1)) as Record<string, unknown>;
+          if (typeof obj.text === 'string') {
+            const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
+            envelopes.push({ text: obj.text, blocks });
+          }
+        } catch { /* not an envelope (prose with braces, partial object) — skip */ }
+        objStart = -1;
+      }
+    }
+  }
+
+  return envelopes;
+};
+
+/**
  * Returns `null` when no block-style JSON envelope could be detected, so the
  * caller can fall back to the raw output. Returns `{ text, blocks }` whenever
  * a `"text"` field was extracted, even if there are no blocks attached.
@@ -234,20 +286,26 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
     }
   } catch { /* not valid JSON, try extraction */ }
 
-  // Extract JSON portion — strips code fences, preamble, trailing junk
+  // Pull out every complete envelope, then pick the FINAL answer. Codex prepends
+  // preamble envelopes before the answer; taking the first (as a naive
+  // first-`{"text":` match does) would surface the preamble and drop the
+  // answer's blocks (#187). Prefer the last envelope that actually carries
+  // blocks, falling back to the last envelope overall — the answer is always
+  // last, and this also survives a trailing block-less sign-off envelope.
+  const envelopes = findBlockEnvelopes(text);
+  if (envelopes.length > 0) {
+    const chosen =
+      [...envelopes].reverse().find((e) => e.blocks && e.blocks.length > 0)
+      ?? envelopes[envelopes.length - 1]!;
+    return { text: chosen.text, blocks: sanitizeBlocks(chosen.blocks) };
+  }
+
+  // No complete envelope parsed — the JSON is likely truncated. Strip code
+  // fences / preamble / trailing junk, then salvage the text field and any
+  // complete blocks from the envelope-shaped fragment.
   const jsonPart = extractJsonContent(text);
   if (!jsonPart) return null;
 
-  // Try parsing the cleaned JSON
-  try {
-    const obj = JSON.parse(jsonPart) as Record<string, unknown>;
-    if (typeof obj.text === 'string') {
-      const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
-      return { text: obj.text, blocks: sanitizeBlocks(blocks) };
-    }
-  } catch { /* JSON is truncated, try to salvage */ }
-
-  // JSON is truncated — extract text field and any complete blocks
   const textFieldMatch = jsonPart.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
   if (!textFieldMatch) return null;
 
