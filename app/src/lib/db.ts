@@ -105,15 +105,27 @@ export const clearRoomMessages = async (roomHash: string): Promise<void> => {
   await db.messages.where('room_hash').equals(roomHash).delete();
 };
 
-// Metadata for the masked last-message preview on the /rooms card. We deliberately
-// return only the timestamp + an existence flag — NOT the plaintext — so the card
-// can render a masked "••• ••• •••" + stamp without ever surfacing message content
-// in the list. (The content stays decrypted-on-device inside `messages`; the card
-// just never reads it.) Returns null when the room has no stored messages yet.
+// Metadata for the last-message preview on the /rooms card. This decrypts NOTHING
+// new: the latest message is already decrypted on THIS device inside `messages`, so
+// we read it locally to show a real one-line preview + timestamp. Nothing here ever
+// reaches the server — the relay only ever held ciphertext — so it's a local
+// convenience for the operator's own screen, not a leak. Returns null when the room
+// has no stored messages yet.
 export type LastMessageMeta = {
   timestamp: number;
   /** True if the latest message carries displayable content / blocks / replies. */
   hasContent: boolean;
+  /** One-line preview of the latest message, or a short activity summary. */
+  preview: string;
+  /** True if the latest message was sent from this device (render a "you:" hint). */
+  mine: boolean;
+  /** True if the latest line is a system/activity notice (render muted). */
+  system: boolean;
+};
+
+const previewText = (value: string): string => {
+  const oneLine = value.replace(/\s+/g, ' ').trim();
+  return oneLine.length > 80 ? `${oneLine.slice(0, 79)}…` : oneLine;
 };
 
 export const lastMessageMeta = async (roomHash: string): Promise<LastMessageMeta | null> => {
@@ -122,10 +134,23 @@ export const lastMessageMeta = async (roomHash: string): Promise<LastMessageMeta
     .between([roomHash, Dexie.minKey], [roomHash, Dexie.maxKey])
     .last();
   if (!latest) return null;
-  const hasContent = Boolean(
-    (latest.content && latest.content.trim().length > 0) ||
-      (latest.blocks && latest.blocks.length > 0) ||
-      (latest.replies && latest.replies.length > 0)
-  );
-  return { timestamp: latest.timestamp, hasContent };
+
+  const system = latest.type === 'system';
+  let preview = '';
+  if (latest.content && latest.content.trim().length > 0) {
+    preview = previewText(latest.content);
+  } else if (latest.replies && latest.replies.length > 0) {
+    const firstText = latest.replies.find((entry) => entry.text && entry.text.trim().length > 0)?.text;
+    preview = firstText ? previewText(firstText) : 'replied';
+  } else if (latest.blocks && latest.blocks.length > 0) {
+    preview = latest.blocks.length === 1 ? 'sent an update' : `sent ${latest.blocks.length} updates`;
+  }
+
+  return {
+    timestamp: latest.timestamp,
+    hasContent: preview.length > 0,
+    preview,
+    mine: latest.direction === 'out',
+    system,
+  };
 };

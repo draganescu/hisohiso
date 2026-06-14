@@ -4,11 +4,11 @@
 // stay visually in sync.
 //
 // PRIVACY (read before changing anything here):
-//   - The MASKED last-message preview NEVER renders plaintext. It shows fixed
-//     "••• ••• •••" dots plus a timestamp. The message text stays decrypted on
-//     this device inside Dexie; the card reads only `lastMessageMeta` (timestamp
-//     + existence flag), not content. Masking is presentational, not a crypto
-//     state — there is no plaintext to leak from this component.
+//   - The last-message preview reads `lastMessageMeta`, which decrypts NOTHING
+//     new: the latest message is already decrypted on this device inside Dexie.
+//     Showing a one-line preview is a local convenience for the operator's own
+//     screen; the relay only ever held ciphertext, so nothing here is exposed to
+//     the server or anyone else.
 //   - The Avatar seed is the VOLUNTARY per-room handle when present, otherwise a
 //     per-mount EPHEMERAL id. It is NEVER seeded from roomHash/roomSecret/color
 //     (room-scoped, cross-room/cross-reload stable → would let the same avatar
@@ -51,9 +51,6 @@ const formatStamp = (timestamp: number): string =>
     hour: 'numeric',
     minute: '2-digit',
   });
-
-// Three masked groups standing in for the (deliberately hidden) message text.
-const MASK = '••• ••• •••';
 
 export const RoomCard = ({ room, href, onRename, onForget, onSelect, isCurrent }: Props) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -174,15 +171,25 @@ export const RoomCard = ({ room, href, onRename, onForget, onSelect, isCurrent }
             </span>
           )}
         </div>
-        {/* Masked preview: fixed dots, never the message text. Only show the dots
-            when the latest message actually carries displayable content, so the
-            mask never implies content that isn't there (system/echo rows). */}
-        <div className="mt-1.5 flex items-center gap-2 text-sm text-ink-dim">
-          {meta?.hasContent && (
-            <span className="select-none font-mono tracking-[0.2em] text-ink-fade" aria-hidden="true">
-              {MASK}
-            </span>
-          )}
+        {/* Last-message preview — the real text (or a short activity summary),
+            read locally from the already-decrypted message; see the privacy note. */}
+        <div className="mt-1.5 flex items-center gap-2 text-sm">
+          <span
+            className={`min-w-0 flex-1 truncate ${meta?.system ? 'italic text-ink-dim' : 'text-ink-soft'}`}
+          >
+            {meta ? (
+              meta.preview ? (
+                <>
+                  {meta.mine && !meta.system && <span className="text-ink-dim">you: </span>}
+                  {meta.preview}
+                </>
+              ) : (
+                <span className="text-ink-fade">—</span>
+              )
+            ) : (
+              <span className="text-ink-fade">no messages yet</span>
+            )}
+          </span>
           {meta && (
             <span className="shrink-0 whitespace-nowrap text-xs text-ink-dim">{formatStamp(meta.timestamp)}</span>
           )}
