@@ -1846,7 +1846,7 @@ const RoomController = () => {
         </button>
       </div>
       {pairingCodeRevealed && (
-        <p className="mt-3 text-center font-mono text-2xl font-semibold tracking-[0.3em]">
+        <p className="mt-3 text-center font-mono text-2xl font-bold tracking-[0.3em]">
           {roomPassword}
         </p>
       )}
@@ -2064,7 +2064,7 @@ const RoomController = () => {
           <div className="room-message-column mx-auto w-full max-w-[820px] px-4 pt-[calc(env(safe-area-inset-top)+4rem)] pb-28 sm:px-6 sm:pb-32">
             {showEmptyState && (
               <div className="glass-panel rounded-[28px] border-dashed p-6 text-center sm:p-8">
-                <p className="text-lg font-semibold tracking-[-0.02em] text-ink sm:text-xl">
+                <p className="text-lg font-bold tracking-[-0.02em] text-ink sm:text-xl">
                   invite someone.
                 </p>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-soft">
@@ -2074,7 +2074,7 @@ const RoomController = () => {
                 <div className="mx-auto mt-5 flex max-w-md items-center gap-2 rounded-full border border-rule bg-bg px-3 py-1.5">
                   <p className="min-w-0 flex-1 truncate text-left text-xs text-ink-soft">{shareUrl}</p>
                   <button
-                    className="shrink-0 rounded-full border border-ink bg-filled px-3 py-1 text-xs font-medium text-on-ink"
+                    className="shrink-0 btn-primary btn-sm"
                     onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
                     type="button"
                   >
@@ -2093,6 +2093,58 @@ const RoomController = () => {
                 )}
 
                 <p className="mt-5 text-xs text-ink-dim">or just start typing above.</p>
+              </div>
+            )}
+
+            {/* Inline knock cards — pending join requests surfaced in the
+                conversation itself (not only the header bell + queue modal), so
+                you can let someone in without leaving the thread. Privacy: a
+                knocker has NO identity here — we show only their own voluntary
+                note (never a handle, pubkey, or "who sent you"). The knock having
+                decrypted already proves they hold the link (+ password if set);
+                approve/reject reuse the exact same handshake as the queue modal. */}
+            {knocks.length > 0 && (
+              <div className="mb-3 flex flex-col gap-2">
+                {knocks.map((knock) => (
+                  <div
+                    key={`inline-knock-${knock.id}`}
+                    className="rounded-[20px] border border-accent bg-accent-soft p-4"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-on-ink"
+                        aria-hidden="true"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 20V9l8-5 8 5v11" />
+                          <path d="M9 20v-6h6v6" />
+                        </svg>
+                      </span>
+                      <p className="text-sm font-semibold text-ink">someone's knocking</p>
+                      <span className="ml-auto shrink-0 text-xs text-ink-dim">{formatMailStamp(knock.ts)}</span>
+                    </div>
+                    <p className="mt-2 break-words text-sm leading-6 text-ink">{knock.message || 'no note included.'}</p>
+                    <p className="mt-1 text-[0.6875rem] leading-4 text-ink-dim">
+                      their knock decrypts with the link — let them in only if you're expecting someone.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => approveKnock(knock.id)}
+                        className="flex-1 btn-primary"
+                      >
+                        let in
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rejectKnock(knock.id)}
+                        className="flex-1 btn-ghost"
+                      >
+                        decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -2309,7 +2361,7 @@ const RoomController = () => {
             the newest messages and never get pulled into view. */}
         {!autoScroll && unreadCount > 0 && (
           <button
-            className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border border-ink bg-filled px-4 py-2 text-xs font-medium text-on-ink shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
+            className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2 btn-primary btn-sm shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
             onClick={() => {
               scrollToLatest();
               setAutoScroll(true);
@@ -2432,7 +2484,7 @@ const RoomController = () => {
                 </button>
                 <button
                   type="button"
-                  className="flex-1 rounded-full border border-ink bg-filled px-4 py-2.5 text-sm font-semibold text-on-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  className="flex-1 btn-primary disabled:cursor-not-allowed disabled:opacity-30"
                   disabled={replyQueue.length === 0}
                   onClick={() => void dispatchBatch()}
                 >
@@ -2542,7 +2594,7 @@ const RoomController = () => {
                   cancel
                 </button>
                 <button
-                  className="rounded-full border border-ink bg-filled px-6 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
+                  className="btn-primary disabled:cursor-not-allowed disabled:opacity-30"
                   onPointerDown={() => {
                     suppressSendOnBlurRef.current = true;
                   }}
@@ -2647,7 +2699,7 @@ const RoomController = () => {
                   <div className="flex flex-col items-start gap-2">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink"
+                      className="btn-primary"
                       onClick={() => {
                         if (activeMessage.action?.type === 'join-room') {
                           void joinActionRoom(activeMessage.action);
@@ -2670,14 +2722,14 @@ const RoomController = () => {
                 <div className="mt-2 flex flex-wrap gap-2 pb-[env(safe-area-inset-bottom)]">
                   <button
                     type="button"
-                    className="rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
+                    className="btn-ghost"
                     onClick={() => void handleCopyMessage(messageCopyText(activeMessage))}
                   >
                     copy
                   </button>
                   <button
                     type="button"
-                    className="rounded-full border border-danger bg-surface px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger-soft"
+                    className="btn-danger"
                     onClick={() => void handleDeleteMessage(activeMessage.id)}
                   >
                     delete local copy
@@ -2710,7 +2762,7 @@ const RoomController = () => {
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">notifications</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">join queue</h2>
+                  <h2 className="mt-1 text-lg font-bold tracking-[-0.015em]">join queue</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
@@ -2747,14 +2799,14 @@ const RoomController = () => {
                         </p>
                         <div className="mt-4 flex gap-2">
                           <button
-                            className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                            className="flex-1 btn-primary"
                             onClick={() => approveKnock(knock.id)}
                             type="button"
                           >
                             approve
                           </button>
                           <button
-                            className="flex-1 rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
+                            className="flex-1 btn-ghost"
                             onClick={() => rejectKnock(knock.id)}
                             type="button"
                           >
@@ -2777,7 +2829,7 @@ const RoomController = () => {
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">channel</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">settings</h2>
+                  <h2 className="mt-1 text-lg font-bold tracking-[-0.015em]">settings</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
@@ -2862,7 +2914,7 @@ const RoomController = () => {
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">channel</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">menu</h2>
+                  <h2 className="mt-1 text-lg font-bold tracking-[-0.015em]">menu</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
@@ -2878,7 +2930,7 @@ const RoomController = () => {
                   <p className="mt-2 break-all text-xs text-ink-soft">{shareUrl}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
-                      className="rounded-full border border-ink bg-filled px-4 py-1.5 text-xs font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                      className="btn-primary btn-sm"
                       onClick={handleCopy}
                       type="button"
                     >
@@ -3006,13 +3058,13 @@ const RoomController = () => {
                 <div className="mt-3 flex flex-col gap-2 rounded-[14px] border border-rule bg-surface p-4">
                   <a
                     href="/rooms"
-                    className="rounded-full border border-rule bg-surface px-4 py-2 text-center text-sm font-medium text-ink no-underline transition hover:border-ink"
+                    className="btn-ghost"
                   >
                     your rooms
                   </a>
 
                   <button
-                    className="rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
+                    className="btn-ghost"
                     onClick={() => {
                       setShowLeave(true);
                       setShowMenu(false);
@@ -3023,7 +3075,7 @@ const RoomController = () => {
                   </button>
 
                   <button
-                    className="rounded-full border border-danger bg-surface px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger-soft"
+                    className="btn-danger"
                     onClick={() => {
                       setShowDisband(true);
                       setShowMenu(false);
@@ -3060,7 +3112,7 @@ const RoomController = () => {
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
                   <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">switch</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">channels</h2>
+                  <h2 className="mt-1 text-lg font-bold tracking-[-0.015em]">channels</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
@@ -3128,13 +3180,13 @@ const RoomController = () => {
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <a
                     href="/new"
-                    className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-center text-sm font-medium text-on-ink no-underline transition hover:bg-transparent hover:text-ink"
+                    className="flex-1 text-center no-underline btn-primary"
                   >
                     open a channel
                   </a>
                   <a
                     href="/rooms"
-                    className="flex-1 rounded-full border border-rule bg-surface px-4 py-2 text-center text-sm font-medium text-ink no-underline transition hover:border-ink"
+                    className="flex-1 btn-ghost"
                   >
                     all channels
                   </a>
@@ -3149,7 +3201,7 @@ const RoomController = () => {
           <div className="room-overlay fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-danger bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
               <p className="text-[0.6875rem] uppercase tracking-[0.28em] text-danger">destructive</p>
-              <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em]">
+              <h2 className="mt-2 text-xl font-bold tracking-[-0.015em]">
                 disband this channel?
               </h2>
               <p className="mt-3 text-sm leading-6 text-ink-soft">
@@ -3158,7 +3210,7 @@ const RoomController = () => {
               </p>
               <div className="mt-6 flex gap-3">
                 <button
-                  className="flex-1 rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
+                  className="flex-1 btn-ghost"
                   onClick={() => setShowDisband(false)}
                   type="button"
                 >
@@ -3183,21 +3235,21 @@ const RoomController = () => {
         {showLeave && (
           <div className="room-overlay fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
-              <h2 className="text-xl font-semibold tracking-[-0.015em]">leave this channel?</h2>
+              <h2 className="text-xl font-bold tracking-[-0.015em]">leave this channel?</h2>
               <p className="mt-3 text-sm leading-6 text-ink-soft">
                 you're removed and this channel is wiped from this device only. the channel stays
                 open for everyone else — open the link again to rejoin.
               </p>
               <div className="mt-6 flex gap-3">
                 <button
-                  className="flex-1 rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
+                  className="flex-1 btn-ghost"
                   onClick={() => setShowLeave(false)}
                   type="button"
                 >
                   cancel
                 </button>
                 <button
-                  className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                  className="flex-1 btn-primary"
                   onClick={() => {
                     setShowLeave(false);
                     void leaveRoom();
@@ -3230,7 +3282,7 @@ const RoomController = () => {
 
         {roomState === 'LOBBY_WAITING' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">join this channel.</h1>
+            <h1 className="text-3xl font-bold tracking-[-0.025em]">join this channel.</h1>
             <p className="mt-3 text-ink-soft">ask to be let in. someone inside has to approve you.</p>
 
             <input
@@ -3263,7 +3315,7 @@ const RoomController = () => {
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <button
-                className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                className="btn-primary"
                 onClick={sendKnock}
                 type="button"
               >
@@ -3296,7 +3348,7 @@ const RoomController = () => {
 
         {roomState === 'LOBBY_EMPTY' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">all quiet.</h1>
+            <h1 className="text-3xl font-bold tracking-[-0.025em]">all quiet.</h1>
             <p className="mt-3 text-ink-soft">
               no one is currently in this channel. ask someone inside to open it so they can approve
               you.
@@ -3307,7 +3359,7 @@ const RoomController = () => {
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
-                className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+                className="btn-primary"
                 onClick={handleCopy}
                 type="button"
               >
@@ -3326,10 +3378,10 @@ const RoomController = () => {
 
         {roomState === 'DESTROYED' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">channel closed.</h1>
+            <h1 className="text-3xl font-bold tracking-[-0.025em]">channel closed.</h1>
             <p className="mt-3 text-ink-soft">this channel was disbanded or no longer exists.</p>
             <a
-              className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink"
+              className="mt-6 inline-flex items-center justify-center btn-primary"
               href="/rooms"
             >
               your rooms
@@ -3339,13 +3391,13 @@ const RoomController = () => {
 
         {roomState === 'LEFT' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">you left this channel.</h1>
+            <h1 className="text-3xl font-bold tracking-[-0.025em]">you left this channel.</h1>
             <p className="mt-3 text-ink-soft">
               its messages were wiped from this device. the channel stays open for everyone else —
               open the link again to rejoin.
             </p>
             <a
-              className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink"
+              className="mt-6 inline-flex items-center justify-center btn-primary"
               href="/rooms"
             >
               your rooms

@@ -59,7 +59,7 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
           <button
             type="button"
             onClick={cancel}
-            className="rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink"
+            className="btn-ghost"
           >
             {block.cancel_label || 'Cancel'}
           </button>

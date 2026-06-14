@@ -69,7 +69,7 @@ const RoomCreator = () => {
             <p className="font-mono text-[0.6875rem] uppercase tracking-[0.35em] text-accent-strong">
               hisohiso
             </p>
-            <h1 className="mt-3 font-display text-3xl font-semibold tracking-[-0.025em]">
+            <h1 className="mt-3 font-display text-3xl font-bold tracking-[-0.025em]">
               open a channel
             </h1>
             <p className="mt-2 text-sm text-ink-soft">
@@ -171,7 +171,7 @@ const RoomCreator = () => {
             <button
               type="button"
               onClick={() => void create()}
-              className="mt-6 w-full rounded-full border border-ink bg-filled py-3 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+              className="mt-6 w-full btn-primary"
             >
               open channel
             </button>
