@@ -8,7 +8,7 @@ const roomController = readFileSync(resolve(root, 'src/pages/RoomController.tsx'
 const roomsPage = readFileSync(resolve(root, 'src/pages/RoomsPage.tsx'), 'utf8');
 const roomCreator = readFileSync(resolve(root, 'src/pages/RoomCreator.tsx'), 'utf8');
 
-assert.match(styles, /--accent:\s*#7170ff/, 'design tokens expose the 2026 accent color');
+assert.match(styles, /--accent:\s*#ff4d8d/, 'design tokens expose the riso pink accent color');
 assert.match(styles, /\.app-chrome\b/, 'app chrome shell class exists');
 assert.match(styles, /\.glass-panel\b/, 'glass panel surface class exists');
 assert.match(styles, /\.floating-action\b/, 'floating action class exists');

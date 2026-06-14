@@ -47,7 +47,7 @@ const RoomCreator = () => {
       navigateTo(`/room#${secret}`);
     } catch (err) {
       setStatus('error');
-      setError(err instanceof Error ? err.message : 'Unable to open the channel');
+      setError(err instanceof Error ? err.message : 'unable to open the channel');
     }
   };
 
@@ -57,30 +57,30 @@ const RoomCreator = () => {
         <header className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">hisohiso</p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Open a channel.</h1>
+            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">open a channel</h1>
             <p className="mt-2 text-sm text-ink-soft">
-              Messages stay on this device only. Anyone with the link can join.
+              messages stay on this device only. anyone with the link can join.
             </p>
           </div>
           <a
             className="mt-1 shrink-0 rounded-full border border-rule bg-surface px-4 py-2 text-xs font-medium text-ink no-underline transition hover:border-ink"
             href="/rooms"
           >
-            ← Your channels
+            ← your rooms
           </a>
         </header>
 
         {status === 'form' && (
           <div className="glass-panel rounded-[28px] p-7">
             <div className="rounded-[14px] border border-rule bg-bg p-4">
-              <p className="text-sm font-semibold tracking-[-0.01em]">Channel key</p>
+              <p className="text-sm font-semibold tracking-[-0.01em]">channel key</p>
               <p className="mt-1 text-xs leading-5 text-ink-soft">
-                Optional. Encrypts knocks and message blocks. Everyone joining needs the
+                optional. encrypts knocks and message blocks. everyone joining needs the
                 same key — share it out of band.
               </p>
               <input
                 className="input-field mt-3 w-full rounded-[14px] px-3 py-2 text-base"
-                placeholder="Optional"
+                placeholder="optional"
                 type="text"
                 name="room-key"
                 autoComplete="off"
@@ -96,10 +96,10 @@ const RoomCreator = () => {
 
             <div className="mt-4 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-bg p-4">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold tracking-[-0.01em]">Offline catch-up</p>
+                <p className="text-sm font-semibold tracking-[-0.01em]">offline catch-up</p>
                 <p className="mt-1 text-xs leading-5 text-ink-soft">
-                  Server keeps encrypted messages for 24h so devices that were closed
-                  can catch up. You can change this later.
+                  server keeps encrypted messages for 24h so devices that were closed
+                  can catch up. you can change this later.
                 </p>
               </div>
               <button
@@ -124,19 +124,19 @@ const RoomCreator = () => {
               onClick={() => void create()}
               className="mt-6 w-full rounded-full border border-ink bg-filled py-3 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
             >
-              Open channel
+              open channel
             </button>
 
             <p className="mt-4 text-center text-xs text-ink-dim">
               <a className="underline decoration-rule underline-offset-4 hover:text-ink" href="https://www.hisohiso.org/security/">
-                How the encryption works
+                how the encryption works
               </a>
             </p>
           </div>
         )}
         {status === 'creating' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <p className="text-sm uppercase tracking-[0.32em] text-ink-dim">Opening channel…</p>
+            <p className="text-sm uppercase tracking-[0.32em] text-ink-dim">opening channel…</p>
           </div>
         )}
         {status === 'error' && (

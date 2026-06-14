@@ -51,11 +51,11 @@ const AppLockSettings = () => {
     const a = pin.trim();
     const b = confirmPin.trim();
     if (a.length < 4) {
-      setError('Use a PIN of at least 4 digits.');
+      setError('use a pin of at least 4 digits.');
       return;
     }
     if (a !== b) {
-      setError('PINs do not match.');
+      setError('pins do not match.');
       return;
     }
     setBusy(true);
@@ -79,7 +79,7 @@ const AppLockSettings = () => {
     setHasPasskey(enrolledPasskey);
     setBusy(false);
     closeSetup();
-    setStatus(enrolledPasskey ? 'App lock on — passkey + PIN.' : 'App lock on — PIN only.');
+    setStatus(enrolledPasskey ? 'app lock on — passkey + pin.' : 'app lock on — pin only.');
   }, [pin, confirmPin, passkeySupported, hasPasskey, persist, closeSetup]);
 
   const addPasskey = useCallback(async () => {
@@ -88,9 +88,9 @@ const AppLockSettings = () => {
     try {
       await enrollPasskey();
       setHasPasskey(true);
-      setStatus('Passkey unlock enabled.');
+      setStatus('passkey unlock enabled.');
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Could not enroll a passkey. PIN still works.');
+      setStatus(err instanceof Error ? err.message : 'could not enroll a passkey. pin still works.');
     } finally {
       setBusy(false);
     }
@@ -99,33 +99,33 @@ const AppLockSettings = () => {
   const removePasskey = useCallback(() => {
     clearStoredPasskeyCredential();
     setHasPasskey(false);
-    setStatus('Passkey unlock removed. PIN still works.');
+    setStatus('passkey unlock removed. pin still works.');
   }, []);
 
   const statusLine = !config.enabled
-    ? 'Off — the app will not lock when suspended.'
+    ? 'off — the app will not lock when suspended.'
     : !configured
-      ? 'On, but set a PIN to activate.'
+      ? 'on, but set a pin to activate.'
       : hasPasskey
-        ? 'On — unlocks with your passkey or PIN.'
-        : 'On — unlocks with your PIN.';
+        ? 'on — unlocks with your passkey or pin.'
+        : 'on — unlocks with your pin.';
 
   return (
     <section className="rounded-[22px] border border-rule bg-surface p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold">App lock</h2>
+          <h2 className="text-lg font-semibold">app lock</h2>
           <p className="mt-2 text-sm text-ink-soft">
-            Locks the whole app when it is suspended or backgrounded — so a phone
+            locks the whole app when it is suspended or backgrounded — so a phone
             left unlocked in the app switcher can&apos;t be opened without your
-            passkey or PIN.
+            passkey or pin.
           </p>
         </div>
         <button
           type="button"
           role="switch"
           aria-checked={config.enabled}
-          aria-label="Toggle app lock"
+          aria-label="toggle app lock"
           onClick={toggle}
           className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition ${
             config.enabled ? 'bg-ink' : 'bg-ink-fade'
@@ -152,7 +152,7 @@ const AppLockSettings = () => {
             }}
             className="rounded-full border border-ink px-4 py-2 text-xs font-semibold"
           >
-            {configured ? 'Change PIN' : 'Set PIN'}
+            {configured ? 'change pin' : 'set pin'}
           </button>
           {active && passkeySupported && !hasPasskey && (
             <button
@@ -161,7 +161,7 @@ const AppLockSettings = () => {
               disabled={busy}
               className="rounded-full border border-ink px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Add passkey unlock
+              add passkey unlock
             </button>
           )}
           {active && hasPasskey && (
@@ -171,7 +171,7 @@ const AppLockSettings = () => {
               disabled={busy}
               className="rounded-full border border-ink px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Remove passkey
+              remove passkey
             </button>
           )}
         </div>
@@ -179,24 +179,24 @@ const AppLockSettings = () => {
 
       {config.enabled && !passkeySupported && (
         <p className="mt-3 text-xs text-ink-dim">
-          This device has no passkey/biometric support, so unlock uses your PIN.
+          this device has no passkey/biometric support, so unlock uses your pin.
         </p>
       )}
 
       {setupOpen && (
         <div className="mt-4 rounded-xl border border-rule bg-bg p-4">
-          <p className="text-sm font-semibold">{configured ? 'Change PIN' : 'Set a PIN'}</p>
+          <p className="text-sm font-semibold">{configured ? 'change pin' : 'set a pin'}</p>
           <p className="mt-1 text-xs text-ink-dim">
-            At least 4 digits.{' '}
+            at least 4 digits.{' '}
             {passkeySupported
-              ? 'A passkey is enrolled as the fast path; the PIN is the fallback.'
-              : 'Used to unlock on this device.'}
+              ? 'a passkey is enrolled as the fast path; the pin is the fallback.'
+              : 'used to unlock on this device.'}
           </p>
           <input
             type="password"
             inputMode="numeric"
             autoComplete="off"
-            placeholder="PIN"
+            placeholder="pin"
             value={pin}
             onChange={(e) => {
               setPin(e.target.value);
@@ -208,7 +208,7 @@ const AppLockSettings = () => {
             type="password"
             inputMode="numeric"
             autoComplete="off"
-            placeholder="Confirm PIN"
+            placeholder="confirm pin"
             value={confirmPin}
             onChange={(e) => {
               setConfirmPin(e.target.value);
@@ -224,7 +224,7 @@ const AppLockSettings = () => {
               disabled={busy}
               className="rounded-full border border-ink bg-filled px-4 py-2 text-xs font-semibold text-on-ink disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {busy ? 'Saving…' : 'Save'}
+              {busy ? 'saving…' : 'save'}
             </button>
             <button
               type="button"
@@ -232,7 +232,7 @@ const AppLockSettings = () => {
               disabled={busy}
               className="rounded-full border border-ink px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Cancel
+              cancel
             </button>
           </div>
         </div>

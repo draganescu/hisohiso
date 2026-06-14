@@ -124,9 +124,9 @@ const getMessageLabel = (message: ChatMessage): string => {
     return 'System';
   }
   if (message.direction === 'out') {
-    return message.handle ? `${message.handle} (You)` : 'You';
+    return message.handle ? `${message.handle} (you)` : 'you';
   }
-  return message.handle || 'Room member';
+  return message.handle || 'room member';
 };
 
 // One live work-status for an agent, derived from an ephemeral `status` event.
@@ -760,7 +760,7 @@ const RoomController = () => {
         // AbortError fires when the user switched rooms mid-init — that's the
         // happy path of the abort, not a user-visible failure.
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Unable to load room');
+        setError(err instanceof Error ? err.message : 'unable to load room');
       }
     };
 
@@ -913,7 +913,7 @@ const RoomController = () => {
         }
 
         if (payload.type === 'reject' && roomState === 'LOBBY_WAITING') {
-          setKnockNotice('Request rejected. Try again when someone is online.');
+          setKnockNotice('request rejected. try again when someone is online.');
         }
 
         if (payload.type === 'destroy') {
@@ -1113,7 +1113,7 @@ const RoomController = () => {
     }
     if (!knockKey) {
       setKnockSent(false);
-      setKnockNotice('Preparing encryption key…');
+      setKnockNotice('preparing encryption key…');
       return;
     }
 
@@ -1133,16 +1133,16 @@ const RoomController = () => {
           setLobbyJwt(knockData.lobby_jwt);
         }
         setKnockSent(true);
-        setKnockNotice('Waiting for approval…');
+        setKnockNotice('waiting for approval…');
       } else {
         knockEphemeralRef.current = null;
         setKnockSent(false);
-        setKnockNotice('Unable to send join request.');
+        setKnockNotice('unable to send join request.');
       }
     } catch {
       knockEphemeralRef.current = null;
       setKnockSent(false);
-      setKnockNotice('Unable to send join request.');
+      setKnockNotice('unable to send join request.');
     }
   }, [roomHash, message, knockKey]);
 
@@ -1234,20 +1234,20 @@ const RoomController = () => {
     if (trimmed.startsWith('/iam')) {
       const match = trimmed.match(/^\/iam\s+(.+)/i);
       if (!match || !match[1]) {
-        await addSystemMessage('Usage: /iam your_handle');
+        await addSystemMessage('usage: /iam your_handle');
         setChatInput('');
         return;
       }
       const nextHandle = match[1].trim().slice(0, 24);
       if (!nextHandle) {
-        await addSystemMessage('Handle cannot be empty.');
+        await addSystemMessage('handle cannot be empty.');
         setChatInput('');
         return;
       }
       setHandle(roomHash, nextHandle);
       setHandleState(nextHandle);
       updateRoomHandle(roomHash, nextHandle);
-      await addSystemMessage(`Handle set to ${nextHandle}.`);
+      await addSystemMessage(`handle set to ${nextHandle}.`);
       setChatInput('');
       setShowComposer(false);
       setReplyToId(null);
@@ -1497,7 +1497,7 @@ const RoomController = () => {
     } catch (err) {
       // Surface the reason rather than silently leaving the toggle off — the
       // common case is the browser refusing pushManager.subscribe().
-      setPushError(err instanceof Error ? err.message : 'Could not change notifications.');
+      setPushError(err instanceof Error ? err.message : 'could not change notifications.');
       setPushStatus(getPushStatus(roomHash));
     } finally {
       setPushBusy(false);
@@ -1627,9 +1627,9 @@ const RoomController = () => {
     <div className="mt-2 rounded-xl border border-rule bg-bg p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">Pairing code</p>
+          <p className="font-semibold">pairing code</p>
           <p className="mt-1 text-xs text-ink-soft">
-            Needed alongside the room link to join from another device. Read it
+            needed alongside the room link to join from another device. read it
             off, don't share it together with the link.
           </p>
         </div>
@@ -1638,7 +1638,7 @@ const RoomController = () => {
           onClick={() => setPairingCodeRevealed((v) => !v)}
           className="shrink-0 rounded-full border border-ink px-3 py-1 text-xs font-semibold"
         >
-          {pairingCodeRevealed ? 'Hide' : 'Show'}
+          {pairingCodeRevealed ? 'hide' : 'show'}
         </button>
       </div>
       {pairingCodeRevealed && (
@@ -1662,7 +1662,7 @@ const RoomController = () => {
             className="text-sm font-medium text-ink underline decoration-rule underline-offset-4"
             href="/rooms"
           >
-            ← Your channels
+            ← your rooms
           </a>
         </div>
       </main>
@@ -1671,7 +1671,7 @@ const RoomController = () => {
 
   if (roomState === 'PARTICIPANT') {
     const connectionLabel =
-      connection === 'connected' ? 'Live' : connection === 'error' ? 'Reconnecting…' : 'Connecting…';
+      connection === 'connected' ? 'live' : connection === 'error' ? 'reconnecting…' : 'connecting…';
     const connectionColor =
       connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
 
@@ -1702,8 +1702,8 @@ const RoomController = () => {
               type="button"
               onClick={openSwitcher}
               className="pointer-events-auto pill-control flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-              aria-label="Switch channels"
-              title="Switch channels"
+              aria-label="switch channels"
+              title="switch channels"
             >
               <span
                 className="block h-3.5 w-3.5 rounded-full ring-1 ring-inset ring-rule"
@@ -1712,7 +1712,7 @@ const RoomController = () => {
             </button>
             <div className="pointer-events-auto pill-control flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5">
               <h1 className="truncate text-sm font-semibold tracking-[-0.015em]">
-                {roomNickname || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'Channel')}
+                {roomNickname || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'channel')}
               </h1>
             </div>
             <div
@@ -1730,7 +1730,7 @@ const RoomController = () => {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
-              aria-label={knocks.length === 0 ? 'Open join queue' : `Open join queue, ${knocks.length} waiting`}
+              aria-label={knocks.length === 0 ? 'open join queue' : `open join queue, ${knocks.length} waiting`}
               className="pointer-events-auto pill-control relative inline-flex h-9 w-9 items-center justify-center rounded-full text-ink"
               onClick={() => setShowQueue(true)}
               type="button"
@@ -1746,7 +1746,7 @@ const RoomController = () => {
               )}
             </button>
             <button
-              aria-label="Channel info"
+              aria-label="channel info"
               className="pointer-events-auto pill-control inline-flex h-9 w-9 items-center justify-center rounded-full text-ink"
               onClick={() => setShowHelp(true)}
               type="button"
@@ -1762,7 +1762,7 @@ const RoomController = () => {
               onClick={() => setShowMenu(true)}
               type="button"
             >
-              Menu
+              menu
             </button>
           </div>
         </div>
@@ -1791,10 +1791,10 @@ const RoomController = () => {
             {showEmptyState && (
               <div className="glass-panel rounded-[28px] border-dashed p-6 text-center sm:p-8">
                 <p className="text-lg font-semibold tracking-[-0.02em] text-ink sm:text-xl">
-                  Invite someone.
+                  invite someone.
                 </p>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-soft">
-                  Share this link. Anyone with it can request to join.
+                  share this link. anyone with it can request to join.
                 </p>
 
                 <div className="mx-auto mt-5 flex max-w-md items-center gap-2 rounded-full border border-rule bg-bg px-3 py-1.5">
@@ -1804,7 +1804,7 @@ const RoomController = () => {
                     onClick={() => { void navigator.clipboard.writeText(shareUrl); }}
                     type="button"
                   >
-                    Copy
+                    copy
                   </button>
                 </div>
 
@@ -1812,20 +1812,20 @@ const RoomController = () => {
                   <div className="mt-5 flex justify-center">
                     <img
                       src={emptyQrSrc}
-                      alt="Channel QR code"
+                      alt="channel qr code"
                       className="h-40 w-40 rounded-[10px] border border-rule sm:h-44 sm:w-44"
                     />
                   </div>
                 )}
 
-                <p className="mt-5 text-xs text-ink-dim">Or just start typing above.</p>
+                <p className="mt-5 text-xs text-ink-dim">or just start typing above.</p>
               </div>
             )}
 
             {!showEmptyState && visibleMessages.length === 0 && (
               <div className="glass-panel rounded-[28px] border-dashed p-8 text-center">
-                <p className="text-base font-semibold text-ink">No messages yet.</p>
-                <p className="mt-2 text-sm leading-6 text-ink-soft">Start with a note.</p>
+                <p className="text-base font-semibold text-ink">all quiet.</p>
+                <p className="mt-2 text-sm leading-6 text-ink-soft">whisper something to start.</p>
               </div>
             )}
 
@@ -1853,7 +1853,7 @@ const RoomController = () => {
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-soft" />
                       </span>
                     )}
-                    <span className="break-words">{st.text || 'Working…'}</span>
+                    <span className="break-words">{st.text || 'working…'}</span>
                   </div>
                 </div>
               ))}
@@ -1872,7 +1872,7 @@ const RoomController = () => {
                   );
                 }
 
-                const senderLabel = msg.handle || (isMine ? 'You' : null);
+                const senderLabel = msg.handle || (isMine ? 'you' : null);
                 const hasBlocks = !!(msg.blocks && msg.blocks.length > 0);
 
                 return (
@@ -1991,7 +1991,7 @@ const RoomController = () => {
                             className="hover:text-ink"
                             onClick={() => openComposer(msg.id)}
                           >
-                            Reply
+                            reply
                           </button>
                         </>
                       )}
@@ -2001,7 +2001,7 @@ const RoomController = () => {
                         className="hover:text-ink"
                         onClick={() => void handleCopyMessage(messageCopyText(msg))}
                       >
-                        Copy
+                        copy
                       </button>
                       <span aria-hidden="true">·</span>
                       <button
@@ -2009,7 +2009,7 @@ const RoomController = () => {
                         className="hover:text-danger"
                         onClick={() => void handleDeleteMessage(msg.id)}
                       >
-                        Delete
+                        delete
                       </button>
                     </div>
                   </div>
@@ -2055,7 +2055,7 @@ const RoomController = () => {
             onClick={() => openComposer()}
             type="button"
           >
-            {replyTarget ? 'Continue reply' : 'Compose'}
+            {replyTarget ? 'continue reply' : 'compose'}
           </button>
         )}
         {isControlRoom && (
@@ -2076,7 +2076,7 @@ const RoomController = () => {
             onClick={() => setShowCollector(true)}
             className="floating-action px-5 py-3.5 text-sm font-semibold"
           >
-            Dispatch ({replyQueue.length})
+            dispatch ({replyQueue.length})
           </button>
         )}
 
@@ -2092,19 +2092,19 @@ const RoomController = () => {
             >
               <div className="flex items-center justify-between border-b border-rule px-5 py-4">
                 <p className="text-sm font-semibold">
-                  Batch · {replyQueue.length} {replyQueue.length === 1 ? 'reply' : 'replies'}
+                  batch · {replyQueue.length} {replyQueue.length === 1 ? 'reply' : 'replies'}
                 </p>
                 <button
                   type="button"
                   className="text-sm font-medium text-ink-soft hover:text-ink"
                   onClick={() => setShowCollector(false)}
                 >
-                  Close
+                  close
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-3">
                 {replyQueue.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-ink-dim">No replies queued.</p>
+                  <p className="py-8 text-center text-sm text-ink-dim">no replies queued.</p>
                 ) : (
                   <ul className="flex flex-col gap-3">
                     {replyQueue.map((entry, index) => (
@@ -2117,7 +2117,7 @@ const RoomController = () => {
                         </div>
                         <button
                           type="button"
-                          aria-label="Remove reply"
+                          aria-label="remove reply"
                           className="shrink-0 text-danger hover:opacity-70"
                           onClick={() => removeQueuedReply(index)}
                         >
@@ -2137,7 +2137,7 @@ const RoomController = () => {
                     setShowCollector(false);
                   }}
                 >
-                  Clear
+                  clear
                 </button>
                 <button
                   type="button"
@@ -2145,7 +2145,7 @@ const RoomController = () => {
                   disabled={replyQueue.length === 0}
                   onClick={() => void dispatchBatch()}
                 >
-                  Dispatch all ({replyQueue.length})
+                  dispatch all ({replyQueue.length})
                 </button>
               </div>
             </div>
@@ -2174,7 +2174,7 @@ const RoomController = () => {
                       keyboardVisible ? 'hidden' : ''
                     }`}
                   >
-                    {isAgentRoom ? 'Replying to · adds to batch' : 'Replying to'}
+                    {isAgentRoom ? 'replying to · adds to batch' : 'replying to'}
                   </p>
                   <p
                     className={`font-medium text-ink transition-all duration-200 ${
@@ -2195,8 +2195,8 @@ const RoomController = () => {
 
               <textarea
                 ref={composerInputRef}
-                aria-label={replyTarget ? 'Reply' : 'New message'}
-                placeholder="Write a message…"
+                aria-label={replyTarget ? 'reply' : 'new message'}
+                placeholder="whisper something…"
                 value={chatInput}
                 enterKeyHint="send"
                 onChange={(event) => setChatInput(event.target.value)}
@@ -2248,7 +2248,7 @@ const RoomController = () => {
                   onClick={closeComposer}
                   type="button"
                 >
-                  Cancel
+                  cancel
                 </button>
                 <button
                   className="rounded-full border border-ink bg-filled px-6 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-filled disabled:hover:text-on-ink"
@@ -2259,7 +2259,7 @@ const RoomController = () => {
                   type="button"
                   disabled={!chatInput.trim()}
                 >
-                  {isAgentRoom && replyToId ? 'Add to batch' : 'Done'}
+                  {isAgentRoom && replyToId ? 'add to batch' : 'done'}
                 </button>
               </div>
             </div>
@@ -2277,17 +2277,17 @@ const RoomController = () => {
                 onClick={() => setSelectedId(null)}
                 type="button"
               >
-                Back
+                back
               </button>
               <p className="text-sm font-semibold">
-                {activeMessage.direction === 'out' ? 'Sent message' : 'Message'}
+                {activeMessage.direction === 'out' ? 'sent message' : 'message'}
               </p>
               <button
                 className="text-sm font-medium text-ink-soft hover:text-ink"
                 onClick={() => openComposer(activeMessage.id)}
                 type="button"
               >
-                Reply
+                reply
               </button>
             </div>
 
@@ -2337,7 +2337,7 @@ const RoomController = () => {
                     <p className="whitespace-pre-wrap break-words text-[0.9375rem]">
                       {activeMessage.block_response || (activeMessage.block_responses && activeMessage.block_responses.length > 0)
                         ? formatBlockResponse(activeMessage) || activeMessage.content
-                        : activeMessage.content || 'Empty message'}
+                        : activeMessage.content || 'empty message'}
                     </p>
                   )}
                 </article>
@@ -2382,14 +2382,14 @@ const RoomController = () => {
                     className="rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
                     onClick={() => void handleCopyMessage(messageCopyText(activeMessage))}
                   >
-                    Copy
+                    copy
                   </button>
                   <button
                     type="button"
                     className="rounded-full border border-danger bg-surface px-4 py-2 text-sm font-medium text-danger transition hover:bg-danger-soft"
                     onClick={() => void handleDeleteMessage(activeMessage.id)}
                   >
-                    Delete local copy
+                    delete local copy
                   </button>
                 </div>
               </div>
@@ -2418,23 +2418,23 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Notifications</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Join queue</h2>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">notifications</p>
+                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">join queue</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
                   onClick={() => setShowQueue(false)}
                   type="button"
                 >
-                  Close
+                  close
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 {knocks.length === 0 && (
                   <div className="glass-panel rounded-[28px] border-dashed p-8 text-center">
-                    <p className="text-base font-semibold">No one is waiting.</p>
+                    <p className="text-base font-semibold">no one is waiting.</p>
                     <p className="mt-2 text-sm text-ink-soft">
-                      New join requests appear here. The bell badge lights up when someone knocks.
+                      new join requests appear here. the bell badge lights up when someone knocks.
                     </p>
                   </div>
                 )}
@@ -2447,12 +2447,12 @@ const RoomController = () => {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-medium text-ink">Join request</p>
+                            <p className="text-sm font-medium text-ink">join request</p>
                             <p className="mt-0.5 text-xs text-ink-dim">{formatMailStamp(knock.ts)}</p>
                           </div>
                         </div>
                         <p className="mt-3 text-sm leading-6 text-ink">
-                          {knock.message || 'No note included.'}
+                          {knock.message || 'no note included.'}
                         </p>
                         <div className="mt-4 flex gap-2">
                           <button
@@ -2460,14 +2460,14 @@ const RoomController = () => {
                             onClick={() => approveKnock(knock.id)}
                             type="button"
                           >
-                            Approve
+                            approve
                           </button>
                           <button
                             className="flex-1 rounded-full border border-rule bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-ink"
                             onClick={() => rejectKnock(knock.id)}
                             type="button"
                           >
-                            Reject
+                            reject
                           </button>
                         </div>
                       </div>
@@ -2485,23 +2485,23 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Settings</h2>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">channel</p>
+                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">settings</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
                   onClick={() => setShowHelp(false)}
                   type="button"
                 >
-                  Close
+                  close
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 <div className="rounded-[18px] border border-rule bg-surface p-5">
-                  <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Channel name</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">channel name</p>
                   <input
                     className="mt-2 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
-                    placeholder={roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'Give this channel a name'}
+                    placeholder={roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'give this channel a name'}
                     value={roomNickname}
                     onChange={(e) => {
                       setRoomNickname(e.target.value);
@@ -2509,15 +2509,15 @@ const RoomController = () => {
                     }}
                   />
                   <p className="mt-2 text-xs leading-5 text-ink-dim">
-                    Stored locally. Helps you tell channels apart.
+                    stored locally. helps you tell channels apart.
                   </p>
 
                   <p className="mt-6 text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">
-                    Your sender label
+                    your sender label
                   </p>
                   <input
                     className="mt-2 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
-                    placeholder="No sender set"
+                    placeholder="no sender set"
                     value={handle}
                     maxLength={24}
                     onChange={(e) => {
@@ -2530,12 +2530,12 @@ const RoomController = () => {
                     }}
                   />
                   <p className="mt-2 text-xs leading-5 text-ink-dim">
-                    Shown above each message you send. Stored locally.
+                    shown above each message you send. stored locally.
                   </p>
 
-                  <p className="mt-6 text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Storage</p>
+                  <p className="mt-6 text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">storage</p>
                   <p className="mt-2 text-sm leading-6 text-ink-soft">
-                    Messages stay on this device. Clear your browser storage and they're gone here.
+                    messages stay on this device. clear your browser storage and they're gone here.
                   </p>
                 </div>
 
@@ -2544,19 +2544,19 @@ const RoomController = () => {
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
                     href="https://www.hisohiso.org/"
                   >
-                    What is hisohiso?
+                    what is hisohiso?
                   </a>
                   <a
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
                     href="https://www.hisohiso.org/security/"
                   >
-                    Protocol
+                    protocol
                   </a>
                   <a
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
                     href="https://github.com/draganescu/hisohiso"
                   >
-                    Source
+                    source
                   </a>
                 </div>
               </div>
@@ -2570,20 +2570,20 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Channel</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Menu</h2>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">channel</p>
+                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">menu</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
                   onClick={() => setShowMenu(false)}
                   type="button"
                 >
-                  Close
+                  close
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 <div className="rounded-[14px] border border-rule bg-surface p-4 text-sm">
-                  <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Share link</p>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">share link</p>
                   <p className="mt-2 break-all text-xs text-ink-soft">{shareUrl}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -2591,7 +2591,7 @@ const RoomController = () => {
                       onClick={handleCopy}
                       type="button"
                     >
-                      Copy link
+                      copy link
                     </button>
                     <button
                       className="rounded-full border border-rule bg-surface px-4 py-1.5 text-xs font-medium text-ink transition hover:border-ink"
@@ -2601,7 +2601,7 @@ const RoomController = () => {
                       }}
                       type="button"
                     >
-                      Show QR
+                      show qr
                     </button>
                   </div>
                 </div>
@@ -2610,9 +2610,9 @@ const RoomController = () => {
 
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-surface p-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Offline catch-up</p>
+                    <p className="text-sm font-medium">offline catch-up</p>
                     <p className="mt-1 text-xs leading-5 text-ink-soft">
-                      Server keeps encrypted messages for 24h so devices that were closed can catch up. Turning off wipes them.
+                      server keeps encrypted messages for 24h so devices that were closed can catch up. turning off wipes them.
                     </p>
                   </div>
                   <button
@@ -2635,13 +2635,13 @@ const RoomController = () => {
 
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-surface p-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Notifications</p>
+                    <p className="text-sm font-medium">notifications</p>
                     <p className="mt-1 text-xs leading-5 text-ink-soft">
                       {pushStatus === 'unsupported'
-                        ? 'Not available on this browser.'
+                        ? 'not available on this browser.'
                         : pushStatus === 'denied'
-                          ? 'Blocked — allow notifications for this site in your browser settings.'
-                          : 'Get notified when this channel has new activity, even with the app closed. The alert carries no message content.'}
+                          ? 'blocked — allow notifications for this site in your browser settings.'
+                          : 'get notified when this channel has new activity, even with the app closed. the alert carries no message content.'}
                     </p>
                     {pushError && <p className="mt-1.5 text-xs leading-5 text-danger">{pushError}</p>}
                   </div>
@@ -2668,7 +2668,7 @@ const RoomController = () => {
                     href="/rooms"
                     className="rounded-full border border-rule bg-surface px-4 py-2 text-center text-sm font-medium text-ink no-underline transition hover:border-ink"
                   >
-                    Your channels
+                    your rooms
                   </a>
 
                   <button
@@ -2679,7 +2679,7 @@ const RoomController = () => {
                     }}
                     type="button"
                   >
-                    Leave channel
+                    leave channel
                   </button>
 
                   <button
@@ -2690,7 +2690,7 @@ const RoomController = () => {
                     }}
                     type="button"
                   >
-                    Disband channel
+                    disband channel
                   </button>
                 </div>
 
@@ -2699,13 +2699,13 @@ const RoomController = () => {
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
                     href="https://www.hisohiso.org/"
                   >
-                    What is hisohiso?
+                    what is hisohiso?
                   </a>
                   <a
                     className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
                     href="https://www.hisohiso.org/security/"
                   >
-                    Protocol
+                    protocol
                   </a>
                 </div>
               </div>
@@ -2719,23 +2719,23 @@ const RoomController = () => {
             <div className="modal-shell flex w-full max-w-2xl max-h-full flex-col overflow-hidden rounded-[28px]">
               <div className="flex items-center justify-between border-b border-rule bg-surface px-5 py-4">
                 <div>
-                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Switch</p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">Channels</h2>
+                  <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">switch</p>
+                  <h2 className="mt-1 text-lg font-semibold tracking-[-0.015em]">channels</h2>
                 </div>
                 <button
                   className="text-sm font-medium text-ink-soft hover:text-ink"
                   onClick={() => setShowSwitcher(false)}
                   type="button"
                 >
-                  Close
+                  close
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 {allRooms.length === 0 ? (
                   <div className="rounded-[18px] border border-dashed border-rule bg-surface p-8 text-center">
-                    <p className="text-base font-semibold">No channels yet.</p>
+                    <p className="text-base font-semibold">no rooms yet.</p>
                     <p className="mt-2 text-sm text-ink-soft">
-                      Open one or paste a link from /rooms.
+                      open one or paste a link from /rooms.
                     </p>
                   </div>
                 ) : (
@@ -2774,7 +2774,7 @@ const RoomController = () => {
                           <div className="flex flex-col gap-1.5 rounded-[14px] border border-rule bg-surface p-2">
                             {hasAny && (
                               <p className="px-1 text-[0.625rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
-                                Conversations
+                                conversations
                               </p>
                             )}
                             {chats.map(switcherRow)}
@@ -2790,13 +2790,13 @@ const RoomController = () => {
                     href="/new"
                     className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-center text-sm font-medium text-on-ink no-underline transition hover:bg-transparent hover:text-ink"
                   >
-                    Open a channel
+                    open a channel
                   </a>
                   <a
                     href="/rooms"
                     className="flex-1 rounded-full border border-rule bg-surface px-4 py-2 text-center text-sm font-medium text-ink no-underline transition hover:border-ink"
                   >
-                    All channels
+                    all channels
                   </a>
                 </div>
               </div>
@@ -2808,12 +2808,12 @@ const RoomController = () => {
         {showDisband && (
           <div className="fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-danger bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
-              <p className="text-[0.6875rem] uppercase tracking-[0.28em] text-danger">Destructive</p>
+              <p className="text-[0.6875rem] uppercase tracking-[0.28em] text-danger">destructive</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em]">
-                Disband this channel?
+                disband this channel?
               </h2>
               <p className="mt-3 text-sm leading-6 text-ink-soft">
-                Removes the channel from the server. Everyone is disconnected. Cannot be undone.
+                removes the channel from the server. everyone is disconnected. cannot be undone.
               </p>
               <div className="mt-6 flex gap-3">
                 <button
@@ -2821,7 +2821,7 @@ const RoomController = () => {
                   onClick={() => setShowDisband(false)}
                   type="button"
                 >
-                  Cancel
+                  cancel
                 </button>
                 <button
                   className="flex-1 rounded-full border border-danger bg-danger px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-danger"
@@ -2831,7 +2831,7 @@ const RoomController = () => {
                   }}
                   type="button"
                 >
-                  Disband
+                  disband
                 </button>
               </div>
             </div>
@@ -2842,9 +2842,9 @@ const RoomController = () => {
         {showLeave && (
           <div className="fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
             <div className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
-              <h2 className="text-xl font-semibold tracking-[-0.015em]">Leave this channel?</h2>
+              <h2 className="text-xl font-semibold tracking-[-0.015em]">leave this channel?</h2>
               <p className="mt-3 text-sm leading-6 text-ink-soft">
-                You're removed and the messages on this device are wiped. The channel stays open for
+                you're removed and the messages on this device are wiped. the channel stays open for
                 everyone else — open the link again to rejoin.
               </p>
               <div className="mt-6 flex gap-3">
@@ -2853,7 +2853,7 @@ const RoomController = () => {
                   onClick={() => setShowLeave(false)}
                   type="button"
                 >
-                  Cancel
+                  cancel
                 </button>
                 <button
                   className="flex-1 rounded-full border border-ink bg-filled px-4 py-2 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
@@ -2863,7 +2863,7 @@ const RoomController = () => {
                   }}
                   type="button"
                 >
-                  Leave
+                  leave
                 </button>
               </div>
             </div>
@@ -2883,18 +2883,18 @@ const RoomController = () => {
 
         {roomState === 'INIT' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <p className="text-sm uppercase tracking-[0.32em] text-ink-dim">Opening channel…</p>
+            <p className="text-sm uppercase tracking-[0.32em] text-ink-dim">opening channel…</p>
           </div>
         )}
 
         {roomState === 'LOBBY_WAITING' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">Join this channel.</h1>
-            <p className="mt-3 text-ink-soft">Ask to be let in. Someone inside has to approve you.</p>
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">join this channel.</h1>
+            <p className="mt-3 text-ink-soft">ask to be let in. someone inside has to approve you.</p>
 
             <input
               className="input-field mt-6 w-full rounded-[14px] px-3 py-2.5 text-base"
-              placeholder="Channel key or pairing code"
+              placeholder="channel key or pairing code"
               type="text"
               name="room-key"
               autoComplete="one-time-code"
@@ -2907,12 +2907,12 @@ const RoomController = () => {
               onChange={(event) => updateRoomPassword(event.target.value)}
             />
             <p className="mt-2 text-xs text-ink-dim">
-              Saved on this device. Used to encrypt your knock and chat messages.
+              saved on this device. used to encrypt your knock and chat messages.
             </p>
 
             <textarea
               className="input-field mt-4 w-full rounded-[14px] px-3 py-2.5 text-base"
-              placeholder="Optional note (e.g. who you are)"
+              placeholder="optional note (e.g. who you are)"
               rows={3}
               autoCorrect="off"
               autoCapitalize="sentences"
@@ -2926,19 +2926,19 @@ const RoomController = () => {
                 onClick={sendKnock}
                 type="button"
               >
-                Request to join
+                request to join
               </button>
               <a
                 className="rounded-full border border-rule bg-surface px-5 py-2.5 text-center text-sm font-medium text-ink transition hover:border-ink"
                 href="/rooms"
               >
-                Your channels
+                your rooms
               </a>
             </div>
 
             {(knockSent || knockNotice) && (
               <p className="mt-5 text-xs uppercase tracking-[0.28em] text-ink-dim">
-                {knockNotice || 'Waiting for approval…'}
+                {knockNotice || 'waiting for approval…'}
               </p>
             )}
 
@@ -2947,7 +2947,7 @@ const RoomController = () => {
                 className="underline decoration-rule underline-offset-4 hover:text-ink"
                 href="https://www.hisohiso.org/"
               >
-                What is hisohiso?
+                what is hisohiso?
               </a>
             </p>
           </div>
@@ -2955,13 +2955,13 @@ const RoomController = () => {
 
         {roomState === 'LOBBY_EMPTY' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel quiet.</h1>
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">all quiet.</h1>
             <p className="mt-3 text-ink-soft">
-              No one is currently in this channel. Ask someone inside to open it so they can approve
+              no one is currently in this channel. ask someone inside to open it so they can approve
               you.
             </p>
             <div className="mt-6 rounded-[14px] border border-rule bg-bg p-4 text-sm">
-              <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">Share link</p>
+              <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">share link</p>
               <p className="mt-2 break-all text-ink-soft">{shareUrl}</p>
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -2970,14 +2970,14 @@ const RoomController = () => {
                 onClick={handleCopy}
                 type="button"
               >
-                Copy link
+                copy link
               </button>
               <button
                 className="rounded-full border border-rule bg-surface px-5 py-2.5 text-sm font-medium text-ink transition hover:border-ink"
                 onClick={() => setShowQr(true)}
                 type="button"
               >
-                Show QR
+                show qr
               </button>
             </div>
           </div>
@@ -2985,29 +2985,29 @@ const RoomController = () => {
 
         {roomState === 'DESTROYED' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">Channel closed.</h1>
-            <p className="mt-3 text-ink-soft">This channel was disbanded or no longer exists.</p>
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">channel closed.</h1>
+            <p className="mt-3 text-ink-soft">this channel was disbanded or no longer exists.</p>
             <a
               className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink"
               href="/rooms"
             >
-              Your channels
+              your rooms
             </a>
           </div>
         )}
 
         {roomState === 'LEFT' && (
           <div className="glass-panel rounded-[28px] p-8">
-            <h1 className="text-3xl font-semibold tracking-[-0.025em]">You left this channel.</h1>
+            <h1 className="text-3xl font-semibold tracking-[-0.025em]">you left this channel.</h1>
             <p className="mt-3 text-ink-soft">
-              Its messages were wiped from this device. The channel stays open for everyone else —
+              its messages were wiped from this device. the channel stays open for everyone else —
               open the link again to rejoin.
             </p>
             <a
               className="mt-6 inline-flex items-center justify-center rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink"
               href="/rooms"
             >
-              Your channels
+              your rooms
             </a>
           </div>
         )}
@@ -3017,7 +3017,7 @@ const RoomController = () => {
             className="underline decoration-rule underline-offset-4 hover:text-ink"
             href="https://www.hisohiso.org/"
           >
-            What is hisohiso?
+            what is hisohiso?
           </a>
         </p>
       </div>
