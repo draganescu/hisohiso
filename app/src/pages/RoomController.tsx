@@ -76,7 +76,6 @@ import { ControlCommandBar } from '../components/ControlCommandBar';
 import { AgentQuickActions } from '../components/AgentQuickActions';
 import { RoomRow } from '../components/RoomRow';
 import RoomsRail from '../components/RoomsRail';
-import CipherReveal from '../components/CipherReveal';
 
 const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
 
@@ -2246,11 +2245,6 @@ const RoomController = () => {
                             />
                             {formatBlockResponse(msg) || getMessagePreview(msg.content)}
                           </span>
-                        ) : !isMine ? (
-                          // Cosmetic "decrypt" shimmer on incoming text only. The
-                          // text is ALREADY decrypted plaintext; CipherReveal is
-                          // window dressing and is reduced-motion safe.
-                          <CipherReveal text={getMessagePreview(msg.content)} />
                         ) : (
                           getMessagePreview(msg.content)
                         )}

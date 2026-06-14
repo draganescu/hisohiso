@@ -691,32 +691,6 @@ body {
   }
 }
 
-/* ── CipherReveal: cosmetic "decrypt" shimmer (CipherReveal.tsx) ──────────────
-   Appended block — does not modify any rule above. The character resolution is
-   driven in JS; this only adds the gloss while scrambling. The scramble glyphs
-   tint toward the riso pink accent and breathe gently. When the reveal settles,
-   the component drops .cipher-reveal--active and the text renders at full ink.
-   The global prefers-reduced-motion rule above already neutralizes this
-   animation, and the component also skips scrambling entirely in that case. */
-.cipher-reveal {
-  font-variant-ligatures: none;
-}
-
-.cipher-reveal--active {
-  color: var(--accent);
-  animation: cipher-reveal-flicker 0.5s steps(6, end) infinite;
-  will-change: opacity;
-}
-
-@keyframes cipher-reveal-flicker {
-  0%,
-  100% {
-    opacity: 0.78;
-  }
-  50% {
-    opacity: 1;
-  }
-}
 
 /* ---- Shared button language (matches the marketing landing) ---- */
 body { font-weight: 500; }
