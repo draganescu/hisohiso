@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import { clearAutoApprove } from '../lib/auto-approve';
+import { clearPendingKnocks } from '../lib/pending-knocks';
 import { navigateTo } from '../lib/navigation';
 import { groupOpenChannels } from '../lib/room-grouping';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
 import InstallPrompt from '../components/InstallPrompt';
-import { RoomRow } from '../components/RoomRow';
+import { RoomCard } from '../components/RoomCard';
 import { GroupedChannelList } from '../components/GroupedChannelList';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
@@ -51,6 +53,10 @@ const RoomsPage = () => {
 
   const handleForget = (roomHash: string) => {
     removeRoom(roomHash);
+    // Forget is local-only: also drop this room's local-only hints so no
+    // preference (auto-approve) or pending-knock badge survives removal.
+    clearAutoApprove(roomHash);
+    clearPendingKnocks(roomHash);
     setRooms(listRooms());
   };
 
@@ -136,7 +142,7 @@ const RoomsPage = () => {
   }, []);
 
   const renderRoomRow = (room: StoredRoom) => (
-    <RoomRow
+    <RoomCard
       key={room.roomHash}
       room={room}
       href={`/room#${room.roomSecret}`}
@@ -254,7 +260,7 @@ const RoomsPage = () => {
         )}
 
         {conversations.length > 0 && (
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-3.5">
             {hasOpenChannels && (
               <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
                 conversations

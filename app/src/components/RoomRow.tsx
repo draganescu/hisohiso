@@ -12,7 +12,7 @@ import { generateRoomName } from '../lib/room-names';
 // the pink accent palette so the operator's command surface reads as distinct;
 // 'agent' carries the tang riso ink (its terminal/diff content is its own
 // world); 'chat' stays on the muted surface tone as the quiet peer room.
-const KIND_META: Record<StoredRoom['kind'], { label: string; tone: string }> = {
+export const KIND_META: Record<StoredRoom['kind'], { label: string; tone: string }> = {
   control: { label: 'control', tone: 'border-accent/40 bg-accent-soft text-accent-strong' },
   agent: { label: 'agent', tone: 'border-tang bg-surface text-tang' },
   chat: { label: 'chat', tone: 'border-rule bg-surface text-ink-soft' },
@@ -165,7 +165,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full z-30 mt-1 w-36 overflow-hidden rounded-[12px] border border-rule bg-surface shadow-[var(--shadow-float)]"
+              className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-[12px] border border-rule bg-surface shadow-[var(--shadow-float)]"
             >
               {onRename && (
                 <button
@@ -187,7 +187,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
                 <button
                   role="menuitem"
                   type="button"
-                  className="block w-full border-t border-rule px-3 py-2 text-left text-sm text-danger hover:bg-bg"
+                  className="block w-full border-t border-rule px-3 py-2 text-left text-danger hover:bg-bg"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -195,7 +195,10 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
                     onForget();
                   }}
                 >
-                  forget
+                  <span className="block text-sm">forget</span>
+                  <span className="block text-[0.6875rem] leading-4 text-ink-dim">
+                    removed from this device
+                  </span>
                 </button>
               )}
             </div>

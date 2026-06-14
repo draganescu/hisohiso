@@ -109,6 +109,16 @@ export interface DiffBlock extends BlockBase {
   language?: string;
   hunks: DiffHunk[];
   stats?: { additions: number; deletions: number };
+  /**
+   * Optional commit hash. When set, the diff renders a "committed {sha}"
+   * footer — stating only that a commit exists, never narrating an approve/
+   * apply sequence the client did not observe (a sha is not proof of approval).
+   * Absent on a pending/un-applied diff (the common case today). Accepts either
+   * `sha` or `committed_sha` so a follow-up message can stamp the result without
+   * a breaking schema change.
+   */
+  sha?: string;
+  committed_sha?: string;
 }
 
 // ─── 7. File Tree ─────────────────────────────────────────────────────────

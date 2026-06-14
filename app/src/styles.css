@@ -40,6 +40,16 @@
   --blue: #4b57ff;
   --lime: #bfe93f;
   --tang: #ff7a36;
+  /* code / terminal surfaces inside blocks (diff, terminal). Warm near-black
+     console on paper; the redesign keeps these dark but token-driven so dark
+     mode and reduced-contrast preferences stay coherent. */
+  --code-bg: #211f1a;
+  --code-ink: #e9e4d6;
+  --code-rule: rgba(255, 255, 255, 0.10);
+  --code-add: #bfe93f;
+  --code-add-bg: rgba(191, 233, 63, 0.12);
+  --code-del: #ff7a36;
+  --code-del-bg: rgba(255, 122, 54, 0.14);
 }
 
 .dark {
@@ -72,6 +82,13 @@
   --blue: #7b84ff;
   --lime: #bfe93f;
   --tang: #ff9a5c;
+  --code-bg: #1a1813;
+  --code-ink: #e9e4d6;
+  --code-rule: rgba(255, 255, 255, 0.12);
+  --code-add: #bfe93f;
+  --code-add-bg: rgba(191, 233, 63, 0.14);
+  --code-del: #ff9a5c;
+  --code-del-bg: rgba(255, 154, 92, 0.16);
 }
 
 @supports (font: -apple-system-body) {
@@ -232,6 +249,145 @@ body {
   box-shadow: var(--shadow-soft);
 }
 
+/* ── Block cards (diff / terminal / confirm-danger) ──────────────────────────
+   The phone-UI blocks now read as part of the riso redesign: a soft-card frame
+   with a token-driven console interior (.block-code) instead of hardcoded hex.
+   The header strip uses the warm surface; the code body stays a warm near-black
+   console so diffs/logs keep their terminal legibility. Riso lime/tang tint the
+   add/del lines. All colours come from tokens so dark mode stays coherent. */
+.block-card {
+  border: 1px solid var(--rule);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.block-code {
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+.block-code-rule {
+  border-color: var(--code-rule);
+}
+
+/* Footer shown on a diff when a commit sha is stamped: "committed {sha}".
+   States only that a commit exists. Riso-lime success edge on the warm
+   console foot. */
+.block-commit-confirm {
+  border-top: 1px solid var(--code-rule);
+  color: var(--code-add);
+  background: var(--code-add-bg);
+}
+
+/* /rooms index card (RoomCard.tsx). A soft-card with a riso paper feel and a
+   left kind-accent edge fed by --room-accent (the per-room stored color, set
+   on .room-card-shell). The switcher keeps the compact .room-row look; this is
+   the larger index surface only. Hover lifts subtly, matching .floating-action. */
+.room-card {
+  position: relative;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.room-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--room-accent, var(--ink-fade));
+  opacity: 0.9;
+}
+
+.room-card:hover {
+  border-color: color-mix(in srgb, var(--room-accent, var(--ink-fade)) 50%, var(--rule));
+  box-shadow: var(--shadow-float);
+}
+
+/* The card for the room currently open in the main pane (desktop rail only).
+   A pink accent border + soft tint so the active room reads at a glance,
+   matching the riso accent surfaces. */
+.room-card-current {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--rule));
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface));
+  box-shadow: var(--shadow-float);
+}
+
+.room-card-current:hover {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--rule));
+}
+
+/* ── Desktop two-pane: persistent rooms rail (lg+ only) ──────────────────────
+   The rail is a fixed left sidebar shown only at lg+ (>=1024px). Below lg it is
+   display:none, so the mobile single-pane is untouched. The room screen carries
+   .room-with-rail, which holds a --rail-w token (0 below lg, the rail width at
+   lg+). The room's *fixed* chrome (header pills, command bar, modal overlays,
+   composer, collector tray) and its centered message column are shifted right
+   by --rail-w at lg+ so nothing sits under the rail. We shift fixed chrome via
+   `left`/padding rather than wrapping app-shell in an overflow container —
+   that would break the document-scroll model the channel screen relies on. */
+.room-with-rail {
+  --rail-w: 0px;
+}
+
+.rooms-rail {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .room-with-rail {
+    /* Rail gutter the rest of the screen is shifted by. */
+    --rail-w: 20rem;
+  }
+
+  .rooms-rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 35;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    width: var(--rail-w);
+    padding: max(0.75rem, env(safe-area-inset-top)) 0.85rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-right: 1px solid var(--rule);
+    background: var(--surface-glass);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+  }
+
+  /* Shift the centered message column into the space right of the rail. */
+  .room-with-rail .room-message-column {
+    padding-left: calc(var(--rail-w) + 1rem);
+  }
+
+  /* Header pill row + the command bar span the viewport with left:0 / left:1rem;
+     push their left edge past the rail. */
+  .room-with-rail .room-header-bar {
+    left: var(--rail-w);
+  }
+
+  .room-with-rail .command-bar,
+  .room-with-rail .agent-quick-actions {
+    left: calc(var(--rail-w) + 1rem);
+  }
+
+  /* Full-viewport overlays — modal frames, the composer, the collector tray,
+     the message-detail / confirm sheets — re-center over the room pane (not the
+     whole viewport) so they don't sit behind / over the rail. .room-overlay is
+     the explicit opt-in tag on every fixed overlay in the room view. */
+  .room-with-rail .modal-frame,
+  .room-with-rail .composer-overlay,
+  .room-with-rail .room-overlay {
+    left: var(--rail-w);
+  }
+}
+
 .message-card {
   position: relative;
   box-shadow: 0 12px 35px -30px rgba(0, 0, 0, 0.65);
@@ -370,6 +526,70 @@ body {
   justify-content: center;
 }
 
+/* Agent-room quick-action chip bar. Pinned just above the composer FAB
+   (or the dispatch button while a batch is pending). The outer element is a
+   full-width fixed strip; the inner track is the horizontally-scrollable row of
+   chips. The strip itself never grows the page — overflow is contained to the
+   track. The bottom offset clears the FAB (min-height 3.25rem) plus its safe-
+   area inset; the raised variant adds a touch more for the taller dispatch CTA. */
+.agent-quick-actions {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 3.75rem);
+  z-index: 29;
+  pointer-events: none;
+}
+
+.agent-quick-actions-raised {
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4rem);
+}
+
+.agent-quick-actions-track {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0.125rem 0.125rem 0.375rem;
+  /* The track scrolls but its chips are the only tap targets — re-enable
+     pointer events here so taps on the surrounding strip pass through to the
+     message list / FAB underneath. */
+  pointer-events: auto;
+}
+
+.agent-quick-actions-track::-webkit-scrollbar {
+  display: none;
+}
+
+.agent-quick-action-chip {
+  flex: 0 0 auto;
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--shadow-soft);
+  transition: border-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.agent-quick-action-chip:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--rule));
+}
+
+.agent-quick-action-chip:active {
+  transform: translateY(1px) scale(0.99);
+}
+
 .modal-shell {
   border: 1px solid var(--rule);
   background: var(--surface-strong);
@@ -468,5 +688,32 @@ body {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── CipherReveal: cosmetic "decrypt" shimmer (CipherReveal.tsx) ──────────────
+   Appended block — does not modify any rule above. The character resolution is
+   driven in JS; this only adds the gloss while scrambling. The scramble glyphs
+   tint toward the riso pink accent and breathe gently. When the reveal settles,
+   the component drops .cipher-reveal--active and the text renders at full ink.
+   The global prefers-reduced-motion rule above already neutralizes this
+   animation, and the component also skips scrambling entirely in that case. */
+.cipher-reveal {
+  font-variant-ligatures: none;
+}
+
+.cipher-reveal--active {
+  color: var(--accent);
+  animation: cipher-reveal-flicker 0.5s steps(6, end) infinite;
+  will-change: opacity;
+}
+
+@keyframes cipher-reveal-flicker {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+  50% {
+    opacity: 1;
   }
 }

@@ -104,3 +104,28 @@ export const deleteMessage = async (id: string): Promise<void> => {
 export const clearRoomMessages = async (roomHash: string): Promise<void> => {
   await db.messages.where('room_hash').equals(roomHash).delete();
 };
+
+// Metadata for the masked last-message preview on the /rooms card. We deliberately
+// return only the timestamp + an existence flag — NOT the plaintext — so the card
+// can render a masked "••• ••• •••" + stamp without ever surfacing message content
+// in the list. (The content stays decrypted-on-device inside `messages`; the card
+// just never reads it.) Returns null when the room has no stored messages yet.
+export type LastMessageMeta = {
+  timestamp: number;
+  /** True if the latest message carries displayable content / blocks / replies. */
+  hasContent: boolean;
+};
+
+export const lastMessageMeta = async (roomHash: string): Promise<LastMessageMeta | null> => {
+  const latest = await db.messages
+    .where('[room_hash+timestamp]')
+    .between([roomHash, Dexie.minKey], [roomHash, Dexie.maxKey])
+    .last();
+  if (!latest) return null;
+  const hasContent = Boolean(
+    (latest.content && latest.content.trim().length > 0) ||
+      (latest.blocks && latest.blocks.length > 0) ||
+      (latest.replies && latest.replies.length > 0)
+  );
+  return { timestamp: latest.timestamp, hasContent };
+};
