@@ -181,7 +181,7 @@ const roomSetupBlocks = (stage: RoomSetupStage): Block[] => (
           options: [
             { label: 'Add password', value: 'password' },
             { label: 'Expected knock phrase', value: 'knock_phrase' },
-            { label: 'No setup', value: 'skip_all' },
+            { label: 'No setup', value: 'skip_security' },
           ],
         },
       ]
@@ -1794,16 +1794,13 @@ const RoomController = () => {
       if (!roomHash || responses.length === 0) return;
       const response = responses[0];
       if (response.blockId === 'room-setup-security') {
-        if (response.value === 'skip_all') {
-          dismissRoomSetup();
-          return;
-        }
-
         if (response.value === 'password') {
           openMenuForSetup('password');
         } else if (response.value === 'knock_phrase') {
           openMenuForSetup('knock');
         }
+        // 'skip_security' declines security but still offers the delivery
+        // options — only the delivery card's "No thanks" ends the flow.
         setRoomSetupStage('delivery');
         return;
       }
@@ -3236,7 +3233,7 @@ const RoomController = () => {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">auto-approve joins</p>
                     <p className="mt-1 text-xs leading-5 text-ink-soft">
-                      lets the channel accept a join request the moment the requester has <span className="font-medium">proven</span> they hold this channel's link{roomPassword.trim() ? <> <span className="font-medium">and</span> key</> : ''} — no tap needed. it never adds an identity check; it only skips the manual approve for people who already have the joining secret. off by default, stored on this device only.
+                      on this device, accepts a join the moment the requester has <span className="font-medium">proven</span> they hold this channel's link{roomPassword.trim() ? <> <span className="font-medium">and</span> key</> : ''} — no tap needed. it never adds an identity check; it only skips the manual approve for people who already hold the joining secret. a per-device convenience, not a channel rule — only this device auto-approves, and only while it's online. off by default.
                     </p>
                   </div>
                   <button
