@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { deriveRoomHash, generateRoomSecret } from '../lib/crypto';
-import { setRoomPassword, setToken, setSubscriberJwt } from '../lib/storage';
+import { setHandle, setToken, setSubscriberJwt, updateRoomNickname, upsertRoom } from '../lib/storage';
 import { navigateTo } from '../lib/navigation';
 
 const RoomCreator = () => {
   const [status, setStatus] = useState<'form' | 'creating' | 'error'>('form');
   const [error, setError] = useState<string>('');
-  const [catchUp, setCatchUp] = useState(false);
-  const [roomKey, setRoomKey] = useState('');
+  const [roomName, setRoomName] = useState('');
+  const [nickname, setNickname] = useState('');
 
   const create = async () => {
     setStatus('creating');
@@ -18,7 +18,7 @@ const RoomCreator = () => {
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room_hash: hash, catch_up: catchUp })
+        body: JSON.stringify({ room_hash: hash, catch_up: false })
       });
 
       if (!response.ok) {
@@ -37,11 +37,16 @@ const RoomCreator = () => {
         setSubscriberJwt(hash, data.subscriber_jwt);
       }
       // Persist before navigating so RoomController's optimistic init path
-      // picks the key up on first paint instead of deriving with an empty
-      // string and re-deriving on the next render.
-      const trimmedKey = roomKey.trim();
-      if (trimmedKey) {
-        setRoomPassword(hash, trimmedKey);
+      // picks the local labels up on first paint. Security and delivery options
+      // are nudged inside the room instead of blocking creation here.
+      const trimmedName = roomName.trim();
+      const trimmedNickname = nickname.trim().slice(0, 24);
+      upsertRoom(hash, secret, trimmedNickname || null, 'chat');
+      if (trimmedName) {
+        updateRoomNickname(hash, trimmedName);
+      }
+      if (trimmedNickname) {
+        setHandle(hash, trimmedNickname);
       }
 
       navigateTo(`/room#${secret}`);
@@ -73,7 +78,7 @@ const RoomCreator = () => {
               open a channel
             </h1>
             <p className="mt-2 text-sm text-ink-soft">
-              messages stay on this device only. anyone with the link can join.
+              name it, choose how you show up, then invite people from inside.
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               <span className="inline-flex items-center rounded-full border border-lime bg-surface px-2.5 py-1 font-mono text-[0.625rem] uppercase tracking-[0.18em] text-ink-soft">
@@ -122,50 +127,40 @@ const RoomCreator = () => {
             </div>
 
             <div className="mt-4 rounded-[14px] border border-rule bg-bg p-4">
-              <p className="font-display text-sm font-semibold tracking-[-0.01em]">channel key</p>
+              <p className="font-display text-sm font-semibold tracking-[-0.01em]">room name</p>
               <p className="mt-1 text-xs leading-5 text-ink-soft">
-                optional. encrypts knocks and message blocks. everyone joining needs the
-                same key — share it out of band.
+                stored on this device so the room is easy to find later.
               </p>
               <input
                 className="input-field mt-3 w-full rounded-[14px] px-3 py-2 text-base"
-                placeholder="optional"
+                placeholder="weekend plans"
                 type="text"
-                name="room-key"
+                name="room-name"
                 autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                data-1p-ignore=""
-                data-lpignore="true"
-                value={roomKey}
-                onChange={(event) => setRoomKey(event.target.value)}
+                autoCorrect="on"
+                autoCapitalize="sentences"
+                value={roomName}
+                onChange={(event) => setRoomName(event.target.value)}
               />
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-bg p-4">
-              <div className="min-w-0 flex-1">
-                <p className="font-display text-sm font-semibold tracking-[-0.01em]">offline catch-up</p>
-                <p className="mt-1 text-xs leading-5 text-ink-soft">
-                  server keeps encrypted messages for 24h so devices that were closed
-                  can catch up. you can change this later.
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={catchUp}
-                onClick={() => setCatchUp((v) => !v)}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                  catchUp ? 'bg-ink' : 'bg-overlay-soft'
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-surface shadow transition-transform ${
-                    catchUp ? 'translate-x-5' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+            <div className="mt-4 rounded-[14px] border border-rule bg-bg p-4">
+              <p className="font-display text-sm font-semibold tracking-[-0.01em]">your nickname</p>
+              <p className="mt-1 text-xs leading-5 text-ink-soft">
+                shown above messages you send. you can change it later.
+              </p>
+              <input
+                className="input-field mt-3 w-full rounded-[14px] px-3 py-2 text-base"
+                placeholder="andrei"
+                type="text"
+                name="nickname"
+                autoComplete="nickname"
+                autoCorrect="off"
+                autoCapitalize="words"
+                maxLength={24}
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+              />
             </div>
 
             <button

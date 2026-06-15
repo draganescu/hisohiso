@@ -1,6 +1,8 @@
 import {
   clearHandle,
+  clearExpectedKnockMessage,
   clearRoomPassword,
+  clearRoomSetupDismissed,
   clearSubscriberJwt,
   clearToken,
   removeRoom,
@@ -20,6 +22,8 @@ export const clearLocalRoomStorage = (roomHash: string): void => {
   clearSubscriberJwt(roomHash);
   clearHandle(roomHash);
   clearRoomPassword(roomHash);
+  clearExpectedKnockMessage(roomHash);
+  clearRoomSetupDismissed(roomHash);
   clearPresence(roomHash);
   clearAutoApprove(roomHash);
   clearPendingKnocks(roomHash);
