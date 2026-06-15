@@ -34,7 +34,6 @@
   --disp: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --sans: var(--disp);
   --mono: "Space Mono", "Berkeley Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
-  --jp: "Zen Kaku Gothic New", system-ui, sans-serif;
 
   --measure: 1180px;
   --radius: 24px;
@@ -162,14 +161,6 @@ body::after {
   color: var(--ink);
 }
 .brand-name { text-transform: lowercase; }
-.brand::before {
-  content: "ひそ";
-  font-family: var(--jp);
-  font-weight: 700;
-  font-size: 1.02em;
-  letter-spacing: 0;
-  color: var(--ink);
-}
 .wave--brand { display: none; }
 
 .topnav {
@@ -1070,15 +1061,6 @@ code {
   background: linear-gradient(165deg, var(--ink), #322d24);
 }
 .cta-band > * { position: relative; z-index: 1; }
-.cta-band::before {
-  content: "ひそひそ";
-  display: block;
-  font-family: var(--jp);
-  font-weight: 700;
-  font-size: 2rem;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 12px;
-}
 .cta-band h2 {
   max-width: 24ch;
   margin: 0 auto 12px;

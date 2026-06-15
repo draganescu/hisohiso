@@ -47,6 +47,7 @@ setPresenceEnabled(roomHash, true);
 setAutoApproveEnabled(roomHash, true);
 setPendingKnockCount(roomHash, 2);
 localStorage.setItem(`hisohiso.push.${roomHash}`, '1');
+localStorage.setItem(`hisohiso.push_endpoint.${roomHash}`, 'https://push.example/endpoint-a');
 
 setToken(otherHash, 'token-b');
 setPresenceEnabled(otherHash, true);
@@ -61,6 +62,7 @@ assert(!isPresenceEnabled(roomHash), 'presence opt-in should be cleared');
 assert(!isAutoApproveEnabled(roomHash), 'auto-approve opt-in should be cleared');
 assert(getPendingKnockCount(roomHash) === 0, 'pending knock count should be cleared');
 assert(localStorage.getItem(`hisohiso.push.${roomHash}`) === null, 'push preference should be cleared');
+assert(localStorage.getItem(`hisohiso.push_endpoint.${roomHash}`) === null, 'cached push endpoint should be cleared');
 assert(!listRooms().some((room) => room.roomHash === roomHash), 'room list entry should be removed');
 
 assert(getToken(otherHash) === 'token-b', 'other room token should be preserved');
