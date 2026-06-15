@@ -31,7 +31,7 @@ const IosInstallModal = ({ onClose }: { onClose: () => void }) => (
       onClick={(event) => event.stopPropagation()}
     >
       <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">install</p>
-      <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em]">add to your home screen</h2>
+      <h2 className="mt-2 text-xl font-bold tracking-[-0.02em]">add to your home screen</h2>
       <p className="mt-2 text-sm text-ink-soft">
         iphone installs web apps from the share sheet — it takes two taps.
       </p>
@@ -58,7 +58,7 @@ const IosInstallModal = ({ onClose }: { onClose: () => void }) => (
       </p>
 
       <button
-        className="mt-6 w-full rounded-full border border-ink bg-filled px-4 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+        className="mt-6 w-full btn-primary"
         onClick={onClose}
         type="button"
       >
@@ -123,7 +123,7 @@ const InstallPrompt = () => {
             </svg>
           </button>
           <button
-            className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+            className="btn-primary"
             onClick={() => void handleInstall()}
             type="button"
           >

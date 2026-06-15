@@ -41,6 +41,31 @@ export type RoomEnvelope = {
   // Agent-room batch: replies the operator collected and dispatched as one
   // message — the free-text twin of block_responses.
   replies?: ReplyEntry[] | null;
+  // Optional working-context stamp the daemon MAY include on agent/control-room
+  // envelopes: the git branch / base branch and the working directory / shell
+  // the agent is operating in. Purely cosmetic chrome (a header context line),
+  // never linked to identity and never required. null/absent when the sender
+  // didn't stamp it (peer chat, pre-update daemon) — the client renders nothing.
+  // TODO(server): daemon should populate `context` { branch, base_branch, cwd,
+  // shell } on its agent/control-room replies; until then this stays absent and
+  // the header context line simply does not render.
+  context?: RoomContext | null;
+};
+
+// Working-context the daemon may stamp on an agent/control envelope so the phone
+// can show "main ← feat/x" or "~/notes · shell" in the header. Every field is
+// optional; the client formats whatever subset arrives and renders nothing when
+// the whole object is absent. Carries no identity and never crosses the wire
+// from the phone.
+export type RoomContext = {
+  /** Active git branch, e.g. "feat/x". */
+  branch?: string | null;
+  /** Branch this work targets/merges into, e.g. "main". Renders as "main ← branch". */
+  base_branch?: string | null;
+  /** Working directory, already abbreviated by the daemon if it likes (e.g. "~/notes"). */
+  cwd?: string | null;
+  /** Shell / runtime label, e.g. "shell", "zsh". */
+  shell?: string | null;
 };
 
 export type ChatMessageRecordInput = {
@@ -77,6 +102,29 @@ const parseReplyRef = (val: unknown): ReplyRef | null => {
   return { msg_id: ref.msg_id, quote };
 };
 
+// Pull a non-empty trimmed string off an unknown field, else null. Keeps the
+// context parser from rendering whitespace-only or non-string daemon stamps.
+const cleanString = (val: unknown): string | null => {
+  if (typeof val !== 'string') return null;
+  const trimmed = val.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+// Parse the optional working-context stamp. Returns null when the object is
+// missing or carries no usable field — so the header context line renders
+// nothing rather than an empty pill. Each field is validated independently;
+// a daemon may stamp only `cwd`, only `branch`, or any mix.
+const parseRoomContext = (val: unknown): RoomContext | null => {
+  if (!val || typeof val !== 'object') return null;
+  const raw = val as { branch?: unknown; base_branch?: unknown; cwd?: unknown; shell?: unknown };
+  const branch = cleanString(raw.branch);
+  const baseBranch = cleanString(raw.base_branch);
+  const cwd = cleanString(raw.cwd);
+  const shell = cleanString(raw.shell);
+  if (!branch && !baseBranch && !cwd && !shell) return null;
+  return { branch, base_branch: baseBranch, cwd, shell };
+};
+
 // Render any block_response value as a readable string. Objects (e.g. the
 // swipe verdict map) would otherwise stringify to "[object Object]".
 export const formatBlockValue = (val: BlockResponse['value']): string => {
@@ -87,6 +135,24 @@ export const formatBlockValue = (val: BlockResponse['value']): string => {
       .join(', ');
   }
   return String(val);
+};
+
+// Format the optional working-context stamp into a single header line. Renders
+// the git side as "base ← branch" (or just the branch / base when only one is
+// present) and the location side as "cwd · shell" — joining the two sides with
+// a middot. Returns null when nothing usable is present, so the caller renders
+// no context pill at all. Never invents a value: only fields the daemon stamped
+// are shown.
+export const formatRoomContext = (ctx: RoomContext | null | undefined): string | null => {
+  if (!ctx) return null;
+  const gitSide =
+    ctx.base_branch && ctx.branch
+      ? `${ctx.base_branch} ← ${ctx.branch}`
+      : ctx.branch || ctx.base_branch || null;
+  const locationSide =
+    ctx.cwd && ctx.shell ? `${ctx.cwd} · ${ctx.shell}` : ctx.cwd || ctx.shell || null;
+  const parts = [gitSide, locationSide].filter((part): part is string => !!part);
+  return parts.length ? parts.join(' · ') : null;
 };
 
 // Swipe responses are a { cardValue: 'good' | 'bad' } map. Group them into
@@ -140,6 +206,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
   let messageRoomName: string | null = null;
   let messageReplyTo: ReplyRef | null = null;
   let messageReplies: ReplyEntry[] | null = null;
+  let messageContext: RoomContext | null = null;
 
   if (plaintext.trim().startsWith('{')) {
     try {
@@ -155,6 +222,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
         room_name?: unknown;
         reply_to?: unknown;
         replies?: unknown;
+        context?: unknown;
       };
       if (typeof obj.text === 'string') messageText = obj.text;
       if (typeof obj.handle === 'string') messageHandle = obj.handle;
@@ -197,6 +265,10 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
           .filter((e): e is ReplyEntry => e !== null);
         if (valid.length > 0) messageReplies = valid;
       }
+      // Optional daemon working-context stamp (git branch / cwd). Absent on
+      // peer chat and pre-update daemons — parseRoomContext returns null then,
+      // and the header context line never renders.
+      messageContext = parseRoomContext(obj.context);
     } catch {
       messageText = plaintext;
     }
@@ -224,6 +296,7 @@ export const parseRoomEnvelope = (plaintext: string): RoomEnvelope => {
     room_name: messageRoomName,
     reply_to: messageReplyTo,
     replies: messageReplies,
+    context: messageContext,
   };
 };
 

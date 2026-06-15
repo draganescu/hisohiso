@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
 import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import { clearAutoApprove } from '../lib/auto-approve';
+import { clearPendingKnocks } from '../lib/pending-knocks';
 import { navigateTo } from '../lib/navigation';
 import { groupOpenChannels } from '../lib/room-grouping';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
 import InstallPrompt from '../components/InstallPrompt';
-import { RoomRow } from '../components/RoomRow';
+import { RoomCard } from '../components/RoomCard';
 import { GroupedChannelList } from '../components/GroupedChannelList';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
@@ -51,6 +53,10 @@ const RoomsPage = () => {
 
   const handleForget = (roomHash: string) => {
     removeRoom(roomHash);
+    // Forget is local-only: also drop this room's local-only hints so no
+    // preference (auto-approve) or pending-knock badge survives removal.
+    clearAutoApprove(roomHash);
+    clearPendingKnocks(roomHash);
     setRooms(listRooms());
   };
 
@@ -136,7 +142,7 @@ const RoomsPage = () => {
   }, []);
 
   const renderRoomRow = (room: StoredRoom) => (
-    <RoomRow
+    <RoomCard
       key={room.roomHash}
       room={room}
       href={`/room#${room.roomSecret}`}
@@ -161,11 +167,11 @@ const RoomsPage = () => {
             <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">
               <a href="https://www.hisohiso.org/" className="hover:text-ink">hisohiso</a>
             </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">your rooms</h1>
+            <h1 className="mt-3 text-3xl font-bold tracking-[-0.025em]">your rooms</h1>
             <p className="mt-2 text-sm text-ink-soft">stored on this device only.</p>
           </div>
           <a
-            className="mt-1 shrink-0 rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+            className="mt-1 shrink-0 btn-primary"
             href="/new"
           >
             open a channel
@@ -175,7 +181,7 @@ const RoomsPage = () => {
         <InstallPrompt />
 
         <section className="glass-panel rounded-[28px] p-6">
-          <h2 className="text-lg font-semibold tracking-[-0.015em]">join with a link.</h2>
+          <h2 className="text-lg font-bold tracking-[-0.015em]">join with a link.</h2>
           <p className="mt-2 text-sm text-ink-soft">paste a channel url or secret.</p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
@@ -188,7 +194,7 @@ const RoomsPage = () => {
               }}
             />
             <button
-              className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+              className="btn-primary"
               onClick={handleJoin}
               type="button"
             >
@@ -200,7 +206,7 @@ const RoomsPage = () => {
           <canvas ref={canvasRef} className="hidden" />
           {hasCamera && !scanning && (
             <button
-              className="mt-4 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink transition hover:border-ink"
+              className="mt-4 btn-ghost transition hover:border-ink"
               onClick={() => void startScan()}
               type="button"
             >
@@ -223,7 +229,7 @@ const RoomsPage = () => {
                 </div>
               </div>
               <button
-                className="mt-3 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink"
+                className="mt-3 btn-ghost"
                 onClick={stopCamera}
                 type="button"
               >
@@ -254,7 +260,7 @@ const RoomsPage = () => {
         )}
 
         {conversations.length > 0 && (
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-3.5">
             {hasOpenChannels && (
               <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
                 conversations
