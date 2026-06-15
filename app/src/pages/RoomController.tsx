@@ -15,8 +15,6 @@ import {
   type EncryptedPayload
 } from '../lib/crypto';
 import {
-  clearHandle,
-  clearRoomPassword,
   clearSubscriberJwt,
   clearToken,
   getHandle,
@@ -33,7 +31,6 @@ import {
   setSubscriberJwt,
   setToken,
   upsertRoom,
-  removeRoom,
   updateRoomHandle,
   updateRoomNickname,
   type RoomKind,
@@ -42,10 +39,10 @@ import {
 import { groupOpenChannels } from '../lib/room-grouping';
 import { GroupedChannelList } from '../components/GroupedChannelList';
 import { createRoomEventSource } from '../lib/mercure';
-import { useRoomPresence, clearPresence } from '../lib/presence';
-import { useRoomAutoApprove, clearAutoApprove } from '../lib/auto-approve';
-import { setPendingKnockCount, clearPendingKnocks } from '../lib/pending-knocks';
-import { clearRoomMessages, deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction, type ReplyEntry } from '../lib/db';
+import { useRoomPresence } from '../lib/presence';
+import { useRoomAutoApprove } from '../lib/auto-approve';
+import { setPendingKnockCount } from '../lib/pending-knocks';
+import { deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction, type ReplyEntry } from '../lib/db';
 import { isInteractiveBlock, type Block, type BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
 import { formatBlockResponse, formatBlockValue, formatRoomContext, getMessagePreview, mergeChatMessageEcho, parseRoomEnvelope, toChatMessageRecord, type RoomContext } from '../lib/room-message';
@@ -68,6 +65,7 @@ import {
   type RoomLookupResponse,
 } from '../lib/room-session';
 import { disablePush, enablePush, getPushStatus, triggerRoomPush, type PushStatus } from '../lib/push';
+import { wipeLocalRoomArtifacts } from '../lib/room-local-cleanup';
 import { BlockRenderer, type BlockResponseInput } from '../components/blocks/BlockRenderer';
 import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
@@ -438,15 +436,7 @@ const RoomController = () => {
   } = useMessageWindow(visibleMessages, listRef);
 
   const wipeLocalRoom = useCallback(async (hash: string) => {
-    clearToken(hash);
-    clearSubscriberJwt(hash);
-    clearHandle(hash);
-    clearRoomPassword(hash);
-    clearPresence(hash);
-    clearAutoApprove(hash);
-    clearPendingKnocks(hash);
-    removeRoom(hash);
-    await clearRoomMessages(hash);
+    await wipeLocalRoomArtifacts(hash, { unregisterPush: true });
     setTokenState(null);
     setTokenHash(null);
     setSubJwt(null);
@@ -3028,7 +3018,7 @@ const RoomController = () => {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">auto-approve joins</p>
                     <p className="mt-1 text-xs leading-5 text-ink-soft">
-                      lets the channel accept a join request the moment the requester has <span className="font-medium">proven</span> they hold this channel's link <span className="font-medium">and</span> password — no tap needed. it never lowers that proof; it only skips the manual approve. off by default, stored on this device only.
+                      lets the channel accept a join request the moment the requester has <span className="font-medium">proven</span> they hold this channel's link{roomPassword.trim() ? <> <span className="font-medium">and</span> key</> : ''} — no tap needed. it never adds an identity check; it only skips the manual approve for people who already have the joining secret. off by default, stored on this device only.
                     </p>
                   </div>
                   <button

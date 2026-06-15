@@ -25,7 +25,12 @@ export const DiffBlockView = ({ block }: Props) => {
   // observe (the presence of a sha is not evidence of approval).
   // TODO(server): no relay field carries a commit sha back to a prior diff today;
   // this renders only if a `sha`/`committed_sha` is voluntarily included.
-  const committedSha = block.committed_sha ?? block.sha;
+  const committedSha =
+    typeof block.committed_sha === 'string'
+      ? block.committed_sha
+      : typeof block.sha === 'string'
+        ? block.sha
+        : null;
 
   return (
     <div className="block-card mt-3 rounded-2xl">

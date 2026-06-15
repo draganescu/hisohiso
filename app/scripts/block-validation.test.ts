@@ -9,11 +9,12 @@ const blocks = sanitizeBlocksForRender([
   { type: 'terminal', title: 'Verification', content: 'PHP lint OK' },
   { type: 'code', title: 'Snapshot', content: 'hello' },
   { type: 'progress', title: 'Done', steps: [{ label: 'Investigate', status: 'done' }] },
+  { type: 'diff', file: 'a.ts', hunks: [], committed_sha: { nope: true }, sha: 'abc1234567890' },
   null,
   { nope: true },
 ]);
 
-assert(blocks.length === 4, `expected 4 renderable blocks, got ${blocks.length}`);
+assert(blocks.length === 5, `expected 5 renderable blocks, got ${blocks.length}`);
 
 const fileTree = blocks[0] as unknown as Record<string, unknown>;
 assert(fileTree.type === 'error', 'malformed file-tree should become an error block');
@@ -25,5 +26,10 @@ assert(String(terminal.title).includes('Invalid terminal block'), 'terminal erro
 
 assert(blocks[2]?.type === 'code', 'valid code block should be preserved');
 assert(blocks[3]?.type === 'progress', 'valid progress block should be preserved');
+
+const diff = blocks[4] as unknown as Record<string, unknown>;
+assert(diff.type === 'diff', 'valid diff block should be preserved');
+assert(diff.sha === 'abc1234567890', 'valid diff sha should be preserved');
+assert(diff.committed_sha === undefined, 'non-string committed_sha should be stripped');
 
 console.log('block validation regression OK');

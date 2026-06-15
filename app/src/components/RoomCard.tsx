@@ -76,7 +76,7 @@ export const RoomCard = ({ room, href, onRename, onForget, onSelect, isCurrent }
   // Voluntary handle wins; otherwise a throwaway ephemeral id (see privacy note).
   const avatarSeed = room.handle && room.handle.trim().length > 0 ? room.handle : ephemeralSeed;
 
-  // Pull only the masked preview's metadata (timestamp + existence) — never text.
+  // Pull local preview metadata from already-decrypted messages on this device.
   useEffect(() => {
     let alive = true;
     void lastMessageMeta(room.roomHash).then((m) => {

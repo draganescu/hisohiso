@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
-import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
-import { clearAutoApprove } from '../lib/auto-approve';
-import { clearPendingKnocks } from '../lib/pending-knocks';
+import { listRooms, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import { wipeLocalRoomArtifacts } from '../lib/room-local-cleanup';
 import { navigateTo } from '../lib/navigation';
 import { groupOpenChannels } from '../lib/room-grouping';
 import AppLockSettings from '../components/AppLockSettings';
@@ -51,12 +50,8 @@ const RoomsPage = () => {
     setRooms(listRooms());
   }, []);
 
-  const handleForget = (roomHash: string) => {
-    removeRoom(roomHash);
-    // Forget is local-only: also drop this room's local-only hints so no
-    // preference (auto-approve) or pending-knock badge survives removal.
-    clearAutoApprove(roomHash);
-    clearPendingKnocks(roomHash);
+  const handleForget = async (roomHash: string) => {
+    await wipeLocalRoomArtifacts(roomHash, { unregisterPush: true });
     setRooms(listRooms());
   };
 
@@ -150,7 +145,7 @@ const RoomsPage = () => {
         updateRoomNickname(room.roomHash, next);
         setRooms(listRooms());
       }}
-      onForget={() => handleForget(room.roomHash)}
+      onForget={() => void handleForget(room.roomHash)}
     />
   );
 
