@@ -105,14 +105,6 @@
         <p>
           when you tap send, your browser encrypts the message with a key derived from the channel secret and, if you set one, the password. the server receives an opaque blob and forwards it. the other browser — or the bridge on your own machine — uses the same inputs to open it.
         </p>
-        <div class="wire" role="img" aria-label="Browser encrypts, server routes ciphertext, browser or bridge decrypts.">
-          <div class="wire-track" aria-hidden="true"><span class="wire-packet" data-packet>▓▒░</span></div>
-          <div class="wire-nodes">
-            <div class="wire-node"><strong>you</strong><span>encrypt before it leaves</span></div>
-            <div class="wire-node wire-node--server"><strong>server</strong><span>forwards ciphertext</span></div>
-            <div class="wire-node"><strong>them</strong><span>open it locally</span></div>
-          </div>
-        </div>
         <p class="footnote">messages use AES-256-GCM. keys are derived from the channel secret and the optional password with HKDF-SHA256.</p>
       </section>
 

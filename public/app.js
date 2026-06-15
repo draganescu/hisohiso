@@ -1,6 +1,6 @@
 // hisohiso launch — tiny progressive enhancement. No dependencies.
 // With JS off: the copy button is inert, the default bridge panel is readable,
-// the ciphertext sits still, and every section is fully visible.
+// and every section is fully visible.
 (function () {
   "use strict";
 
@@ -121,42 +121,6 @@
         selectTab(tabs[next], true);
       });
     });
-  }
-
-  /* ---- The wire: ciphertext that never settles ----
-     The plaintext on either end stays put; only the middle churns, so the
-     "server can't read this" claim is visible, not just stated. */
-  var cipherEl = document.querySelector("[data-cipher]");
-  if (cipherEl && !reduceMotion) {
-    var GLYPHS = "0123456789abcdef0123456789ABCDEF▓▒░".split("");
-    var chars = cipherEl.textContent.split("");
-    var timer = null;
-
-    function scramble() {
-      // Repaint a handful of positions each tick — flowing, not strobing.
-      for (var n = 0; n < 3; n++) {
-        var i = (Math.random() * chars.length) | 0;
-        chars[i] = GLYPHS[(Math.random() * GLYPHS.length) | 0];
-      }
-      cipherEl.textContent = chars.join("");
-    }
-
-    function start() {
-      if (!timer) timer = setInterval(scramble, 90);
-    }
-    function stop() {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-      }
-    }
-
-    // Be a good citizen: don't churn while the tab is hidden.
-    document.addEventListener("visibilitychange", function () {
-      if (document.hidden) stop();
-      else start();
-    });
-    start();
   }
 
   /* ---- Scroll reveal ----
