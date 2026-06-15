@@ -3,66 +3,75 @@
 @tailwind utilities;
 
 :root {
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 100%;
   --app-height: 100vh;
   --app-offset: 0px;
   color-scheme: light;
-  /* Launch3 / 2026 tokens: calm paper by default, high-polish dark mode,
-     and one restrained interactive accent. Tailwind reads the core tokens
-     via tailwind.config.js; component primitives below use the extended set. */
-  --bg: #f4f1ea;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-strong: #fffdf8;
-  --surface-glass: rgba(255, 255, 255, 0.64);
-  --ink: #0b0d12;
-  --ink-soft: #555c6b;
-  --ink-dim: #8b92a1;
-  --ink-fade: #c8cdd6;
-  --rule: rgba(11, 13, 18, 0.10);
-  --rule-soft: rgba(11, 13, 18, 0.06);
-  --danger: #be123c;
-  --danger-soft: rgba(244, 63, 94, 0.12);
+  /* Riso / warm-paper redesign: warm paper by default, warm-console dark mode,
+     and a pink riso accent. Tailwind reads the core tokens via
+     tailwind.config.js; component primitives below use the extended set. */
+  --bg: #f3efe6;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-strong: #ffffff;
+  --surface-glass: rgba(255, 255, 255, 0.66);
+  --ink: #1c1a16;
+  --ink-soft: #6f6a5e;
+  --ink-dim: #8f897a;
+  --ink-fade: #c7c0af;
+  --rule: rgba(28, 26, 22, 0.12);
+  --rule-soft: rgba(28, 26, 22, 0.07);
+  --danger: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.12);
   --on-ink: #ffffff;
-  --filled: #11131a;
-  --accent: #7170ff;
-  --accent-strong: #5e6ad2;
-  --accent-soft: rgba(113, 112, 255, 0.13);
-  --success: #10b981;
-  --overlay: rgba(11, 13, 18, 0.48);
-  --overlay-soft: rgba(11, 13, 18, 0.16);
-  --theme-color: #f4f1ea;
-  --shadow-soft: 0 18px 60px -34px rgba(12, 16, 24, 0.45);
-  --shadow-float: 0 24px 80px -30px rgba(12, 16, 24, 0.5);
-  --glow-accent: 0 0 0 1px rgba(113, 112, 255, 0.16), 0 20px 70px -38px rgba(113, 112, 255, 0.9);
+  --filled: #1c1a16;
+  --accent: #ff4d8d;
+  --accent-strong: #e23a78;
+  --accent-soft: rgba(255, 77, 141, 0.14);
+  --success: #86b81e;
+  --overlay: rgba(28, 26, 22, 0.46);
+  --overlay-soft: rgba(28, 26, 22, 0.16);
+  --theme-color: #f3efe6;
+  --shadow-soft: 0 18px 60px -34px rgba(40, 30, 24, 0.40);
+  --shadow-float: 0 24px 80px -30px rgba(40, 30, 24, 0.46);
+  --glow-accent: 0 0 0 1px rgba(255, 77, 141, 0.18), 0 20px 70px -38px rgba(255, 77, 141, 0.85);
+  /* riso accent set — pink primary, blue/lime/tang for status + kind badges */
+  --pink: #ff4d8d;
+  --blue: #4b57ff;
+  --lime: #bfe93f;
+  --tang: #ff7a36;
 }
 
 .dark {
   color-scheme: dark;
-  --bg: #07080b;
-  --surface: rgba(20, 22, 28, 0.72);
-  --surface-strong: #11131a;
-  --surface-glass: rgba(19, 21, 28, 0.62);
-  --ink: #f7f8f8;
-  --ink-soft: #c8ccd7;
-  --ink-dim: #8f96a8;
-  --ink-fade: #434858;
+  --bg: #14120d;
+  --surface: rgba(40, 36, 27, 0.72);
+  --surface-strong: #211e16;
+  --surface-glass: rgba(33, 30, 22, 0.62);
+  --ink: #f5f2ea;
+  --ink-soft: #cfc8b8;
+  --ink-dim: #9b9482;
+  --ink-fade: #5a5446;
   --rule: rgba(255, 255, 255, 0.10);
   --rule-soft: rgba(255, 255, 255, 0.06);
-  --danger: #fb7185;
-  --danger-soft: rgba(251, 113, 133, 0.14);
+  --danger: #ff7185;
+  --danger-soft: rgba(255, 113, 133, 0.16);
   --on-ink: #ffffff;
-  --filled: #5e6ad2;
-  --accent: #828fff;
-  --accent-strong: #7170ff;
-  --accent-soft: rgba(130, 143, 255, 0.16);
-  --success: #34d399;
+  --filled: #ff4d8d;
+  --accent: #ff5e9c;
+  --accent-strong: #ff4d8d;
+  --accent-soft: rgba(255, 94, 156, 0.18);
+  --success: #bfe93f;
   --overlay: rgba(0, 0, 0, 0.72);
   --overlay-soft: rgba(255, 255, 255, 0.10);
-  --theme-color: #07080b;
+  --theme-color: #14120d;
   --shadow-soft: 0 22px 80px -42px rgba(0, 0, 0, 0.85);
   --shadow-float: 0 28px 90px -32px rgba(0, 0, 0, 0.88);
-  --glow-accent: 0 0 0 1px rgba(130, 143, 255, 0.18), 0 22px 80px -38px rgba(130, 143, 255, 0.72);
+  --glow-accent: 0 0 0 1px rgba(255, 94, 156, 0.20), 0 22px 80px -38px rgba(255, 94, 156, 0.70);
+  --pink: #ff5e9c;
+  --blue: #7b84ff;
+  --lime: #bfe93f;
+  --tang: #ff9a5c;
 }
 
 @supports (font: -apple-system-body) {
@@ -73,7 +82,7 @@
          Dynamic Type-scaled root size; font-family restores our brand
          stack so only the size follows the user's accessibility setting. */
       font: -apple-system-body;
-      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       line-height: 1.5;
     }
   }
@@ -81,7 +90,6 @@
 
 body {
   margin: 0;
-  font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -122,8 +130,9 @@ body,
 html,
 body {
   background:
-    radial-gradient(circle at 12% -10%, rgba(113, 112, 255, 0.18), transparent 30rem),
-    radial-gradient(circle at 95% 5%, rgba(16, 185, 129, 0.10), transparent 28rem),
+    radial-gradient(circle at 12% -10%, rgba(255, 77, 141, 0.16), transparent 30rem),
+    radial-gradient(circle at 95% 5%, rgba(75, 87, 255, 0.12), transparent 28rem),
+    radial-gradient(circle at 50% 115%, rgba(191, 233, 63, 0.12), transparent 30rem),
     var(--bg);
   overscroll-behavior: none;
   /* Horizontal clip lives here, not on inner containers. It MUST be
@@ -188,7 +197,7 @@ body {
   width: 36rem;
   height: 36rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(113, 112, 255, 0.18), transparent 64%);
+  background: radial-gradient(circle, rgba(255, 77, 141, 0.18), transparent 64%);
 }
 
 .app-chrome::after {
@@ -197,7 +206,7 @@ body {
   width: 42rem;
   height: 42rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.11), transparent 62%);
+  background: radial-gradient(circle, rgba(75, 87, 255, 0.12), transparent 62%);
 }
 
 /* Applied to <html> (documentElement) while any modal is open. Putting
@@ -252,9 +261,9 @@ body {
 
 .message-card-out {
   border: 1px solid color-mix(in srgb, var(--accent) 62%, transparent);
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  background: linear-gradient(176deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 46%, var(--accent-strong) 100%);
   color: var(--on-ink);
-  box-shadow: var(--glow-accent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.40) inset, var(--glow-accent);
 }
 
 .floating-action {
@@ -266,9 +275,9 @@ body {
   min-height: 3.25rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  background: linear-gradient(176deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 46%, var(--accent-strong) 100%);
   color: var(--on-ink);
-  box-shadow: var(--glow-accent), var(--shadow-float);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, var(--glow-accent), var(--shadow-float);
   transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
 
@@ -316,9 +325,9 @@ body {
   align-items: center;
   gap: 0.5rem;
   border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  background: linear-gradient(176deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 46%, var(--accent-strong) 100%);
   color: var(--on-ink);
-  box-shadow: var(--glow-accent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, var(--glow-accent);
   transition: transform 120ms ease, filter 120ms ease;
 }
 

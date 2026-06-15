@@ -21,11 +21,16 @@ export default {
         'overlay-soft': 'var(--overlay-soft)',
         accent: 'var(--accent)',
         'accent-strong': 'var(--accent-strong)',
-        'accent-soft': 'var(--accent-soft)'
+        'accent-soft': 'var(--accent-soft)',
+        success: 'var(--success)',
+        pink: 'var(--pink)',
+        blue: 'var(--blue)',
+        lime: 'var(--lime)',
+        tang: 'var(--tang)'
       },
       fontFamily: {
-        display: ['"Inter"', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'monospace']
+        display: ['"Bricolage Grotesque"', 'system-ui', 'sans-serif'],
+        mono: ['"Space Mono"', '"IBM Plex Mono"', 'monospace']
       }
     }
   },

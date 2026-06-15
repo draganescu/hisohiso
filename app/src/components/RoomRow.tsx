@@ -9,13 +9,13 @@ import type { StoredRoom } from '../lib/storage';
 import { generateRoomName } from '../lib/room-names';
 
 // Kind-badge styling lives here so both consumers stay in sync. 'control' uses
-// the accent palette so the operator's command surface reads as distinct;
-// 'agent' and 'chat' share the muted surface tone — they're peer rooms in
-// terms of UI weight.
+// the pink accent palette so the operator's command surface reads as distinct;
+// 'agent' carries the tang riso ink (its terminal/diff content is its own
+// world); 'chat' stays on the muted surface tone as the quiet peer room.
 const KIND_META: Record<StoredRoom['kind'], { label: string; tone: string }> = {
-  control: { label: 'Control', tone: 'border-accent/40 bg-accent-soft text-accent-strong' },
-  agent: { label: 'Agent', tone: 'border-rule bg-surface text-ink-soft' },
-  chat: { label: 'Chat', tone: 'border-rule bg-surface text-ink-soft' },
+  control: { label: 'control', tone: 'border-accent/40 bg-accent-soft text-accent-strong' },
+  agent: { label: 'agent', tone: 'border-tang bg-surface text-tang' },
+  chat: { label: 'chat', tone: 'border-rule bg-surface text-ink-soft' },
 };
 
 type Props = {
@@ -48,7 +48,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
   // beats it and renaming to empty restores it. Non-chat kinds keep the
   // bland "Unnamed channel" since control gets the daemon hostname and
   // agent rooms are named explicitly by the daemon on spawn.
-  const fallbackName = room.kind === 'chat' ? generateRoomName(room.roomHash) : 'Unnamed channel';
+  const fallbackName = room.kind === 'chat' ? generateRoomName(room.roomHash) : 'unnamed channel';
   const displayName = room.nickname || fallbackName;
 
   // Close the kebab popover on any outside tap. Captured at document level so
@@ -152,7 +152,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
         <div ref={menuRef} className="relative shrink-0">
           <button
             type="button"
-            aria-label="Channel actions"
+            aria-label="channel actions"
             className="rounded-full px-2 py-1.5 text-ink-dim hover:bg-bg hover:text-ink"
             onClick={(e) => {
               e.preventDefault();
@@ -180,7 +180,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
                     setEditing(true);
                   }}
                 >
-                  Rename
+                  rename
                 </button>
               )}
               {onForget && (
@@ -195,7 +195,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
                     onForget();
                   }}
                 >
-                  Forget
+                  forget
                 </button>
               )}
             </div>
