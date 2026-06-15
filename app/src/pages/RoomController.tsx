@@ -167,7 +167,11 @@ const describeInteractiveBlock = (block: Block): string | null => {
 // One live work-status for an agent, derived from an ephemeral `status` event.
 // `at` is the client receive time, used to expire a stale indicator if the
 // daemon goes silent without sending a terminal status to clear it.
-type AgentStatus = { state: string; text: string; handle: string | null; at: number };
+// `at` is the client receive time (drives the 30s stale backstop); `ts` is the
+// status event's server timestamp (same clock domain as chat message ts), used
+// to decide whether a recovered chat reply post-dates — and so supersedes — a
+// stale indicator whose terminal `done` we missed while backgrounded.
+type AgentStatus = { state: string; text: string; handle: string | null; at: number; ts: number };
 
 type RoomSetupStage = 'security' | 'delivery';
 
@@ -221,6 +225,16 @@ const RoomController = () => {
   // order (e.g. a late 'tool' landing after the turn's terminal 'done') is
   // discarded instead of resurrecting a cleared indicator.
   const statusSeqRef = useRef<Record<string, number>>({});
+  // Highest inbound chat server-ts seen per sender hash. An agent's terminal
+  // status is ephemeral and never replays, so a missed `done` strands a
+  // "working…" bubble; on (re)connect we clear any indicator a newer reply from
+  // the same sender already supersedes. In-memory; reset on room switch.
+  const lastInboundMsgTsRef = useRef<Record<string, number>>({});
+  // Bumped on resume (visibilitychange → visible) to force the SSE effect to
+  // tear down and rebuild a fresh connection — a backgrounded socket often dies
+  // silently without firing `error`, so `onopen` (and its catch-up) never
+  // re-fires until restart. See the resume effect below.
+  const [reconnectNonce, setReconnectNonce] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [showDisband, setShowDisband] = useState(false);
@@ -490,6 +504,7 @@ const RoomController = () => {
     setMessages([]);
     setAgentStatuses({});
     statusSeqRef.current = {};
+    lastInboundMsgTsRef.current = {};
     setMessage('');
     setChatInput('');
     setShowComposer(false);
@@ -602,6 +617,12 @@ const RoomController = () => {
       plaintext,
       ownTokenHash: tokenHashRef.current,
     });
+    // Record the newest inbound (peer/agent) message ts per sender so a resume
+    // reconcile (see the SSE onopen handler) can clear a stale "working…"
+    // indicator that this reply already superseded.
+    if (from && messageRecord.direction === 'in' && ts > (lastInboundMsgTsRef.current[from] ?? 0)) {
+      lastInboundMsgTsRef.current[from] = ts;
+    }
     // NOTE: the work indicator is NOT cleared here. Clearing is driven by the
     // daemon's terminal `done`/`failed` status event (see the status handler),
     // so intermediate daemon chats ("queued", "exit code N") that share this
@@ -784,6 +805,7 @@ const RoomController = () => {
           setRoomContext(null);
           setAgentCount(null);
           statusSeqRef.current = {};
+          lastInboundMsgTsRef.current = {};
           setSelectedId(null);
           setShowQr(false);
           setShowDisband(false);
@@ -1168,6 +1190,7 @@ const RoomController = () => {
                 text: env.text ?? '',
                 handle: env.handle ?? null,
                 at: Date.now(),
+                ts: payload.ts,
               },
             }));
           } catch (err) {
@@ -1202,14 +1225,35 @@ const RoomController = () => {
               0
             );
             const r = await fetchOutbox(roomHash, token, localMax);
-            if (!r.ok) return;
-            const data = (await r.json()) as { messages: OutboxMessage[] };
-            for (const m of data.messages) {
-              await ingestEncryptedChat(m.msg_id, m.ts, m.sender_hash, m.encrypted_payload);
+            if (r.ok) {
+              const data = (await r.json()) as { messages: OutboxMessage[] };
+              for (const m of data.messages) {
+                await ingestEncryptedChat(m.msg_id, m.ts, m.sender_hash, m.encrypted_payload);
+              }
             }
           } catch {
             // non-fatal
           }
+          // Reconcile stale agent indicators on every (re)connect. A terminal
+          // `done`/`failed` status is ephemeral and never replays, so one missed
+          // while backgrounded would strand a "working…" bubble above the agent's
+          // reply. If the newest inbound message we hold from a sender is at/after
+          // its last status, the turn produced its reply and ended — drop the
+          // indicator. An actively-working agent keeps emitting status with a
+          // newer ts, so its bubble outlives any earlier reply and is preserved.
+          setAgentStatuses((prev) => {
+            let changed = false;
+            const next: Record<string, AgentStatus> = {};
+            for (const [sender, st] of Object.entries(prev)) {
+              const msgTs = lastInboundMsgTsRef.current[sender];
+              if (msgTs !== undefined && msgTs >= st.ts) {
+                changed = true;
+                continue;
+              }
+              next[sender] = st;
+            }
+            return changed ? next : prev;
+          });
         })();
       }
     };
@@ -1222,7 +1266,28 @@ const RoomController = () => {
       eventTypes.forEach((type) => source.removeEventListener(type, handleEvent));
       source.close();
     };
-  }, [roomHash, roomState, cryptoKey, token, tokenHash, subJwt, lobbyJwt, wipeLocalRoom, ingestEncryptedChat]);
+  }, [roomHash, roomState, cryptoKey, token, tokenHash, subJwt, lobbyJwt, wipeLocalRoom, ingestEncryptedChat, reconnectNonce]);
+
+  // Resume reconciler. When the tab/PWA returns to the foreground (opened from a
+  // push notification, app-switched back, or restored from bfcache), force the
+  // SSE to reconnect. A backgrounded socket frequently dies silently without
+  // firing `error`, so the polyfill never re-fires `onopen` and the missed-
+  // message catch-up + status reconcile never run until a full restart — the
+  // exact "restart fixes it" symptom. Bumping the nonce tears the connection
+  // down and rebuilds it, so onopen → catch-up → status reconcile all run.
+  useEffect(() => {
+    const onResume = () => {
+      if (document.visibilityState === 'visible') {
+        setReconnectNonce((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('pageshow', onResume);
+    return () => {
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('pageshow', onResume);
+    };
+  }, []);
 
   useEffect(() => {
     if (roomState !== 'PARTICIPANT' || !token || !roomHash) {
