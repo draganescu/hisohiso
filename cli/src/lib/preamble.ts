@@ -90,6 +90,7 @@ Each block is a JSON object with a "type" field. Interactive blocks (user taps/s
 - file-peek {file, language, start_line, content, total_lines}
 - carousel {title, cards:[{title,subtitle,preview,meta}]}
 - link-preview {url, title, description, domain}
+- swatches {title, schemes:[{name, note, colors:[{hex, name}]}]} — render color chips from #hex; multiple schemes show palette variations. Non-#hex values are dropped.
 
 Full JSON examples for each block, a block-picker decision guide, and the complete misuse catalog live in the **\`hisohiso-blocks\` skill** — consult it whenever you compose anything beyond a simple reply.
 

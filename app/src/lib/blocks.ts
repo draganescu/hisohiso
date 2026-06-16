@@ -307,6 +307,27 @@ export interface LabelBlock extends BlockBase {
   text: string;
 }
 
+// ─── 25. Swatches ─────────────────────────────────────────────────────────
+
+export interface SwatchColor {
+  /** A hex color: #rgb, #rgba, #rrggbb, or #rrggbbaa. Anything else is dropped. */
+  hex: string;
+  name?: string;
+}
+
+export interface SwatchScheme {
+  name?: string;
+  note?: string;
+  colors: SwatchColor[];
+}
+
+export interface SwatchesBlock extends BlockBase {
+  type: 'swatches';
+  title?: string;
+  /** One or more named schemes, each a row of color chips — for showing palette variations side by side. */
+  schemes: SwatchScheme[];
+}
+
 // ─── Union type ───────────────────────────────────────────────────────────
 
 export type Block =
@@ -332,7 +353,8 @@ export type Block =
   | LinkPreviewBlock
   | ListBlock
   | ProseBlock
-  | LabelBlock;
+  | LabelBlock
+  | SwatchesBlock;
 
 // ─── Block response (user interaction reply) ──────────────────────────────
 

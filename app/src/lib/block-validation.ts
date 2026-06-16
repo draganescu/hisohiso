@@ -10,6 +10,9 @@ const isString = (value: unknown): value is string => typeof value === 'string';
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
 
+const hexColorRe = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const isHexColor = (value: unknown): value is string => isString(value) && hexColorRe.test(value.trim());
+
 const confidenceLevels = new Set(['high', 'medium', 'low']);
 const stepStatuses = new Set(['done', 'active', 'pending', 'failed']);
 const fileStatuses = new Set(['added', 'modified', 'deleted', 'renamed']);
@@ -145,6 +148,24 @@ const validateBlock = (raw: unknown): Block | null => {
     case 'label':
       if (!isString(raw.text)) return invalidBlock(raw.type, 'Expected text string', raw);
       return toBlock({ ...baseBlock(raw), text: raw.text });
+    case 'swatches': {
+      if (!Array.isArray(raw.schemes)) return invalidBlock(raw.type, 'Expected schemes[]', raw);
+      const schemes = raw.schemes
+        .map((scheme) => {
+          if (!isRecord(scheme) || !Array.isArray(scheme.colors)) return null;
+          // Only accept literal hex colors. A value goes straight into an inline
+          // style background, so anything that isn't #rgb / #rgba / #rrggbb /
+          // #rrggbbaa is dropped — no CSS injection surface.
+          const colors = scheme.colors
+            .filter((color): color is AnyRecord => isRecord(color) && isHexColor(color.hex))
+            .map((color) => ({ hex: (color.hex as string).trim().toLowerCase(), name: isString(color.name) ? color.name : undefined }));
+          if (colors.length === 0) return null;
+          return { name: isString(scheme.name) ? scheme.name : undefined, note: isString(scheme.note) ? scheme.note : undefined, colors };
+        })
+        .filter((scheme): scheme is NonNullable<typeof scheme> => scheme !== null);
+      if (schemes.length === 0) return invalidBlock(raw.type, 'Expected at least one scheme with valid #hex colors', raw);
+      return toBlock({ ...baseBlock(raw), title: isString(raw.title) ? raw.title : undefined, schemes });
+    }
     default:
       return null;
   }
