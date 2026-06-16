@@ -3,66 +3,92 @@
 @tailwind utilities;
 
 :root {
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 100%;
   --app-height: 100vh;
   --app-offset: 0px;
   color-scheme: light;
-  /* Launch3 / 2026 tokens: calm paper by default, high-polish dark mode,
-     and one restrained interactive accent. Tailwind reads the core tokens
-     via tailwind.config.js; component primitives below use the extended set. */
-  --bg: #f4f1ea;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-strong: #fffdf8;
-  --surface-glass: rgba(255, 255, 255, 0.64);
-  --ink: #0b0d12;
-  --ink-soft: #555c6b;
-  --ink-dim: #8b92a1;
-  --ink-fade: #c8cdd6;
-  --rule: rgba(11, 13, 18, 0.10);
-  --rule-soft: rgba(11, 13, 18, 0.06);
-  --danger: #be123c;
-  --danger-soft: rgba(244, 63, 94, 0.12);
+  /* Riso / warm-paper redesign: warm paper by default, warm-console dark mode,
+     and a pink riso accent. Tailwind reads the core tokens via
+     tailwind.config.js; component primitives below use the extended set. */
+  --bg: #f3efe6;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-strong: #ffffff;
+  --surface-glass: rgba(255, 255, 255, 0.66);
+  --ink: #1c1a16;
+  --ink-soft: #6f6a5e;
+  --ink-dim: #8f897a;
+  --ink-fade: #c7c0af;
+  --rule: rgba(28, 26, 22, 0.12);
+  --rule-soft: rgba(28, 26, 22, 0.07);
+  --danger: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.12);
   --on-ink: #ffffff;
-  --filled: #11131a;
-  --accent: #7170ff;
-  --accent-strong: #5e6ad2;
-  --accent-soft: rgba(113, 112, 255, 0.13);
-  --success: #10b981;
-  --overlay: rgba(11, 13, 18, 0.48);
-  --overlay-soft: rgba(11, 13, 18, 0.16);
-  --theme-color: #f4f1ea;
-  --shadow-soft: 0 18px 60px -34px rgba(12, 16, 24, 0.45);
-  --shadow-float: 0 24px 80px -30px rgba(12, 16, 24, 0.5);
-  --glow-accent: 0 0 0 1px rgba(113, 112, 255, 0.16), 0 20px 70px -38px rgba(113, 112, 255, 0.9);
+  --filled: #1c1a16;
+  --accent: #ff4d8d;
+  --accent-strong: #e23a78;
+  --accent-soft: rgba(255, 77, 141, 0.14);
+  --success: #86b81e;
+  --overlay: rgba(28, 26, 22, 0.46);
+  --overlay-soft: rgba(28, 26, 22, 0.16);
+  --theme-color: #f3efe6;
+  --shadow-soft: 0 18px 60px -34px rgba(40, 30, 24, 0.40);
+  --shadow-float: 0 24px 80px -30px rgba(40, 30, 24, 0.46);
+  --glow-accent: 0 0 0 1px rgba(255, 77, 141, 0.18), 0 20px 70px -38px rgba(255, 77, 141, 0.85);
+  /* riso accent set — pink primary, blue/lime/tang for status + kind badges */
+  --pink: #ff4d8d;
+  --blue: #4b57ff;
+  --lime: #bfe93f;
+  --tang: #ff7a36;
+  /* code / terminal surfaces inside blocks (diff, terminal). Warm near-black
+     console on paper; the redesign keeps these dark but token-driven so dark
+     mode and reduced-contrast preferences stay coherent. */
+  --code-bg: #211f1a;
+  --code-ink: #e9e4d6;
+  --code-rule: rgba(255, 255, 255, 0.10);
+  --code-add: #bfe93f;
+  --code-add-bg: rgba(191, 233, 63, 0.12);
+  --code-del: #ff7a36;
+  --code-del-bg: rgba(255, 122, 54, 0.14);
 }
 
 .dark {
   color-scheme: dark;
-  --bg: #07080b;
-  --surface: rgba(20, 22, 28, 0.72);
-  --surface-strong: #11131a;
-  --surface-glass: rgba(19, 21, 28, 0.62);
-  --ink: #f7f8f8;
-  --ink-soft: #c8ccd7;
-  --ink-dim: #8f96a8;
-  --ink-fade: #434858;
+  --bg: #14120d;
+  --surface: rgba(40, 36, 27, 0.72);
+  --surface-strong: #211e16;
+  --surface-glass: rgba(33, 30, 22, 0.62);
+  --ink: #f5f2ea;
+  --ink-soft: #cfc8b8;
+  --ink-dim: #9b9482;
+  --ink-fade: #5a5446;
   --rule: rgba(255, 255, 255, 0.10);
   --rule-soft: rgba(255, 255, 255, 0.06);
-  --danger: #fb7185;
-  --danger-soft: rgba(251, 113, 133, 0.14);
+  --danger: #ff7185;
+  --danger-soft: rgba(255, 113, 133, 0.16);
   --on-ink: #ffffff;
-  --filled: #5e6ad2;
-  --accent: #828fff;
-  --accent-strong: #7170ff;
-  --accent-soft: rgba(130, 143, 255, 0.16);
-  --success: #34d399;
+  --filled: #ff4d8d;
+  --accent: #ff5e9c;
+  --accent-strong: #ff4d8d;
+  --accent-soft: rgba(255, 94, 156, 0.18);
+  --success: #bfe93f;
   --overlay: rgba(0, 0, 0, 0.72);
   --overlay-soft: rgba(255, 255, 255, 0.10);
-  --theme-color: #07080b;
+  --theme-color: #14120d;
   --shadow-soft: 0 22px 80px -42px rgba(0, 0, 0, 0.85);
   --shadow-float: 0 28px 90px -32px rgba(0, 0, 0, 0.88);
-  --glow-accent: 0 0 0 1px rgba(130, 143, 255, 0.18), 0 22px 80px -38px rgba(130, 143, 255, 0.72);
+  --glow-accent: 0 0 0 1px rgba(255, 94, 156, 0.20), 0 22px 80px -38px rgba(255, 94, 156, 0.70);
+  --pink: #ff5e9c;
+  --blue: #7b84ff;
+  --lime: #bfe93f;
+  --tang: #ff9a5c;
+  --code-bg: #1a1813;
+  --code-ink: #e9e4d6;
+  --code-rule: rgba(255, 255, 255, 0.12);
+  --code-add: #bfe93f;
+  --code-add-bg: rgba(191, 233, 63, 0.14);
+  --code-del: #ff9a5c;
+  --code-del-bg: rgba(255, 154, 92, 0.16);
 }
 
 @supports (font: -apple-system-body) {
@@ -73,7 +99,7 @@
          Dynamic Type-scaled root size; font-family restores our brand
          stack so only the size follows the user's accessibility setting. */
       font: -apple-system-body;
-      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       line-height: 1.5;
     }
   }
@@ -81,7 +107,6 @@
 
 body {
   margin: 0;
-  font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -122,8 +147,9 @@ body,
 html,
 body {
   background:
-    radial-gradient(circle at 12% -10%, rgba(113, 112, 255, 0.18), transparent 30rem),
-    radial-gradient(circle at 95% 5%, rgba(16, 185, 129, 0.10), transparent 28rem),
+    radial-gradient(circle at 12% -10%, rgba(255, 77, 141, 0.16), transparent 30rem),
+    radial-gradient(circle at 95% 5%, rgba(75, 87, 255, 0.12), transparent 28rem),
+    radial-gradient(circle at 50% 115%, rgba(191, 233, 63, 0.12), transparent 30rem),
     var(--bg);
   overscroll-behavior: none;
   /* Horizontal clip lives here, not on inner containers. It MUST be
@@ -188,7 +214,7 @@ body {
   width: 36rem;
   height: 36rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(113, 112, 255, 0.18), transparent 64%);
+  background: radial-gradient(circle, rgba(255, 77, 141, 0.18), transparent 64%);
 }
 
 .app-chrome::after {
@@ -197,7 +223,7 @@ body {
   width: 42rem;
   height: 42rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.11), transparent 62%);
+  background: radial-gradient(circle, rgba(75, 87, 255, 0.12), transparent 62%);
 }
 
 /* Applied to <html> (documentElement) while any modal is open. Putting
@@ -221,6 +247,145 @@ body {
   border: 1px solid var(--rule);
   background: var(--surface);
   box-shadow: var(--shadow-soft);
+}
+
+/* ── Block cards (diff / terminal / confirm-danger) ──────────────────────────
+   The phone-UI blocks now read as part of the riso redesign: a soft-card frame
+   with a token-driven console interior (.block-code) instead of hardcoded hex.
+   The header strip uses the warm surface; the code body stays a warm near-black
+   console so diffs/logs keep their terminal legibility. Riso lime/tang tint the
+   add/del lines. All colours come from tokens so dark mode stays coherent. */
+.block-card {
+  border: 1px solid var(--rule);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.block-code {
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+.block-code-rule {
+  border-color: var(--code-rule);
+}
+
+/* Footer shown on a diff when a commit sha is stamped: "committed {sha}".
+   States only that a commit exists. Riso-lime success edge on the warm
+   console foot. */
+.block-commit-confirm {
+  border-top: 1px solid var(--code-rule);
+  color: var(--code-add);
+  background: var(--code-add-bg);
+}
+
+/* /rooms index card (RoomCard.tsx). A soft-card with a riso paper feel and a
+   left kind-accent edge fed by --room-accent (the per-room stored color, set
+   on .room-card-shell). The switcher keeps the compact .room-row look; this is
+   the larger index surface only. Hover lifts subtly, matching .floating-action. */
+.room-card {
+  position: relative;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.room-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--room-accent, var(--ink-fade));
+  opacity: 0.9;
+}
+
+.room-card:hover {
+  border-color: color-mix(in srgb, var(--room-accent, var(--ink-fade)) 50%, var(--rule));
+  box-shadow: var(--shadow-float);
+}
+
+/* The card for the room currently open in the main pane (desktop rail only).
+   A pink accent border + soft tint so the active room reads at a glance,
+   matching the riso accent surfaces. */
+.room-card-current {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--rule));
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface));
+  box-shadow: var(--shadow-float);
+}
+
+.room-card-current:hover {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--rule));
+}
+
+/* ── Desktop two-pane: persistent rooms rail (lg+ only) ──────────────────────
+   The rail is a fixed left sidebar shown only at lg+ (>=1024px). Below lg it is
+   display:none, so the mobile single-pane is untouched. The room screen carries
+   .room-with-rail, which holds a --rail-w token (0 below lg, the rail width at
+   lg+). The room's *fixed* chrome (header pills, command bar, modal overlays,
+   composer, collector tray) and its centered message column are shifted right
+   by --rail-w at lg+ so nothing sits under the rail. We shift fixed chrome via
+   `left`/padding rather than wrapping app-shell in an overflow container —
+   that would break the document-scroll model the channel screen relies on. */
+.room-with-rail {
+  --rail-w: 0px;
+}
+
+.rooms-rail {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .room-with-rail {
+    /* Rail gutter the rest of the screen is shifted by. */
+    --rail-w: 20rem;
+  }
+
+  .rooms-rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 35;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    width: var(--rail-w);
+    padding: max(0.75rem, env(safe-area-inset-top)) 0.85rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-right: 1px solid var(--rule);
+    background: var(--surface-glass);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+  }
+
+  /* Shift the centered message column into the space right of the rail. */
+  .room-with-rail .room-message-column {
+    padding-left: calc(var(--rail-w) + 1rem);
+  }
+
+  /* Header pill row + the command bar span the viewport with left:0 / left:1rem;
+     push their left edge past the rail. */
+  .room-with-rail .room-header-bar {
+    left: var(--rail-w);
+  }
+
+  .room-with-rail .command-bar,
+  .room-with-rail .agent-quick-actions {
+    left: calc(var(--rail-w) + 1rem);
+  }
+
+  /* Full-viewport overlays — modal frames, the composer, the collector tray,
+     the message-detail / confirm sheets — re-center over the room pane (not the
+     whole viewport) so they don't sit behind / over the rail. .room-overlay is
+     the explicit opt-in tag on every fixed overlay in the room view. */
+  .room-with-rail .modal-frame,
+  .room-with-rail .composer-overlay,
+  .room-with-rail .room-overlay {
+    left: var(--rail-w);
+  }
 }
 
 .message-card {
@@ -252,9 +417,9 @@ body {
 
 .message-card-out {
   border: 1px solid color-mix(in srgb, var(--accent) 62%, transparent);
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  background: linear-gradient(176deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 46%, var(--accent-strong) 100%);
   color: var(--on-ink);
-  box-shadow: var(--glow-accent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.40) inset, var(--glow-accent);
 }
 
 .floating-action {
@@ -266,9 +431,9 @@ body {
   min-height: 3.25rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  background: linear-gradient(176deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 46%, var(--accent-strong) 100%);
   color: var(--on-ink);
-  box-shadow: var(--glow-accent), var(--shadow-float);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, var(--glow-accent), var(--shadow-float);
   transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
 
@@ -316,9 +481,9 @@ body {
   align-items: center;
   gap: 0.5rem;
   border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  background: linear-gradient(176deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 46%, var(--accent-strong) 100%);
   color: var(--on-ink);
-  box-shadow: var(--glow-accent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, var(--glow-accent);
   transition: transform 120ms ease, filter 120ms ease;
 }
 
@@ -359,6 +524,70 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Agent-room quick-action chip bar. Pinned just above the composer FAB
+   (or the dispatch button while a batch is pending). The outer element is a
+   full-width fixed strip; the inner track is the horizontally-scrollable row of
+   chips. The strip itself never grows the page — overflow is contained to the
+   track. The bottom offset clears the FAB (min-height 3.25rem) plus its safe-
+   area inset; the raised variant adds a touch more for the taller dispatch CTA. */
+.agent-quick-actions {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 3.75rem);
+  z-index: 29;
+  pointer-events: none;
+}
+
+.agent-quick-actions-raised {
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4rem);
+}
+
+.agent-quick-actions-track {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0.125rem 0.125rem 0.375rem;
+  /* The track scrolls but its chips are the only tap targets — re-enable
+     pointer events here so taps on the surrounding strip pass through to the
+     message list / FAB underneath. */
+  pointer-events: auto;
+}
+
+.agent-quick-actions-track::-webkit-scrollbar {
+  display: none;
+}
+
+.agent-quick-action-chip {
+  flex: 0 0 auto;
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--shadow-soft);
+  transition: border-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.agent-quick-action-chip:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--rule));
+}
+
+.agent-quick-action-chip:active {
+  transform: translateY(1px) scale(0.99);
 }
 
 .modal-shell {
@@ -461,3 +690,47 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+
+/* ---- Shared button language (matches the marketing landing) ---- */
+body { font-weight: 500; }
+
+.btn-primary {
+  position: relative; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  padding: 0.7rem 1.4rem; border-radius: 999px; border: none;
+  font-weight: 700; font-size: 0.9375rem; letter-spacing: 0.01em; text-decoration: none;
+  color: var(--on-ink);
+  background: linear-gradient(176deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 46%, var(--accent-strong) 100%);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.45) inset, 0 -2px 6px rgba(0,0,0,0.16) inset, var(--glow-accent);
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.btn-primary::before {
+  content: ""; position: absolute; top: 2px; left: 10%; right: 10%; height: 42%;
+  border-radius: 999px; background: linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0)); pointer-events: none;
+}
+.btn-primary:hover { transform: translateY(-1px); filter: brightness(1.04); }
+.btn-primary:active { transform: translateY(1px) scale(0.99); }
+.btn-primary:disabled { opacity: 0.5; cursor: default; transform: none; filter: none; }
+
+.btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  padding: 0.65rem 1.3rem; border-radius: 999px; border: 1.5px solid var(--rule);
+  background: var(--surface); color: var(--ink);
+  font-weight: 600; font-size: 0.9375rem; text-decoration: none;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+.btn-ghost:hover { border-color: var(--ink); transform: translateY(-1px); }
+.btn-ghost:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+.btn-danger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  padding: 0.65rem 1.3rem; border-radius: 999px; border: 1.5px solid var(--danger);
+  background: var(--surface); color: var(--danger);
+  font-weight: 600; font-size: 0.9375rem; text-decoration: none;
+  transition: background 0.12s ease;
+}
+.btn-danger:hover { background: var(--danger-soft); }
+.btn-danger:disabled { opacity: 0.4; cursor: default; }
+
+.btn-sm { padding: 0.4rem 0.9rem; font-size: 0.75rem; gap: 0.35rem; }

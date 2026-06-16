@@ -3,14 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f5f5f3" />
-    <title>protocol — the server moves your words, it never reads them</title>
-    <meta name="description" content="How hisohiso keeps quiet. Encryption happens in your browser. The key never reaches our server. Lose the link, and there is nothing to recover." />
+    <meta name="theme-color" content="#f3efe6" />
+    <title>protocol — the server moves your words. it never reads them.</title>
+    <meta name="description" content="how hisohiso keeps quiet. encryption happens in your browser. the key never reaches our server. lose the link, and there's nothing to recover." />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://www.hisohiso.org/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/fonts/riso-fonts.css" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -42,10 +43,10 @@
       <section class="hero" aria-labelledby="hero-title">
         <p class="eyebrow">protocol</p>
         <h1 id="hero-title">
-          The server moves your words.<br /><span class="accent">It never reads them.</span>
+          the server moves your words.<br /><span class="accent">it never reads them.</span>
         </h1>
         <p class="lead">
-          Encryption happens in your browser, before a single byte leaves. The key never reaches our server. The history never touches our database. Lose your link, and there is nothing for us to recover.
+          encryption happens in your browser, before a single byte leaves. the key never reaches our server. the history never touches our database. lose your link, and there's nothing for us to recover.
         </p>
         <div class="hero-actions">
           <a class="cta" href="https://hisohiso.org/new">open a channel</a>
@@ -54,41 +55,41 @@
       </section>
 
       <section class="section numbered" aria-labelledby="short-title">
-        <h2 id="short-title">We gave up the conveniences. <span class="accent">We meant to.</span></h2>
+        <h2 id="short-title">we gave up the conveniences. <span class="accent">we meant to.</span></h2>
         <p>
-          Mainstream chat apps ship accounts, contact discovery, group invites, forwarding, and cross-device history. Each of those is a surface that lets you be found, followed, and correlated. We do not ship them. What you trade for the rough edges is a chat you actually own.
+          mainstream chat apps ship accounts, contact discovery, group invites, forwarding, and cross-device history. each of those is a surface that lets you be found, followed, and correlated. we don't ship them. what you trade for the rough edges is a chat you actually own.
         </p>
       </section>
 
       <section class="section numbered" aria-labelledby="gates-title">
-        <h2 id="gates-title">Have it. Know it. <span class="accent">Prove it.</span></h2>
+        <h2 id="gates-title">have it. know it. <span class="accent">prove it.</span></h2>
         <p>
-          A channel can ask for three things to let someone in: the link you have, the password you know, and the knock that says who you are. For two friends, only the link is required. For an agent pairing, all three are.
+          a channel can ask for three things to let someone in: the link you have, the password you know, and the knock that says who you are. for two friends, only the link is required. for an agent pairing, all three are.
         </p>
         <div class="split">
           <article class="split-card">
             <p class="split-tag">have it</p>
-            <h3>The link is the first key.</h3>
-            <p>The room secret lives after the <code>#</code> in the URL. Browsers keep that part of the URL local. Our server sees a hash of the room. It never sees the key.</p>
+            <h3>the link is the first key.</h3>
+            <p>the room secret lives after the <code>#</code> in the URL. browsers keep that part of the URL local. our server sees a hash of the room. it never sees the key.</p>
           </article>
           <article class="split-card">
             <p class="split-tag">know it</p>
-            <h3>A password locks the room twice.</h3>
-            <p>Add a password and the message keys are derived from the link <em>and</em> the password. Someone with just the link cannot read or speak.</p>
+            <h3>a password locks the room twice.</h3>
+            <p>add a password and the message keys are derived from the link <em>and</em> the password. someone with just the link can't read or speak.</p>
           </article>
           <article class="split-card">
             <p class="split-tag">prove it</p>
-            <h3>A knock says who's at the door.</h3>
-            <p>Knocking sends a short introduction. A person sees it and lets you in. For an agent, the knock is a hidden session secret — the phone has to type it correctly before the agent auto-approves.</p>
+            <h3>a knock says who's at the door.</h3>
+            <p>knocking sends a short introduction. a person sees it and lets you in. for an agent, the knock is a hidden session secret — the phone has to type it correctly before the agent auto-approves.</p>
           </article>
         </div>
-        <p class="footnote">Human rooms can skip the password and the knock. Agent pairing uses both: the CLI prints a fresh code and asks for a hidden knock, then only approves a phone that holds all three.</p>
+        <p class="footnote">human rooms can skip the password and the knock. agent pairing uses both: the CLI prints a fresh code and asks for a hidden knock, then only approves a phone that holds all three.</p>
       </section>
 
       <section class="section numbered" aria-labelledby="link-title">
-        <h2 id="link-title">The secret <span class="accent">never leaves your browser.</span></h2>
+        <h2 id="link-title">the secret <span class="accent">never leaves your browser.</span></h2>
         <p>
-          When you create a channel, your browser generates a secret and writes it into the part of the URL after the <code>#</code>. Browsers do not send that part to a server. Our server gets a hash of the room. It never gets the key.
+          when you create a channel, your browser generates a secret and writes it into the part of the URL after the <code>#</code>. browsers don't send that part to a server. our server gets a hash of the room. it never gets the key.
         </p>
         <div class="urlbar" role="img" aria-label="Everything before the hash can reach the server. Everything after the hash stays in the browser.">
           <code class="url-line"><span class="url-dim">https://</span><span class="url-sent">hisohiso.org/r/quiet-fox</span><span class="url-cut">#</span><span class="url-secret">channel-secret</span></code>
@@ -100,9 +101,9 @@
       </section>
 
       <section class="section numbered" aria-labelledby="message-title">
-        <h2 id="message-title">Every message is locked <span class="accent">before it leaves you.</span></h2>
+        <h2 id="message-title">every message is locked <span class="accent">before it leaves you.</span></h2>
         <p>
-          When you tap send, your browser encrypts the message with a key derived from the channel secret and, if you set one, the password. The server receives an opaque blob and forwards it. The other browser — or the bridge on your own machine — uses the same inputs to open it.
+          when you tap send, your browser encrypts the message with a key derived from the channel secret and, if you set one, the password. the server receives an opaque blob and forwards it. the other browser — or the bridge on your own machine — uses the same inputs to open it.
         </p>
         <div class="wire" role="img" aria-label="Browser encrypts, server routes ciphertext, browser or bridge decrypts.">
           <div class="wire-track" aria-hidden="true"><span class="wire-packet" data-packet>▓▒░</span></div>
@@ -112,57 +113,57 @@
             <div class="wire-node"><strong>them</strong><span>open it locally</span></div>
           </div>
         </div>
-        <p class="footnote">Messages use AES-256-GCM. Keys are derived from the channel secret and the optional password with HKDF-SHA256.</p>
+        <p class="footnote">messages use AES-256-GCM. keys are derived from the channel secret and the optional password with HKDF-SHA256.</p>
       </section>
 
       <section class="section numbered" aria-labelledby="join-title">
-        <h2 id="join-title">Joining is a knock, <span class="accent">not an account.</span></h2>
+        <h2 id="join-title">joining is a knock, <span class="accent">not an account.</span></h2>
         <p>
-          A new person opens the link and knocks. Someone already inside sees the knock and approves. For an agent, the local bridge joins from your machine, decrypts the knock with the pairing code, and matches the body against a hidden session message before it lets the phone in. There is no global identity to search, follow, invite, or leak.
+          a new person opens the link and knocks. someone already inside sees the knock and approves. for an agent, the local bridge joins from your machine, decrypts the knock with the pairing code, and matches the body against a hidden session message before it lets the phone in. there's no global identity to search, follow, invite, or leak.
         </p>
         <ul class="bullets">
-          <li><strong>Nobody owns the room.</strong> Anyone inside can approve a knock or close the room.</li>
-          <li><strong>Nothing to recover.</strong> Lose your link and your local data and we have nothing to give you back.</li>
-          <li><strong>No public lobby.</strong> A channel is useful only to people who already have the link.</li>
+          <li><strong>nobody owns the room.</strong> anyone inside can approve a knock or close the room.</li>
+          <li><strong>nothing to recover.</strong> lose your link and your local data and we have nothing to give you back.</li>
+          <li><strong>no public lobby.</strong> a channel is useful only to people who already have the link.</li>
         </ul>
       </section>
 
       <section class="section numbered" aria-labelledby="stored-title">
-        <h2 id="stored-title">We keep the routing. <span class="accent">You keep the words.</span></h2>
+        <h2 id="stored-title">we keep the routing. <span class="accent">you keep the words.</span></h2>
         <p>
-          Our database holds a hash of each channel, a hash of each participant token, and timestamps. Enough to deliver an encrypted event to the right place. Not enough to read it. Your readable message history lives in IndexedDB on your own device.
+          our database holds a hash of each channel, a hash of each participant token, and timestamps. enough to deliver an encrypted event to the right place. not enough to read it. your readable message history lives in IndexedDB on your own device.
         </p>
         <div class="split">
           <article class="split-card">
             <p class="split-tag">on our server</p>
-            <h3>Routing data.</h3>
-            <p>Just enough to know which encrypted event belongs where. Not the text of the message.</p>
+            <h3>routing data.</h3>
+            <p>just enough to know which encrypted event belongs where. not the text of the message.</p>
           </article>
           <article class="split-card">
             <p class="split-tag">on your device</p>
-            <h3>Local history.</h3>
-            <p>Every message you received. Clear your browser storage and that local copy is gone.</p>
+            <h3>local history.</h3>
+            <p>every message you received. clear your browser storage and that local copy is gone.</p>
           </article>
         </div>
-        <p class="footnote">A channel can opt into encrypted offline catch-up. The server stores ciphertext only, capped by retention rules — newest messages first, old ciphertext expires instead of becoming permanent cloud history.</p>
+        <p class="footnote">a channel can opt into encrypted offline catch-up. the server stores ciphertext only, capped by retention rules — newest messages first, old ciphertext expires instead of becoming permanent cloud history.</p>
       </section>
 
       <section class="section numbered" aria-labelledby="limits-title">
-        <h2 id="limits-title">What we won't <span class="accent">pretend to fix.</span></h2>
+        <h2 id="limits-title">what we won't <span class="accent">pretend to fix.</span></h2>
         <p>
-          We protect the contents of your messages from our server. We don't fix bad link-sharing habits. We don't hide your network metadata from your ISP. And we don't decide whether an agent command is safe to run. Those choices stay with you.
+          we protect the contents of your messages from our server. we don't fix bad link-sharing habits. we don't hide your network metadata from your ISP. and we don't decide whether an agent command is safe to run. those choices stay with you.
         </p>
         <ul class="bullets">
-          <li><strong>You still have to trust the code we ship.</strong> End-to-end crypto runs in the client you load. A compromised origin could serve malicious JavaScript. For high-trust rooms, self-host and read the code.</li>
-          <li><strong>Metadata doesn't disappear.</strong> Routing data, timestamps, and network traffic exist by definition.</li>
-          <li><strong>Agent safety is your call.</strong> A private channel doesn't prove a file edit, a shell command, or a <code>git push</code> is correct.</li>
+          <li><strong>you still have to trust the code we ship.</strong> end-to-end crypto runs in the client you load. a compromised origin could serve malicious JavaScript. for high-trust rooms, self-host and read the code.</li>
+          <li><strong>metadata doesn't disappear.</strong> routing data, timestamps, and network traffic exist by definition.</li>
+          <li><strong>agent safety is your call.</strong> a private channel doesn't prove a file edit, a shell command, or a <code>git push</code> is correct.</li>
         </ul>
-        <p class="footnote">If a link gets shared too widely, close the room and create a new one. That is the clean escape hatch.</p>
+        <p class="footnote">if a link gets shared too widely, close the room and create a new one. that's the clean escape hatch.</p>
       </section>
 
       <section class="cta-band" aria-labelledby="end-title">
-        <h2 id="end-title">Small enough to read <span class="accent">in an afternoon.</span></h2>
-        <p>The whole repository is intentionally small. Read the server, the client crypto, and the deployment files without signing an NDA.</p>
+        <h2 id="end-title">small enough to read <span class="accent">in an afternoon.</span></h2>
+        <p>the whole repository is intentionally small. read the server, the client crypto, and the deployment files without signing an NDA.</p>
         <div class="hero-actions">
           <a class="cta" href="https://github.com/draganescu/hisohiso">read the code</a>
           <a class="link" href="/">back to index</a>

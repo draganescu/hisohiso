@@ -37,13 +37,13 @@ const QrModal = ({ open, onClose, value }: QrModalProps) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
       <div className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_60px_-20px_rgba(10,10,10,0.3)]">
         <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Channel link</p>
-        <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em]">Scan to join</h2>
+        <h2 className="mt-2 text-xl font-bold tracking-[-0.02em]">Scan to join</h2>
         <p className="mt-2 text-sm text-ink-soft">Losing this link means losing access.</p>
         <div className="mt-5 flex justify-center">
           {src ? <img src={src} alt="Channel QR code" className="h-56 w-56" /> : <div className="text-sm text-ink-dim">Loading…</div>}
         </div>
         <button
-          className="mt-6 w-full rounded-full border border-ink bg-filled px-4 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+          className="mt-6 w-full btn-primary"
           onClick={onClose}
           type="button"
         >

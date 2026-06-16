@@ -30,39 +30,39 @@ const IosInstallModal = ({ onClose }: { onClose: () => void }) => (
       className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_60px_-20px_rgba(10,10,10,0.3)]"
       onClick={(event) => event.stopPropagation()}
     >
-      <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">Install</p>
-      <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em]">Add to your Home Screen</h2>
+      <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">install</p>
+      <h2 className="mt-2 text-xl font-bold tracking-[-0.02em]">add to your home screen</h2>
       <p className="mt-2 text-sm text-ink-soft">
-        iPhone installs web apps from the share sheet — it takes two taps.
+        iphone installs web apps from the share sheet — it takes two taps.
       </p>
 
       <ol className="mt-5 flex flex-col gap-4">
         <Step n={1}>
-          Tap the{' '}
+          tap the{' '}
           <span className="inline-flex items-center gap-1 rounded-md border border-rule px-1.5 py-0.5 align-middle font-medium text-ink">
             <ShareGlyph className="h-4 w-4" />
-            Share
+            share
           </span>{' '}
           button in Safari&rsquo;s toolbar.
         </Step>
         <Step n={2}>
-          Scroll and choose <span className="font-medium text-ink">Add to Home Screen</span>.
+          scroll and choose <span className="font-medium text-ink">add to home screen</span>.
         </Step>
         <Step n={3}>
-          Open hisohiso from the new icon — notifications only work from there.
+          open hisohiso from the new icon — notifications only work from there.
         </Step>
       </ol>
 
       <p className="mt-5 rounded-2xl border border-rule bg-overlay-soft px-4 py-3 text-xs leading-5 text-ink-soft">
-        Use <span className="font-medium text-ink">Safari</span> — other browsers on iPhone can&rsquo;t install web apps.
+        use <span className="font-medium text-ink">Safari</span> — other browsers on iphone can&rsquo;t install web apps.
       </p>
 
       <button
-        className="mt-6 w-full rounded-full border border-ink bg-filled px-4 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+        className="mt-6 w-full btn-primary"
         onClick={onClose}
         type="button"
       >
-        Got it
+        got it
       </button>
     </div>
   </div>
@@ -106,9 +106,9 @@ const InstallPrompt = () => {
           className="h-12 w-12 shrink-0 rounded-2xl border border-rule sm:h-14 sm:w-14"
         />
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold tracking-[-0.015em] sm:text-lg">Install hisohiso</h2>
+          <h2 className="text-base font-semibold tracking-[-0.015em] sm:text-lg">install hisohiso</h2>
           <p className="mt-1 text-sm leading-5 text-ink-soft">
-            Add it to your home screen for push notifications and one-tap access.
+            add it to your home screen for push notifications and one-tap access.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
@@ -116,18 +116,18 @@ const InstallPrompt = () => {
             className="-mr-1 flex h-6 w-6 items-center justify-center rounded-full text-ink-dim transition hover:bg-overlay-soft hover:text-ink"
             onClick={handleDismiss}
             type="button"
-            aria-label="Dismiss"
+            aria-label="dismiss"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" className="h-4 w-4" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
           <button
-            className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+            className="btn-primary"
             onClick={() => void handleInstall()}
             type="button"
           >
-            Install
+            install
           </button>
         </div>
       </section>

@@ -83,7 +83,11 @@ const validateBlock = (raw: unknown): Block | null => {
       return toBlock({ ...baseBlock(raw), id: raw.id, prompt: raw.prompt, items: raw.items.filter((item): item is { value: string; label: string } => isRecord(item) && isString(item.value) && isString(item.label)) });
     case 'diff':
       if (!isString(raw.file) || !Array.isArray(raw.hunks)) return invalidBlock(raw.type, 'Expected file and hunks[]', raw);
-      return toBlock(raw);
+      return toBlock({
+        ...raw,
+        sha: isString(raw.sha) ? raw.sha : undefined,
+        committed_sha: isString(raw.committed_sha) ? raw.committed_sha : undefined,
+      });
     case 'file-tree': {
       if (!Array.isArray(raw.nodes)) return invalidBlock(raw.type, 'Expected nodes[]; flat files[] is not renderable', raw);
       const nodes = raw.nodes.map(validateFileTreeNode).filter((node): node is AnyRecord => node !== null);

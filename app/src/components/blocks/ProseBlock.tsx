@@ -80,8 +80,8 @@ export const ProseBlockView = ({ block }: Props) => {
   return (
     <div className="mt-3 space-y-3 text-[0.9375rem] leading-7 text-ink-soft">
       {tokens.map((tok, i) => {
-        if (tok.kind === 'h1') return <h2 key={i} className="text-xl font-semibold text-ink">{renderInline(tok.text)}</h2>;
-        if (tok.kind === 'h2') return <h3 key={i} className="text-lg font-semibold text-ink">{renderInline(tok.text)}</h3>;
+        if (tok.kind === 'h1') return <h2 key={i} className="text-xl font-bold text-ink">{renderInline(tok.text)}</h2>;
+        if (tok.kind === 'h2') return <h3 key={i} className="text-lg font-bold text-ink">{renderInline(tok.text)}</h3>;
         if (tok.kind === 'h3') return <h4 key={i} className="text-base font-semibold text-ink">{renderInline(tok.text)}</h4>;
         if (tok.kind === 'ul') return (
           <ul key={i} className="space-y-1.5 pl-1">

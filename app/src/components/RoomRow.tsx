@@ -9,13 +9,13 @@ import type { StoredRoom } from '../lib/storage';
 import { generateRoomName } from '../lib/room-names';
 
 // Kind-badge styling lives here so both consumers stay in sync. 'control' uses
-// the accent palette so the operator's command surface reads as distinct;
-// 'agent' and 'chat' share the muted surface tone — they're peer rooms in
-// terms of UI weight.
-const KIND_META: Record<StoredRoom['kind'], { label: string; tone: string }> = {
-  control: { label: 'Control', tone: 'border-accent/40 bg-accent-soft text-accent-strong' },
-  agent: { label: 'Agent', tone: 'border-rule bg-surface text-ink-soft' },
-  chat: { label: 'Chat', tone: 'border-rule bg-surface text-ink-soft' },
+// the pink accent palette so the operator's command surface reads as distinct;
+// 'agent' carries the tang riso ink (its terminal/diff content is its own
+// world); 'chat' stays on the muted surface tone as the quiet peer room.
+export const KIND_META: Record<StoredRoom['kind'], { label: string; tone: string }> = {
+  control: { label: 'control', tone: 'border-accent/40 bg-accent-soft text-accent-strong' },
+  agent: { label: 'agent', tone: 'border-tang bg-surface text-tang' },
+  chat: { label: 'chat', tone: 'border-rule bg-surface text-ink-soft' },
 };
 
 type Props = {
@@ -48,7 +48,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
   // beats it and renaming to empty restores it. Non-chat kinds keep the
   // bland "Unnamed channel" since control gets the daemon hostname and
   // agent rooms are named explicitly by the daemon on spawn.
-  const fallbackName = room.kind === 'chat' ? generateRoomName(room.roomHash) : 'Unnamed channel';
+  const fallbackName = room.kind === 'chat' ? generateRoomName(room.roomHash) : 'unnamed channel';
   const displayName = room.nickname || fallbackName;
 
   // Close the kebab popover on any outside tap. Captured at document level so
@@ -152,7 +152,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
         <div ref={menuRef} className="relative shrink-0">
           <button
             type="button"
-            aria-label="Channel actions"
+            aria-label="channel actions"
             className="rounded-full px-2 py-1.5 text-ink-dim hover:bg-bg hover:text-ink"
             onClick={(e) => {
               e.preventDefault();
@@ -165,7 +165,7 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full z-30 mt-1 w-36 overflow-hidden rounded-[12px] border border-rule bg-surface shadow-[var(--shadow-float)]"
+              className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-[12px] border border-rule bg-surface shadow-[var(--shadow-float)]"
             >
               {onRename && (
                 <button
@@ -180,14 +180,14 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
                     setEditing(true);
                   }}
                 >
-                  Rename
+                  rename
                 </button>
               )}
               {onForget && (
                 <button
                   role="menuitem"
                   type="button"
-                  className="block w-full border-t border-rule px-3 py-2 text-left text-sm text-danger hover:bg-bg"
+                  className="block w-full border-t border-rule px-3 py-2 text-left text-danger hover:bg-bg"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -195,7 +195,10 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
                     onForget();
                   }}
                 >
-                  Forget
+                  <span className="block text-sm">forget</span>
+                  <span className="block text-[0.6875rem] leading-4 text-ink-dim">
+                    removed from this device
+                  </span>
                 </button>
               )}
             </div>

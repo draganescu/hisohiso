@@ -17,23 +17,39 @@ export const DiffBlockView = ({ block }: Props) => {
     });
   };
 
+  // Optional: a follow-up message (or the diff itself) may stamp a commit hash.
+  // Absent on a pending diff — when absent we render no footer. The field
+  // arrives over the existing E2E channel; nothing here assumes server
+  // behaviour. We only ever state what the sha itself proves — that a commit
+  // exists — and never narrate an approve/apply sequence the client did not
+  // observe (the presence of a sha is not evidence of approval).
+  // TODO(server): no relay field carries a commit sha back to a prior diff today;
+  // this renders only if a `sha`/`committed_sha` is voluntarily included.
+  const committedSha =
+    typeof block.committed_sha === 'string'
+      ? block.committed_sha
+      : typeof block.sha === 'string'
+        ? block.sha
+        : null;
+
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-ink-fade bg-[#1b1b1b]">
-      <div className="flex items-center justify-between border-b border-ink-soft px-4 py-2.5">
-        <span className="font-mono text-sm text-ink-soft">{block.file}</span>
+    <div className="block-card mt-3 rounded-2xl">
+      <div className="block-code block-code-rule flex items-center justify-between border-b px-4 py-2.5">
+        <span className="font-mono text-sm" style={{ color: 'var(--code-ink)' }}>{block.file}</span>
         {block.stats && (
           <span className="flex gap-2 text-xs font-semibold">
-            <span className="text-green-400">+{block.stats.additions}</span>
-            <span className="text-red-400">-{block.stats.deletions}</span>
+            <span style={{ color: 'var(--code-add)' }}>+{block.stats.additions}</span>
+            <span style={{ color: 'var(--code-del)' }}>-{block.stats.deletions}</span>
           </span>
         )}
       </div>
       {block.hunks.map((hunk, hi) => (
-        <div key={hi}>
+        <div key={hi} className="block-code">
           <button
             type="button"
             onClick={() => toggleHunk(hi)}
-            className="w-full border-b border-ink-soft bg-[#252525] px-4 py-1.5 text-left font-mono text-xs text-ink-dim"
+            className="block-code-rule w-full border-b px-4 py-1.5 text-left font-mono text-xs"
+            style={{ color: 'var(--code-ink)', opacity: 0.7 }}
           >
             {expandedHunks.has(hi) ? '▾' : '▸'} {hunk.header}
           </button>
@@ -42,15 +58,16 @@ export const DiffBlockView = ({ block }: Props) => {
               {hunk.lines.map((line, li) => (
                 <div
                   key={li}
-                  className={`whitespace-pre px-4 py-0.5 font-mono text-[0.8125rem] leading-5 ${
+                  className="whitespace-pre px-4 py-0.5 font-mono text-[0.8125rem] leading-5"
+                  style={
                     line.op === '+'
-                      ? 'bg-[#1a2e1a] text-green-300'
+                      ? { background: 'var(--code-add-bg)', color: 'var(--code-add)' }
                       : line.op === '-'
-                      ? 'bg-[#2e1a1a] text-red-300'
-                      : 'text-ink-fade'
-                  }`}
+                      ? { background: 'var(--code-del-bg)', color: 'var(--code-del)' }
+                      : { color: 'var(--code-ink)', opacity: 0.62 }
+                  }
                 >
-                  <span className="mr-2 inline-block w-4 text-center text-ink-dim">{line.op}</span>
+                  <span className="mr-2 inline-block w-4 text-center" style={{ color: 'var(--code-ink)', opacity: 0.55 }}>{line.op}</span>
                   {line.text}
                 </div>
               ))}
@@ -58,6 +75,12 @@ export const DiffBlockView = ({ block }: Props) => {
           )}
         </div>
       ))}
+      {committedSha && (
+        <div className="block-commit-confirm px-4 py-2 font-mono text-xs">
+          committed{' '}
+          <span className="font-semibold">{committedSha.slice(0, 10)}</span>
+        </div>
+      )}
     </div>
   );
 };

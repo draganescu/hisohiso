@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsQR from 'jsqr';
-import { listRooms, removeRoom, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import { listRooms, updateRoomNickname, type StoredRoom } from '../lib/storage';
+import { wipeLocalRoomArtifacts } from '../lib/room-local-cleanup';
 import { navigateTo } from '../lib/navigation';
 import { groupOpenChannels } from '../lib/room-grouping';
 import AppLockSettings from '../components/AppLockSettings';
 import ThemeToggle from '../components/ThemeToggle';
 import InstallPrompt from '../components/InstallPrompt';
-import { RoomRow } from '../components/RoomRow';
+import { RoomCard } from '../components/RoomCard';
 import { GroupedChannelList } from '../components/GroupedChannelList';
 
 const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
@@ -49,15 +50,15 @@ const RoomsPage = () => {
     setRooms(listRooms());
   }, []);
 
-  const handleForget = (roomHash: string) => {
-    removeRoom(roomHash);
+  const handleForget = async (roomHash: string) => {
+    await wipeLocalRoomArtifacts(roomHash, { unregisterPush: true });
     setRooms(listRooms());
   };
 
   const handleJoin = () => {
     const secret = extractSecret(joinValue);
     if (!secret) {
-      setJoinError('Paste a channel link or secret.');
+      setJoinError('paste a channel link or secret.');
       return;
     }
     setJoinError('');
@@ -122,7 +123,7 @@ const RoomsPage = () => {
         active = false;
       };
     } catch {
-      setScanError('Camera access denied.');
+      setScanError('camera access denied.');
       stopCamera();
     }
   }, [navigate, stopCamera]);
@@ -136,7 +137,7 @@ const RoomsPage = () => {
   }, []);
 
   const renderRoomRow = (room: StoredRoom) => (
-    <RoomRow
+    <RoomCard
       key={room.roomHash}
       room={room}
       href={`/room#${room.roomSecret}`}
@@ -144,7 +145,7 @@ const RoomsPage = () => {
         updateRoomNickname(room.roomHash, next);
         setRooms(listRooms());
       }}
-      onForget={() => handleForget(room.roomHash)}
+      onForget={() => void handleForget(room.roomHash)}
     />
   );
 
@@ -161,22 +162,22 @@ const RoomsPage = () => {
             <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-dim">
               <a href="https://www.hisohiso.org/" className="hover:text-ink">hisohiso</a>
             </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em]">Your channels.</h1>
-            <p className="mt-2 text-sm text-ink-soft">Stored on this device only.</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-[-0.025em]">your rooms</h1>
+            <p className="mt-2 text-sm text-ink-soft">stored on this device only.</p>
           </div>
           <a
-            className="mt-1 shrink-0 rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+            className="mt-1 shrink-0 btn-primary"
             href="/new"
           >
-            Open a channel
+            open a channel
           </a>
         </header>
 
         <InstallPrompt />
 
         <section className="glass-panel rounded-[28px] p-6">
-          <h2 className="text-lg font-semibold tracking-[-0.015em]">Join with a link.</h2>
-          <p className="mt-2 text-sm text-ink-soft">Paste a channel URL or secret.</p>
+          <h2 className="text-lg font-bold tracking-[-0.015em]">join with a link.</h2>
+          <p className="mt-2 text-sm text-ink-soft">paste a channel url or secret.</p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
               className="form-zoom-safe input-field flex-1 rounded-full px-4 py-2.5"
@@ -188,11 +189,11 @@ const RoomsPage = () => {
               }}
             />
             <button
-              className="rounded-full border border-ink bg-filled px-5 py-2.5 text-sm font-medium text-on-ink transition hover:bg-transparent hover:text-ink"
+              className="btn-primary"
               onClick={handleJoin}
               type="button"
             >
-              Join
+              join
             </button>
           </div>
           {joinError && <p className="mt-2 text-xs text-danger">{joinError}</p>}
@@ -200,11 +201,11 @@ const RoomsPage = () => {
           <canvas ref={canvasRef} className="hidden" />
           {hasCamera && !scanning && (
             <button
-              className="mt-4 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink transition hover:border-ink"
+              className="mt-4 btn-ghost transition hover:border-ink"
               onClick={() => void startScan()}
               type="button"
             >
-              Scan QR code
+              scan qr code
             </button>
           )}
 
@@ -223,11 +224,11 @@ const RoomsPage = () => {
                 </div>
               </div>
               <button
-                className="mt-3 rounded-full border border-rule bg-surface px-5 py-2 text-sm font-medium text-ink"
+                className="mt-3 btn-ghost"
                 onClick={stopCamera}
                 type="button"
               >
-                Stop scanning
+                stop scanning
               </button>
             </div>
           )}
@@ -237,9 +238,9 @@ const RoomsPage = () => {
 
         {rooms.length === 0 && (
           <div className="glass-panel rounded-[28px] border-dashed p-8">
-            <p className="text-ink-soft">No channels yet. Open one or paste a link above.</p>
+            <p className="text-ink-soft">no rooms yet. open one or paste a link above.</p>
             <a className="mt-4 inline-block text-sm font-medium text-ink underline decoration-rule underline-offset-4" href="/new">
-              Open a channel →
+              open a channel →
             </a>
           </div>
         )}
@@ -247,17 +248,17 @@ const RoomsPage = () => {
         {hasOpenChannels && (
           <section className="flex flex-col gap-5">
             <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
-              Open channels
+              open channels
             </h2>
             <GroupedChannelList groups={groups} orphanAgents={orphanAgents} renderRow={renderRoomRow} />
           </section>
         )}
 
         {conversations.length > 0 && (
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-3.5">
             {hasOpenChannels && (
               <h2 className="px-1 text-[0.6875rem] font-semibold uppercase tracking-[0.32em] text-ink-dim">
-                Conversations
+                conversations
               </h2>
             )}
             {conversations.map(renderRoomRow)}
@@ -269,13 +270,13 @@ const RoomsPage = () => {
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 text-xs text-ink-dim">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://www.hisohiso.org/">
-              What is hisohiso?
+              what is hisohiso?
             </a>
             <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://www.hisohiso.org/security/">
-              Protocol
+              protocol
             </a>
             <a className="font-medium text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink" href="https://github.com/draganescu/hisohiso">
-              Source
+              source
             </a>
           </div>
           <ThemeToggle variant="pill" />

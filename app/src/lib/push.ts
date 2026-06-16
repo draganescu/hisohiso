@@ -1,5 +1,11 @@
 import { base64UrlDecode } from './crypto';
 import { fetchVapidPublicKey, postPushSubscribe, postPushTrigger, postPushUnsubscribe } from './room-session';
+import {
+  clearPushPreference,
+  getPushEndpointPreference,
+  roomPushFlagKey,
+  setPushEndpointPreference,
+} from './push-preference';
 
 // Per-room web-push opt-in. The server only ever sends a content-less "tickle"
 // (see server/push.php), so nothing here leaks message content. We reuse the
@@ -14,8 +20,6 @@ import { fetchVapidPublicKey, postPushSubscribe, postPushTrigger, postPushUnsubs
 
 export type PushStatus = 'unsupported' | 'denied' | 'on' | 'off';
 
-const roomFlagKey = (roomHash: string): string => `hisohiso.push.${roomHash}`;
-
 export const pushSupported = (): boolean =>
   typeof navigator !== 'undefined' &&
   'serviceWorker' in navigator &&
@@ -26,7 +30,7 @@ export const pushSupported = (): boolean =>
 export const getPushStatus = (roomHash: string): PushStatus => {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
-  return localStorage.getItem(roomFlagKey(roomHash)) === '1' ? 'on' : 'off';
+  return localStorage.getItem(roomPushFlagKey(roomHash)) === '1' ? 'on' : 'off';
 };
 
 // Ensure a browser PushSubscription exists for this origin, creating one against
@@ -72,17 +76,26 @@ export const enablePush = async (roomHash: string, token: string): Promise<void>
   if (!res.ok) {
     throw new Error('Could not register this channel for notifications.');
   }
-  localStorage.setItem(roomFlagKey(roomHash), '1');
+  localStorage.setItem(roomPushFlagKey(roomHash), '1');
+  setPushEndpointPreference(roomHash, sub.endpoint);
 };
 
 export const disablePush = async (roomHash: string, token: string): Promise<void> => {
-  localStorage.removeItem(roomFlagKey(roomHash));
+  const fallbackEndpoint = getPushEndpointPreference(roomHash);
+  clearPushPreference(roomHash);
   // Drop only this room's server registration; the shared browser subscription
   // stays alive for any other room that still wants notifications.
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription();
-  if (sub) {
-    await postPushUnsubscribe(roomHash, token, sub.endpoint).catch(() => {});
+  let endpoint = fallbackEndpoint;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    endpoint = sub?.endpoint ?? endpoint;
+  } catch {
+    // If the service worker is unavailable during Forget, fall back to the
+    // endpoint cached when push was enabled.
+  }
+  if (endpoint) {
+    await postPushUnsubscribe(roomHash, token, endpoint).catch(() => {});
   }
 };
 

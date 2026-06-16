@@ -79,7 +79,7 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
       await verifyPasskey(passkey);
       onUnlock();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Passkey unlock failed. Enter your PIN.');
+      setError(err instanceof Error ? err.message : 'passkey unlock failed. enter your pin.');
     } finally {
       setBusy(false);
     }
@@ -102,7 +102,7 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
         setPin('');
         onUnlock();
       } else {
-        setError('Incorrect PIN.');
+        setError('incorrect pin.');
       }
     },
     [config.pin, onUnlock, pin],
@@ -114,13 +114,13 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
         <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-rule bg-rule text-3xl">
           🔐
         </div>
-        <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-fade">Hisohiso locked</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Unlock</h1>
+        <p className="text-[0.6875rem] uppercase tracking-[0.35em] text-ink-fade">hisohiso locked</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em]">unlock</h1>
         <p className="mt-3 max-w-sm text-sm leading-6 text-ink-fade">
-          The app locked while it was in the background.{' '}
+          the app locked while it was in the background.{' '}
           {showPasskey
-            ? 'Use your device passkey or enter your PIN to continue.'
-            : 'Enter your PIN to continue.'}
+            ? 'use your device passkey or enter your pin to continue.'
+            : 'enter your pin to continue.'}
         </p>
 
         {showPasskey && (
@@ -130,7 +130,7 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
             disabled={busy}
             className="mt-8 w-full rounded-full bg-bg px-5 py-3 text-sm font-semibold text-ink shadow-lg shadow-black/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? 'Unlocking…' : 'Unlock with passkey'}
+            {busy ? 'unlocking…' : 'unlock with passkey'}
           </button>
         )}
 
@@ -145,8 +145,8 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
               setPin(event.target.value);
               if (error) setError(null);
             }}
-            placeholder="PIN"
-            aria-label="App lock PIN"
+            placeholder="pin"
+            aria-label="app lock pin"
             className="w-full rounded-full border border-rule bg-rule px-5 py-3 text-center text-sm tracking-[0.3em] text-on-ink placeholder:tracking-normal placeholder:text-ink-fade focus:border-bg focus:outline-none"
           />
           {error && <p className="mt-3 text-sm text-danger">{error}</p>}
@@ -155,7 +155,7 @@ const LockScreen = ({ onUnlock }: { onUnlock: () => void }) => {
             disabled={busy}
             className="mt-3 w-full rounded-full border border-rule px-5 py-3 text-sm font-semibold text-on-ink transition hover:bg-rule disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Unlock with PIN
+            unlock with pin
           </button>
         </form>
       </div>

@@ -42,24 +42,24 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
   };
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border-2 border-red-400 bg-danger-soft">
+    <div className="block-card mt-3 rounded-2xl border-2 border-danger bg-danger-soft">
       <div className="px-4 py-3">
-        <p className="flex items-center gap-2 font-semibold text-red-800">
+        <p className="flex items-center gap-2 font-semibold text-danger">
           <span className="text-lg">&#9888;</span> {block.title}
         </p>
         <p className="mt-2 text-sm leading-6 text-ink">{block.description}</p>
         {block.command && (
-          <pre className="mt-2 rounded-xl bg-[#1b1b1b] px-4 py-2 font-mono text-[0.8125rem] text-ink-fade">
+          <pre className="block-code mt-2 rounded-xl px-4 py-2 font-mono text-[0.8125rem]" style={{ color: 'var(--code-ink)', opacity: 0.86 }}>
             $ {block.command}
           </pre>
         )}
       </div>
       {!isLocked && (
-        <div className="flex gap-2 border-t border-red-200 px-4 py-3">
+        <div className="flex gap-2 border-t border-danger/30 px-4 py-3">
           <button
             type="button"
             onClick={cancel}
-            className="rounded-full border border-ink-fade bg-surface px-5 py-2 text-sm font-medium text-ink"
+            className="btn-ghost"
           >
             {block.cancel_label || 'Cancel'}
           </button>
@@ -72,21 +72,21 @@ export const ConfirmDangerBlockView = ({ block, onSelect, submitted }: Props) =>
             onTouchEnd={endHold}
             onContextMenu={(e) => e.preventDefault()}
             style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
-            className="relative select-none overflow-hidden rounded-full bg-red-600 px-5 py-2 text-sm font-semibold text-on-ink touch-none"
+            className="relative select-none overflow-hidden rounded-full bg-danger px-5 py-2 text-sm font-semibold text-on-ink touch-none"
           >
             <div
-              className="pointer-events-none absolute inset-0 bg-red-800 transition-none"
-              style={{ width: `${holdProgress}%` }}
+              className="pointer-events-none absolute inset-0 transition-none"
+              style={{ width: `${holdProgress}%`, background: 'color-mix(in srgb, var(--danger) 55%, #000)' }}
             />
             <span className="pointer-events-none relative select-none">{block.confirm_label || 'Confirm'}</span>
           </button>
         </div>
       )}
       {isLocked && selected === true && (
-        <div className="border-t border-red-200 px-4 py-2 text-sm font-medium text-red-700">Confirmed</div>
+        <div className="border-t border-danger/30 px-4 py-2 text-sm font-medium text-danger">Confirmed</div>
       )}
       {isLocked && selected === false && (
-        <div className="border-t border-red-200 px-4 py-2 text-sm font-medium text-ink-dim">Cancelled</div>
+        <div className="border-t border-danger/30 px-4 py-2 text-sm font-medium text-ink-dim">Cancelled</div>
       )}
     </div>
   );

@@ -27,23 +27,23 @@ type Props = {
 
 export const ControlCommandBar: FC<Props> = ({ agentCount, onSpawn, onAgents }) => {
   return (
-    <div className="command-bar" role="toolbar" aria-label="Control room actions">
+    <div className="command-bar" role="toolbar" aria-label="control room actions">
       <button
         type="button"
         className="command-bar-primary"
         onClick={onSpawn}
-        aria-label="Spawn an agent"
+        aria-label="spawn an agent"
       >
         <span aria-hidden="true">+</span>
-        <span>Spawn</span>
+        <span>spawn</span>
       </button>
       <button
         type="button"
         className="command-bar-chip"
         onClick={onAgents}
-        aria-label={agentCount === null ? 'Running agents' : `Running agents (${agentCount})`}
+        aria-label={agentCount === null ? 'running agents' : `running agents (${agentCount})`}
       >
-        <span>Agents</span>
+        <span>agents</span>
         {agentCount !== null && <span className="command-bar-chip-badge">{agentCount}</span>}
       </button>
     </div>
