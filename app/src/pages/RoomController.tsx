@@ -17,8 +17,10 @@ import {
 import {
   clearSubscriberJwt,
   clearToken,
+  getExpectedKnockMessage,
   getHandle,
   getRoomPassword,
+  getRoomSetupDismissed,
   getRoomColor,
   getRoomKind,
   getRoomNickname,
@@ -26,8 +28,10 @@ import {
   getToken,
   listRooms,
   setHandle,
+  setExpectedKnockMessage,
   setRoomKind,
   setRoomPassword,
+  setRoomSetupDismissed,
   setSubscriberJwt,
   setToken,
   upsertRoom,
@@ -163,7 +167,41 @@ const describeInteractiveBlock = (block: Block): string | null => {
 // One live work-status for an agent, derived from an ephemeral `status` event.
 // `at` is the client receive time, used to expire a stale indicator if the
 // daemon goes silent without sending a terminal status to clear it.
-type AgentStatus = { state: string; text: string; handle: string | null; at: number };
+// `at` is the client receive time (drives the 30s stale backstop); `ts` is the
+// status event's server timestamp (same clock domain as chat message ts), used
+// to decide whether a recovered chat reply post-dates — and so supersedes — a
+// stale indicator whose terminal `done` we missed while backgrounded.
+type AgentStatus = { state: string; text: string; handle: string | null; at: number; ts: number };
+
+type RoomSetupStage = 'security' | 'delivery';
+
+const roomSetupBlocks = (stage: RoomSetupStage): Block[] => (
+  stage === 'security'
+    ? [
+        {
+          type: 'buttons',
+          id: 'room-setup-security',
+          prompt: 'Do you want to secure this room more?',
+          options: [
+            { label: 'Add password', value: 'password' },
+            { label: 'Expected knock phrase', value: 'knock_phrase' },
+            { label: 'No setup', value: 'skip_security' },
+          ],
+        },
+      ]
+    : [
+        {
+          type: 'buttons',
+          id: 'room-setup-delivery',
+          prompt: 'Do you want offline catch-up or notifications?',
+          options: [
+            { label: 'Offline catch-up', value: 'catchup' },
+            { label: 'Notifications', value: 'notifications' },
+            { label: 'No thanks', value: 'skip' },
+          ],
+        },
+      ]
+);
 
 const RoomController = () => {
   const [initialContext] = useState<OptimisticContext | null>(loadInitialContext);
@@ -187,6 +225,16 @@ const RoomController = () => {
   // order (e.g. a late 'tool' landing after the turn's terminal 'done') is
   // discarded instead of resurrecting a cleared indicator.
   const statusSeqRef = useRef<Record<string, number>>({});
+  // Highest inbound chat server-ts seen per sender hash. An agent's terminal
+  // status is ephemeral and never replays, so a missed `done` strands a
+  // "working…" bubble; on (re)connect we clear any indicator a newer reply from
+  // the same sender already supersedes. In-memory; reset on room switch.
+  const lastInboundMsgTsRef = useRef<Record<string, number>>({});
+  // Bumped on resume (visibilitychange → visible) to force the SSE effect to
+  // tear down and rebuild a fresh connection — a backgrounded socket often dies
+  // silently without firing `error`, so `onopen` (and its catch-up) never
+  // re-fires until restart. See the resume effect below.
+  const [reconnectNonce, setReconnectNonce] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [showDisband, setShowDisband] = useState(false);
@@ -265,6 +313,10 @@ const RoomController = () => {
   const [pushStatus, setPushStatus] = useState<PushStatus>('off');
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState('');
+  const [expectedKnockMessage, setExpectedKnockMessageState] = useState('');
+  const [roomSetupDismissed, setRoomSetupDismissedState] = useState(false);
+  const [roomSetupStage, setRoomSetupStage] = useState<RoomSetupStage>('security');
+  const [menuFocusTarget, setMenuFocusTarget] = useState<'password' | 'knock' | null>(null);
   // Reveal-on-tap for the pairing code in the room menu. Auto-hides after a few
   // seconds and on backgrounding so a phone left open on the menu doesn't sit
   // there broadcasting the code to anyone walking by. The code itself never
@@ -274,6 +326,8 @@ const RoomController = () => {
   const listRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusProxyRef = useRef<HTMLTextAreaElement | null>(null);
+  const roomPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const expectedKnockInputRef = useRef<HTMLInputElement | null>(null);
   // Set true on pointerdown of Cancel/Done in our custom toolbar so the
   // textarea's blur handler knows the dismissal was intentional — it then
   // skips the iOS Done = send branch. Cleared on the next blur.
@@ -312,7 +366,12 @@ const RoomController = () => {
   const isFirstInitRunRef = useRef(true);
 
   const shareUrl = useMemo(() => `${window.location.origin}/room#${roomSecret}`, [roomSecret]);
-  const showEmptyState = messages.length === 0 && !hasCompanion && roomState === 'PARTICIPANT';
+  const userMessageCount = messages.filter((msg) => msg.type !== 'system').length;
+  const showEmptyState = userMessageCount === 0 && !hasCompanion && roomState === 'PARTICIPANT';
+  const showRoomSetupNudge =
+    showEmptyState &&
+    roomKind === 'chat' &&
+    !roomSetupDismissed;
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -445,12 +504,17 @@ const RoomController = () => {
     setMessages([]);
     setAgentStatuses({});
     statusSeqRef.current = {};
+    lastInboundMsgTsRef.current = {};
     setMessage('');
     setChatInput('');
     setShowComposer(false);
     setReplyToId(null);
     setSelectedId(null);
     setRoomPasswordState('');
+    setExpectedKnockMessageState('');
+    setRoomSetupDismissedState(false);
+    setRoomSetupStage('security');
+    setMenuFocusTarget(null);
     setCryptoKey(null);
     setKnockKey(null);
   }, []);
@@ -460,6 +524,16 @@ const RoomController = () => {
       setRoomPasswordState(nextPassword);
       if (roomHash) {
         setRoomPassword(roomHash, nextPassword);
+      }
+    },
+    [roomHash]
+  );
+
+  const updateExpectedKnockMessage = useCallback(
+    (nextMessage: string) => {
+      setExpectedKnockMessageState(nextMessage);
+      if (roomHash) {
+        setExpectedKnockMessage(roomHash, nextMessage);
       }
     },
     [roomHash]
@@ -543,6 +617,12 @@ const RoomController = () => {
       plaintext,
       ownTokenHash: tokenHashRef.current,
     });
+    // Record the newest inbound (peer/agent) message ts per sender so a resume
+    // reconcile (see the SSE onopen handler) can clear a stale "working…"
+    // indicator that this reply already superseded.
+    if (from && messageRecord.direction === 'in' && ts > (lastInboundMsgTsRef.current[from] ?? 0)) {
+      lastInboundMsgTsRef.current[from] = ts;
+    }
     // NOTE: the work indicator is NOT cleared here. Clearing is driven by the
     // daemon's terminal `done`/`failed` status event (see the status handler),
     // so intermediate daemon chats ("queued", "exit code N") that share this
@@ -725,6 +805,7 @@ const RoomController = () => {
           setRoomContext(null);
           setAgentCount(null);
           statusSeqRef.current = {};
+          lastInboundMsgTsRef.current = {};
           setSelectedId(null);
           setShowQr(false);
           setShowDisband(false);
@@ -746,6 +827,10 @@ const RoomController = () => {
           setEmptyQrSrc('');
           setCatchUpEnabled(false);
           setRoomPasswordState('');
+          setExpectedKnockMessageState('');
+          setRoomSetupDismissedState(false);
+          setRoomSetupStage('security');
+          setMenuFocusTarget(null);
           knockEphemeralRef.current = null;
           claimTagRef.current = null;
         }
@@ -773,6 +858,9 @@ const RoomController = () => {
         const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
         setRoomPasswordState(savedRoomPassword ?? '');
+        setExpectedKnockMessageState(getExpectedKnockMessage(hash) ?? '');
+        setRoomSetupDismissedState(getRoomSetupDismissed(hash));
+        setRoomSetupStage('security');
         setRoomColor(getRoomColor(hash));
         setRoomNickname(getRoomNickname(hash) ?? '');
         setRoomKindState(getRoomKind(hash));
@@ -1102,6 +1190,7 @@ const RoomController = () => {
                 text: env.text ?? '',
                 handle: env.handle ?? null,
                 at: Date.now(),
+                ts: payload.ts,
               },
             }));
           } catch (err) {
@@ -1136,14 +1225,35 @@ const RoomController = () => {
               0
             );
             const r = await fetchOutbox(roomHash, token, localMax);
-            if (!r.ok) return;
-            const data = (await r.json()) as { messages: OutboxMessage[] };
-            for (const m of data.messages) {
-              await ingestEncryptedChat(m.msg_id, m.ts, m.sender_hash, m.encrypted_payload);
+            if (r.ok) {
+              const data = (await r.json()) as { messages: OutboxMessage[] };
+              for (const m of data.messages) {
+                await ingestEncryptedChat(m.msg_id, m.ts, m.sender_hash, m.encrypted_payload);
+              }
             }
           } catch {
             // non-fatal
           }
+          // Reconcile stale agent indicators on every (re)connect. A terminal
+          // `done`/`failed` status is ephemeral and never replays, so one missed
+          // while backgrounded would strand a "working…" bubble above the agent's
+          // reply. If the newest inbound message we hold from a sender is at/after
+          // its last status, the turn produced its reply and ended — drop the
+          // indicator. An actively-working agent keeps emitting status with a
+          // newer ts, so its bubble outlives any earlier reply and is preserved.
+          setAgentStatuses((prev) => {
+            let changed = false;
+            const next: Record<string, AgentStatus> = {};
+            for (const [sender, st] of Object.entries(prev)) {
+              const msgTs = lastInboundMsgTsRef.current[sender];
+              if (msgTs !== undefined && msgTs >= st.ts) {
+                changed = true;
+                continue;
+              }
+              next[sender] = st;
+            }
+            return changed ? next : prev;
+          });
         })();
       }
     };
@@ -1156,7 +1266,28 @@ const RoomController = () => {
       eventTypes.forEach((type) => source.removeEventListener(type, handleEvent));
       source.close();
     };
-  }, [roomHash, roomState, cryptoKey, token, tokenHash, subJwt, lobbyJwt, wipeLocalRoom, ingestEncryptedChat]);
+  }, [roomHash, roomState, cryptoKey, token, tokenHash, subJwt, lobbyJwt, wipeLocalRoom, ingestEncryptedChat, reconnectNonce]);
+
+  // Resume reconciler. When the tab/PWA returns to the foreground (opened from a
+  // push notification, app-switched back, or restored from bfcache), force the
+  // SSE to reconnect. A backgrounded socket frequently dies silently without
+  // firing `error`, so the polyfill never re-fires `onopen` and the missed-
+  // message catch-up + status reconcile never run until a full restart — the
+  // exact "restart fixes it" symptom. Bumping the nonce tears the connection
+  // down and rebuilds it, so onopen → catch-up → status reconcile all run.
+  useEffect(() => {
+    const onResume = () => {
+      if (document.visibilityState === 'visible') {
+        setReconnectNonce((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('pageshow', onResume);
+    return () => {
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('pageshow', onResume);
+    };
+  }, []);
 
   useEffect(() => {
     if (roomState !== 'PARTICIPANT' || !token || !roomHash) {
@@ -1674,6 +1805,21 @@ const RoomController = () => {
     setPushStatus(getPushStatus(roomHash));
   }, [roomHash]);
 
+  useEffect(() => {
+    if (!showMenu || !menuFocusTarget) return;
+    const input =
+      menuFocusTarget === 'password'
+        ? roomPasswordInputRef.current
+        : expectedKnockInputRef.current;
+    if (!input) return;
+    const timer = window.setTimeout(() => {
+      input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      input.focus({ preventScroll: true });
+      setMenuFocusTarget(null);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [showMenu, menuFocusTarget]);
+
   const handleTogglePush = useCallback(async () => {
     if (!roomHash || !token || pushBusy) return;
     if (pushStatus === 'unsupported' || pushStatus === 'denied') return;
@@ -1696,6 +1842,46 @@ const RoomController = () => {
       setPushBusy(false);
     }
   }, [roomHash, token, pushStatus, pushBusy]);
+
+  const dismissRoomSetup = useCallback(() => {
+    if (roomHash) setRoomSetupDismissed(roomHash, true);
+    setRoomSetupDismissedState(true);
+  }, [roomHash]);
+
+  const openMenuForSetup = useCallback((target: 'password' | 'knock') => {
+    setSelectedId(null);
+    setMenuFocusTarget(target);
+    setShowMenu(true);
+  }, []);
+
+  const handleSetupResponses = useCallback(
+    async (responses: BlockResponseInput[]) => {
+      if (!roomHash || responses.length === 0) return;
+      const response = responses[0];
+      if (response.blockId === 'room-setup-security') {
+        if (response.value === 'password') {
+          openMenuForSetup('password');
+        } else if (response.value === 'knock_phrase') {
+          openMenuForSetup('knock');
+        }
+        // 'skip_security' declines security but still offers the delivery
+        // options — only the delivery card's "No thanks" ends the flow.
+        setRoomSetupStage('delivery');
+        return;
+      }
+
+      if (response.blockId === 'room-setup-delivery') {
+        if (response.value === 'catchup' && !catchUpEnabled) {
+          await handleToggleCatchUp();
+        }
+        if (response.value === 'notifications' && pushStatus !== 'on') {
+          await handleTogglePush();
+        }
+        dismissRoomSetup();
+      }
+    },
+    [roomHash, catchUpEnabled, dismissRoomSetup, handleToggleCatchUp, handleTogglePush, openMenuForSetup, pushStatus]
+  );
 
   const handleDeleteMessage = useCallback(async (id: string) => {
     await deleteMessage(id);
@@ -2051,8 +2237,8 @@ const RoomController = () => {
               behind the lowered pills. Matching the inset keeps a constant
               gap below the pills on every device. */}
           <div className="room-message-column mx-auto w-full max-w-[820px] px-4 pt-[calc(env(safe-area-inset-top)+4rem)] pb-28 sm:px-6 sm:pb-32">
-            {showEmptyState && (
-              <div className="glass-panel rounded-[28px] border-dashed p-6 text-center sm:p-8">
+	            {showEmptyState && (
+	              <div className="glass-panel rounded-[28px] border-dashed p-6 text-center sm:p-8">
                 <p className="text-lg font-bold tracking-[-0.02em] text-ink sm:text-xl">
                   invite someone.
                 </p>
@@ -2081,11 +2267,27 @@ const RoomController = () => {
                   </div>
                 )}
 
-                <p className="mt-5 text-xs text-ink-dim">or just start typing above.</p>
-              </div>
-            )}
+	                <p className="mt-5 text-xs text-ink-dim">or just start typing above.</p>
+	              </div>
+	            )}
 
-            {/* Inline knock cards — pending join requests surfaced in the
+	            {showRoomSetupNudge && (
+	              <div className="my-3 flex w-full flex-col items-start">
+	                <p className="mb-1 px-2 text-[0.6875rem] text-ink-dim">hisohiso</p>
+	                <div className="message-card message-card-in max-w-[84%] rounded-[22px] rounded-bl-[7px] px-4 py-3 text-left leading-6 text-ink sm:max-w-[72%]">
+	                  <p className="mb-2 whitespace-pre-line break-words text-[0.9375rem]">
+	                    {roomSetupStage === 'security' ? 'room setup' : 'delivery setup'}
+	                  </p>
+	                  <BlockRenderer
+	                    blocks={roomSetupBlocks(roomSetupStage)}
+	                    onRespond={handleSetupResponses}
+	                    progressOverrides={progressOverrides}
+	                  />
+	                </div>
+	              </div>
+	            )}
+
+	            {/* Inline knock cards — pending join requests surfaced in the
                 conversation itself (not only the header bell + queue modal), so
                 you can let someone in without leaving the thread. Privacy: a
                 knocker has NO identity here — we show only their own voluntary
@@ -2094,46 +2296,61 @@ const RoomController = () => {
                 approve/reject reuse the exact same handshake as the queue modal. */}
             {knocks.length > 0 && (
               <div className="mb-3 flex flex-col gap-2">
-                {knocks.map((knock) => (
-                  <div
-                    key={`inline-knock-${knock.id}`}
-                    className="rounded-[20px] border border-accent bg-accent-soft p-4"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-on-ink"
-                        aria-hidden="true"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 20V9l8-5 8 5v11" />
-                          <path d="M9 20v-6h6v6" />
-                        </svg>
-                      </span>
-                      <p className="text-sm font-semibold text-ink">someone's knocking</p>
-                      <span className="ml-auto shrink-0 text-xs text-ink-dim">{formatMailStamp(knock.ts)}</span>
+                {knocks.map((knock) => {
+                  const expected = expectedKnockMessage.trim();
+                  const matchesExpected = expected !== '' && knock.message.trim() === expected;
+                  return (
+                    <div
+                      key={`inline-knock-${knock.id}`}
+                      className="rounded-[20px] border border-accent bg-accent-soft p-4"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-on-ink"
+                          aria-hidden="true"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 20V9l8-5 8 5v11" />
+                            <path d="M9 20v-6h6v6" />
+                          </svg>
+                        </span>
+                        <p className="text-sm font-semibold text-ink">someone's knocking</p>
+                        {expected && (
+                          <span
+                            className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-[0.625rem] font-semibold uppercase tracking-[0.16em] ${
+                              matchesExpected
+                                ? 'border border-ink bg-filled text-on-ink'
+                                : 'border border-danger bg-danger-soft text-danger'
+                            }`}
+                          >
+                            {matchesExpected ? 'matches' : 'mismatch'}
+                          </span>
+                        )}
+                        <span className={`${expected ? '' : 'ml-auto'} shrink-0 text-xs text-ink-dim`}>{formatMailStamp(knock.ts)}</span>
+                      </div>
+                      <p className="mt-2 break-words text-sm leading-6 text-ink">{knock.message || 'no note included.'}</p>
+                      <p className="mt-1 text-[0.6875rem] leading-4 text-ink-dim">
+                        their knock decrypts with the link — let them in only if you're expecting someone.
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => approveKnock(knock.id)}
+                          className="flex-1 btn-primary"
+                        >
+                          let in
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => rejectKnock(knock.id)}
+                          className="flex-1 btn-ghost"
+                        >
+                          decline
+                        </button>
+                      </div>
                     </div>
-                    <p className="mt-2 break-words text-sm leading-6 text-ink">{knock.message || 'no note included.'}</p>
-                    <p className="mt-1 text-[0.6875rem] leading-4 text-ink-dim">
-                      their knock decrypts with the link — let them in only if you're expecting someone.
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => approveKnock(knock.id)}
-                        className="flex-1 btn-primary"
-                      >
-                        let in
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => rejectKnock(knock.id)}
-                        className="flex-1 btn-ghost"
-                      >
-                        decline
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -2609,13 +2826,17 @@ const RoomController = () => {
               <p className="text-sm font-semibold">
                 {activeMessage.direction === 'out' ? 'sent message' : 'message'}
               </p>
-              <button
-                className="text-sm font-medium text-ink-soft hover:text-ink"
-                onClick={() => openComposer(activeMessage.id)}
-                type="button"
-              >
-                reply
-              </button>
+              {!isControlRoom ? (
+                <button
+                  className="text-sm font-medium text-ink-soft hover:text-ink"
+                  onClick={() => openComposer(activeMessage.id)}
+                  type="button"
+                >
+                  reply
+                </button>
+              ) : (
+                <span className="w-10" aria-hidden="true" />
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-6">
@@ -2767,38 +2988,53 @@ const RoomController = () => {
                 )}
                 {knocks.length > 0 && (
                   <div className="grid gap-3">
-                    {knocks.map((knock) => (
-                      <div
-                        key={knock.id}
-                        className="rounded-[18px] border border-rule bg-surface p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-ink">join request</p>
-                            <p className="mt-0.5 text-xs text-ink-dim">{formatMailStamp(knock.ts)}</p>
+                    {knocks.map((knock) => {
+                      const expected = expectedKnockMessage.trim();
+                      const matchesExpected = expected !== '' && knock.message.trim() === expected;
+                      return (
+                        <div
+                          key={knock.id}
+                          className="rounded-[18px] border border-rule bg-surface p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-ink">join request</p>
+                              <p className="mt-0.5 text-xs text-ink-dim">{formatMailStamp(knock.ts)}</p>
+                            </div>
+                            {expected && (
+                              <span
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-[0.625rem] font-semibold uppercase tracking-[0.16em] ${
+                                  matchesExpected
+                                    ? 'border border-ink bg-filled text-on-ink'
+                                    : 'border border-danger bg-danger-soft text-danger'
+                                }`}
+                              >
+                                {matchesExpected ? 'matches' : 'mismatch'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-ink">
+                            {knock.message || 'no note included.'}
+                          </p>
+                          <div className="mt-4 flex gap-2">
+                            <button
+                              className="flex-1 btn-primary"
+                              onClick={() => approveKnock(knock.id)}
+                              type="button"
+                            >
+                              approve
+                            </button>
+                            <button
+                              className="flex-1 btn-ghost"
+                              onClick={() => rejectKnock(knock.id)}
+                              type="button"
+                            >
+                              reject
+                            </button>
                           </div>
                         </div>
-                        <p className="mt-3 text-sm leading-6 text-ink">
-                          {knock.message || 'no note included.'}
-                        </p>
-                        <div className="mt-4 flex gap-2">
-                          <button
-                            className="flex-1 btn-primary"
-                            onClick={() => approveKnock(knock.id)}
-                            type="button"
-                          >
-                            approve
-                          </button>
-                          <button
-                            className="flex-1 btn-ghost"
-                            onClick={() => rejectKnock(knock.id)}
-                            type="button"
-                          >
-                            reject
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2933,7 +3169,51 @@ const RoomController = () => {
                   </div>
                 </div>
 
+                <div className="mt-3 rounded-[14px] border border-rule bg-surface p-4">
+	                  <p className="text-sm font-medium">room password</p>
+	                  <p className="mt-1 text-xs leading-5 text-ink-soft">
+	                    optional. people need this alongside the link to decrypt knocks and messages.
+	                  </p>
+	                  {userMessageCount > 0 && (
+	                    <p className="mt-1 text-xs leading-5 text-danger">
+	                      changing this after the room is active changes the key for future messages and joins.
+	                    </p>
+	                  )}
+	                  <input
+	                    ref={roomPasswordInputRef}
+	                    className="mt-3 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
+                    placeholder="no password"
+                    type="text"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-1p-ignore=""
+                    data-lpignore="true"
+                    value={roomPassword}
+                    onChange={(event) => updateRoomPassword(event.target.value)}
+                  />
+                </div>
+
                 {pairingCodePanel}
+
+	                <div className="mt-3 rounded-[14px] border border-rule bg-surface p-4">
+	                  <p className="text-sm font-medium">expected knock phrase</p>
+	                  <p className="mt-1 text-xs leading-5 text-ink-soft">
+	                    optional admission phrase. incoming join requests are marked when they match.
+	                  </p>
+	                  <input
+	                    ref={expectedKnockInputRef}
+	                    className="mt-3 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
+                    placeholder="no phrase"
+                    type="text"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="sentences"
+                    value={expectedKnockMessage}
+                    onChange={(event) => updateExpectedKnockMessage(event.target.value)}
+                  />
+                </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-surface p-4">
                   <div className="min-w-0 flex-1">
@@ -3018,7 +3298,7 @@ const RoomController = () => {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">auto-approve joins</p>
                     <p className="mt-1 text-xs leading-5 text-ink-soft">
-                      lets the channel accept a join request the moment the requester has <span className="font-medium">proven</span> they hold this channel's link{roomPassword.trim() ? <> <span className="font-medium">and</span> key</> : ''} — no tap needed. it never adds an identity check; it only skips the manual approve for people who already have the joining secret. off by default, stored on this device only.
+                      on this device, accepts a join the moment the requester has <span className="font-medium">proven</span> they hold this channel's link{roomPassword.trim() ? <> <span className="font-medium">and</span> key</> : ''} — no tap needed. it never adds an identity check; it only skips the manual approve for people who already hold the joining secret. a per-device convenience, not a channel rule — only this device auto-approves, and only while it's online. off by default.
                     </p>
                   </div>
                   <button

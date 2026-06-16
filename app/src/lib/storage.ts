@@ -54,6 +54,43 @@ export const clearRoomPassword = (roomHash: string): void => {
   localStorage.removeItem(roomPasswordKey(roomHash));
 };
 
+const expectedKnockMessageKey = (roomHash: string): string => `hisohiso.expected_knock.${roomHash}`;
+
+export const getExpectedKnockMessage = (roomHash: string): string | null => {
+  return localStorage.getItem(expectedKnockMessageKey(roomHash));
+};
+
+export const setExpectedKnockMessage = (roomHash: string, message: string): void => {
+  const trimmed = message.trim();
+  if (trimmed) {
+    localStorage.setItem(expectedKnockMessageKey(roomHash), trimmed);
+  } else {
+    localStorage.removeItem(expectedKnockMessageKey(roomHash));
+  }
+};
+
+export const clearExpectedKnockMessage = (roomHash: string): void => {
+  localStorage.removeItem(expectedKnockMessageKey(roomHash));
+};
+
+const roomSetupDismissedKey = (roomHash: string): string => `hisohiso.room_setup_dismissed.${roomHash}`;
+
+export const getRoomSetupDismissed = (roomHash: string): boolean => {
+  return localStorage.getItem(roomSetupDismissedKey(roomHash)) === '1';
+};
+
+export const setRoomSetupDismissed = (roomHash: string, dismissed: boolean): void => {
+  if (dismissed) {
+    localStorage.setItem(roomSetupDismissedKey(roomHash), '1');
+  } else {
+    localStorage.removeItem(roomSetupDismissedKey(roomHash));
+  }
+};
+
+export const clearRoomSetupDismissed = (roomHash: string): void => {
+  localStorage.removeItem(roomSetupDismissedKey(roomHash));
+};
+
 // --- App lock: a single GLOBAL setting (not per room). On by default, but it
 // only actually engages once a PIN has been set — see isAppLockArmed. The
 // passkey credential, when enrolled, lives separately in app-passkey.ts. ---
