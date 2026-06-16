@@ -25,31 +25,34 @@
   --danger-soft: rgba(229, 72, 77, 0.12);
   --on-ink: #ffffff;
   --filled: #1c1a16;
-  --accent: #ff4d8d;
-  --accent-strong: #e23a78;
-  --accent-soft: rgba(255, 77, 141, 0.14);
-  --success: #86b81e;
+  /* Sorbet Pastel: soft decorative palette; functional accent kept a deeper
+     rose so white-on-accent buttons and accent-coloured badge text stay legible. */
+  --accent: #de6b97;
+  --accent-strong: #c44d7d;
+  --accent-soft: rgba(222, 107, 151, 0.15);
+  --success: #8fb255;
   --overlay: rgba(28, 26, 22, 0.46);
   --overlay-soft: rgba(28, 26, 22, 0.16);
   --theme-color: #f3efe6;
   --shadow-soft: 0 18px 60px -34px rgba(40, 30, 24, 0.40);
   --shadow-float: 0 24px 80px -30px rgba(40, 30, 24, 0.46);
-  --glow-accent: 0 0 0 1px rgba(255, 77, 141, 0.18), 0 20px 70px -38px rgba(255, 77, 141, 0.85);
-  /* riso accent set — pink primary, blue/lime/tang for status + kind badges */
-  --pink: #ff4d8d;
-  --blue: #4b57ff;
-  --lime: #bfe93f;
-  --tang: #ff7a36;
+  --glow-accent: 0 0 0 1px rgba(222, 107, 151, 0.18), 0 20px 70px -38px rgba(222, 107, 151, 0.85);
+  /* sorbet decorative set — soft pastels for status + kind badges. --tang is
+     kept a touch deeper than a pure pastel because it renders as badge text. */
+  --pink: #f0a9c0;
+  --blue: #a3b0ee;
+  --lime: #d2e29a;
+  --tang: #e0935c;
   /* code / terminal surfaces inside blocks (diff, terminal). Warm near-black
      console on paper; the redesign keeps these dark but token-driven so dark
      mode and reduced-contrast preferences stay coherent. */
   --code-bg: #211f1a;
   --code-ink: #e9e4d6;
   --code-rule: rgba(255, 255, 255, 0.10);
-  --code-add: #bfe93f;
-  --code-add-bg: rgba(191, 233, 63, 0.12);
-  --code-del: #ff7a36;
-  --code-del-bg: rgba(255, 122, 54, 0.14);
+  --code-add: #d2e29a;
+  --code-add-bg: rgba(210, 226, 154, 0.13);
+  --code-del: #f3b48f;
+  --code-del-bg: rgba(243, 180, 143, 0.15);
 }
 
 .dark {
@@ -67,28 +70,28 @@
   --danger: #ff7185;
   --danger-soft: rgba(255, 113, 133, 0.16);
   --on-ink: #ffffff;
-  --filled: #ff4d8d;
-  --accent: #ff5e9c;
-  --accent-strong: #ff4d8d;
-  --accent-soft: rgba(255, 94, 156, 0.18);
-  --success: #bfe93f;
+  --filled: #d35f8c;
+  --accent: #ec86ad;
+  --accent-strong: #db6597;
+  --accent-soft: rgba(236, 134, 173, 0.18);
+  --success: #c0d77f;
   --overlay: rgba(0, 0, 0, 0.72);
   --overlay-soft: rgba(255, 255, 255, 0.10);
   --theme-color: #14120d;
   --shadow-soft: 0 22px 80px -42px rgba(0, 0, 0, 0.85);
   --shadow-float: 0 28px 90px -32px rgba(0, 0, 0, 0.88);
-  --glow-accent: 0 0 0 1px rgba(255, 94, 156, 0.20), 0 22px 80px -38px rgba(255, 94, 156, 0.70);
-  --pink: #ff5e9c;
-  --blue: #7b84ff;
-  --lime: #bfe93f;
-  --tang: #ff9a5c;
+  --glow-accent: 0 0 0 1px rgba(236, 134, 173, 0.20), 0 22px 80px -38px rgba(236, 134, 173, 0.70);
+  --pink: #f2afc4;
+  --blue: #aab7f2;
+  --lime: #d2e29a;
+  --tang: #f3b48f;
   --code-bg: #1a1813;
   --code-ink: #e9e4d6;
   --code-rule: rgba(255, 255, 255, 0.12);
-  --code-add: #bfe93f;
-  --code-add-bg: rgba(191, 233, 63, 0.14);
-  --code-del: #ff9a5c;
-  --code-del-bg: rgba(255, 154, 92, 0.16);
+  --code-add: #d2e29a;
+  --code-add-bg: rgba(210, 226, 154, 0.14);
+  --code-del: #f3b48f;
+  --code-del-bg: rgba(243, 180, 143, 0.16);
 }
 
 @supports (font: -apple-system-body) {
