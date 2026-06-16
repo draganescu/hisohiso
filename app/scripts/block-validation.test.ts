@@ -1,4 +1,5 @@
 import { sanitizeBlocksForRender } from '../src/lib/block-validation.js';
+import { redactSecretsForStorage, SECRET_VALUE_MASK } from '../src/lib/room-message.js';
 
 const assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message);
@@ -26,11 +27,13 @@ const blocks = sanitizeBlocksForRender([
       { name: 'all bad', colors: [{ hex: 'rgb(1,2,3)' }] },
     ],
   },
+  { type: 'secret', id: 's1', prompt: 'Paste token', placeholder: 'ghp_' },
+  { type: 'secret', id: 's2' },
   null,
   { nope: true },
 ]);
 
-assert(blocks.length === 6, `expected 6 renderable blocks, got ${blocks.length}`);
+assert(blocks.length === 8, `expected 8 renderable blocks, got ${blocks.length}`);
 
 const fileTree = blocks[0] as unknown as Record<string, unknown>;
 assert(fileTree.type === 'error', 'malformed file-tree should become an error block');
@@ -54,5 +57,29 @@ assert(swatches.schemes.length === 1, 'scheme with no valid hex colors should be
 assert(swatches.schemes[0].colors.length === 2, 'only #hex colors should survive (red, rgb(), javascript: dropped)');
 assert(swatches.schemes[0].colors[0].hex === '#e0728f', 'hex should be lowercased');
 assert(swatches.schemes[0].colors[1].hex === '#abc', 'short #hex should be kept');
+
+const secret = blocks[6] as unknown as Record<string, unknown>;
+assert(secret.type === 'secret', 'valid secret block should be preserved');
+assert(secret.prompt === 'Paste token', 'secret prompt should be preserved');
+assert(secret.placeholder === 'ghp_', 'secret placeholder should be preserved');
+
+const badSecret = blocks[7] as unknown as Record<string, unknown>;
+assert(badSecret.type === 'error', 'secret without a prompt should become an error block');
+assert(String(badSecret.title).includes('Invalid secret block'), 'secret error title should describe invalid block');
+
+// --- secret redaction (the value must never be persisted) ---
+const redacted = redactSecretsForStorage({
+  block_response: { block_id: 's1', type: 'secret', value: 'hunter2' },
+  block_responses: [
+    { block_id: 's1', type: 'secret', value: 'hunter2' },
+    { block_id: 'b1', type: 'buttons', value: 'yes' },
+  ],
+});
+assert(redacted.block_response?.value === SECRET_VALUE_MASK, 'single secret response value must be masked');
+assert(redacted.block_responses?.[0].value === SECRET_VALUE_MASK, 'secret value in batch must be masked');
+assert(redacted.block_responses?.[1].value === 'yes', 'non-secret response value must be untouched');
+
+const noSecret = { block_responses: [{ block_id: 'b', type: 'buttons', value: 'x' }] };
+assert(redactSecretsForStorage(noSecret) === noSecret, 'message without secrets returns the same object (no copy)');
 
 console.log('block validation regression OK');

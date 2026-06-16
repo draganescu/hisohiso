@@ -49,7 +49,7 @@ import { setPendingKnockCount } from '../lib/pending-knocks';
 import { deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction, type ReplyEntry } from '../lib/db';
 import { type Block, type BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
-import { formatBlockResponse, formatBlockValue, formatRoomContext, getMessagePreview, mergeChatMessageEcho, parseRoomEnvelope, toChatMessageRecord, type RoomContext } from '../lib/room-message';
+import { formatBlockResponse, formatBlockValue, formatRoomContext, getMessagePreview, mergeChatMessageEcho, parseRoomEnvelope, redactSecretsForStorage, toChatMessageRecord, type RoomContext } from '../lib/room-message';
 import { generateRoomName } from '../lib/room-names';
 import {
   fetchOutbox,
@@ -1632,8 +1632,13 @@ const RoomController = () => {
       }));
       // One label line per selection so the agent reads them all at once.
       // formatBlockValue renders object values (e.g. the swipe verdict map)
-      // instead of letting them stringify to "[object Object]".
-      const text = block_responses.map((br) => `[${br.type}] ${formatBlockValue(br.value)}`).join('\n');
+      // instead of letting them stringify to "[object Object]". A `secret`
+      // value is masked here: the real value travels ONLY inside the encrypted
+      // block_responses below — never in this human-readable `text`, which is
+      // what every client displays/persists and what the daemon logs.
+      const text = block_responses
+        .map((br) => `[${br.type}] ${br.type === 'secret' ? '••••••' : formatBlockValue(br.value)}`)
+        .join('\n');
       // Mirror the single case into block_response so the daemon control room
       // and single-block rendering keep working unchanged.
       const single = block_responses.length === 1 ? block_responses[0] : null;
@@ -1647,7 +1652,10 @@ const RoomController = () => {
       const encrypted = await encryptText(cryptoKey, roomHash, 'chat', msgId, payload);
       const response = await postEncryptedRoomMessage(roomHash, token, msgId, JSON.stringify(encrypted));
       if (response.ok) {
-        const messageRecord: ChatMessage = {
+        // The real value already left in the encrypted payload above. From here
+        // on (React state + local history) we keep only the redacted copy, so a
+        // secret never lands in memory we render from or in IndexedDB.
+        const messageRecord: ChatMessage = redactSecretsForStorage({
           id: msgId,
           room_hash: roomHash,
           timestamp: Date.now(),
@@ -1658,7 +1666,7 @@ const RoomController = () => {
           handle: handle || null,
           block_response: single,
           block_responses
-        };
+        });
         void persistMessage(messageRecord);
         setMessages((prev) => {
           if (prev.find((item) => item.id === msgId)) return prev;

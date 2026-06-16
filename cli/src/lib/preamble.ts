@@ -91,6 +91,7 @@ Each block is a JSON object with a "type" field. Interactive blocks (user taps/s
 - carousel {title, cards:[{title,subtitle,preview,meta}]}
 - link-preview {url, title, description, domain}
 - swatches {title, schemes:[{name, note, colors:[{hex, name}]}]} — render color chips from #hex; multiple schemes show palette variations. Non-#hex values are dropped.
+- secret {id, prompt, placeholder, confirm_label} — masked input for ONE sensitive value (password/token) the agent needs. The value reaches you but is masked in chat history and daemon logs. Use ONLY when you genuinely need a secret; never echo the received value back into a reply or block.
 
 Full JSON examples for each block, a block-picker decision guide, and the complete misuse catalog live in the **\`hisohiso-blocks\` skill** — consult it whenever you compose anything beyond a simple reply.
 

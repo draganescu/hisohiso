@@ -125,6 +125,27 @@ const parseRoomContext = (val: unknown): RoomContext | null => {
   return { branch, base_branch: baseBranch, cwd, shell };
 };
 
+// The placeholder a secret block-response value is replaced with before it is
+// ever written to local history. The real value only ever lives in the
+// encrypted wire payload on its way to the agent — never in IndexedDB.
+export const SECRET_VALUE_MASK = '[secret hidden]';
+
+// Strip the value of any `secret` block-response so it is never persisted.
+// Applied at the single DB write chokepoint, so it covers BOTH the sender's
+// outgoing copy and every other room member's inbound copy. Returns the same
+// object when there is nothing to redact (no allocation on the common path).
+export const redactSecretsForStorage = <T extends Pick<ChatMessage, 'block_response' | 'block_responses'>>(message: T): T => {
+  const isSecret = (br: BlockResponse | null | undefined): boolean => !!br && br.type === 'secret';
+  const hasSecret = isSecret(message.block_response) || !!message.block_responses?.some(isSecret);
+  if (!hasSecret) return message;
+  const scrub = (br: BlockResponse): BlockResponse => (br.type === 'secret' ? { ...br, value: SECRET_VALUE_MASK } : br);
+  return {
+    ...message,
+    block_response: message.block_response ? scrub(message.block_response) : message.block_response,
+    block_responses: message.block_responses ? message.block_responses.map(scrub) : message.block_responses,
+  };
+};
+
 // Render any block_response value as a readable string. Objects (e.g. the
 // swipe verdict map) would otherwise stringify to "[object Object]".
 export const formatBlockValue = (val: BlockResponse['value']): string => {
@@ -180,6 +201,8 @@ const formatOneBlockResponse = (br: BlockResponse): string => {
     case 'confirm-danger': return val ? 'Confirmed' : 'Cancelled';
     case 'commit': return label === 'commit' ? 'Committed' : label === 'edit' ? 'Editing' : 'Cancelled';
     case 'run-command': return label === 'run' ? 'Running command' : 'Skipped';
+    // Never render a secret's value, even if a stale copy slipped through.
+    case 'secret': return 'Secret sent (hidden)';
     default: return label;
   }
 };

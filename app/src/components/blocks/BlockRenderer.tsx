@@ -26,6 +26,7 @@ import { ListBlockView } from './ListBlock';
 import { ProseBlockView } from './ProseBlock';
 import { LabelBlockView } from './LabelBlock';
 import { SwatchesBlockView } from './SwatchesBlock';
+import { SecretBlockView } from './SecretBlock';
 
 /** One block's selection. The renderer always hands back an array so a single
  *  agent message that carries several interactive blocks is answered with ONE
@@ -45,6 +46,7 @@ interface Props {
 /** Blocks that auto-submit on selection (have their own safety mechanisms) */
 const isAutoSubmit = (block: Block): boolean => {
   if (block.type === 'confirm-danger') return true;
+  if (block.type === 'secret') return true; // send on its own submit; never sit in the shared pending map
   if (block.type === 'run-command' && (block as RunCommandBlockType).risk === 'dangerous') return true;
   return false;
 };
@@ -148,6 +150,8 @@ export const BlockRenderer = ({ blocks, onRespond, progressOverrides }: Props) =
         return <LabelBlockView block={block} />;
       case 'swatches':
         return <SwatchesBlockView block={block} />;
+      case 'secret':
+        return <SecretBlockView block={block} onSelect={handleSelect as never} submitted={isSubmitted} />;
       default:
         return null;
     }

@@ -148,6 +148,9 @@ const validateBlock = (raw: unknown): Block | null => {
     case 'label':
       if (!isString(raw.text)) return invalidBlock(raw.type, 'Expected text string', raw);
       return toBlock({ ...baseBlock(raw), text: raw.text });
+    case 'secret':
+      if (!isString(raw.id) || !isString(raw.prompt)) return invalidBlock(raw.type, 'Expected id and prompt', raw);
+      return toBlock({ ...baseBlock(raw), id: raw.id, prompt: raw.prompt, placeholder: isString(raw.placeholder) ? raw.placeholder : undefined, confirm_label: isString(raw.confirm_label) ? raw.confirm_label : undefined });
     case 'swatches': {
       if (!Array.isArray(raw.schemes)) return invalidBlock(raw.type, 'Expected schemes[]', raw);
       const schemes = raw.schemes
