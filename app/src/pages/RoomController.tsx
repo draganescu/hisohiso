@@ -47,7 +47,7 @@ import { useRoomPresence } from '../lib/presence';
 import { useRoomAutoApprove } from '../lib/auto-approve';
 import { setPendingKnockCount } from '../lib/pending-knocks';
 import { deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction, type ReplyEntry } from '../lib/db';
-import { isInteractiveBlock, type Block, type BlockResponse } from '../lib/blocks';
+import { type Block, type BlockResponse } from '../lib/blocks';
 import type { KnockRequest, RoomEvent, RoomState } from '../lib/room-contracts';
 import { formatBlockResponse, formatBlockValue, formatRoomContext, getMessagePreview, mergeChatMessageEcho, parseRoomEnvelope, toChatMessageRecord, type RoomContext } from '../lib/room-message';
 import { generateRoomName } from '../lib/room-names';
@@ -133,34 +133,6 @@ const getMessageLabel = (message: ChatMessage): string => {
     return message.handle ? `${message.handle} (you)` : 'you';
   }
   return message.handle || 'room member';
-};
-
-// Short human label for a pending interactive block, used by the "waiting on:"
-// header summary. Prefers the block's own prompt/title; falls back to a generic
-// per-type phrase. Returns null for blocks with nothing meaningful to show, so
-// the caller can skip them rather than render an empty "waiting on:" line.
-const describeInteractiveBlock = (block: Block): string | null => {
-  const trim = (s: string | undefined | null): string | null => {
-    if (typeof s !== 'string') return null;
-    const t = s.trim();
-    return t === '' ? null : t;
-  };
-  switch (block.type) {
-    case 'buttons':
-    case 'swipe':
-    case 'slider':
-    case 'checklist':
-    case 'sortable':
-      return trim(block.prompt) ?? 'a choice';
-    case 'confirm-danger':
-      return trim(block.title) ?? 'a risky action';
-    case 'commit':
-      return trim(block.message) ?? 'a commit';
-    case 'run-command':
-      return trim(block.description) ?? trim(block.command) ?? 'a command';
-    default:
-      return null;
-  }
 };
 
 // One live work-status for an agent, derived from an ephemeral `status` event.
@@ -451,36 +423,6 @@ const RoomController = () => {
     }
     return map;
   }, [messages]);
-  // "waiting on: <latest pending action>" — derived purely client-side from
-  // messages already received (no server field). This is only meaningful in
-  // agent rooms: control-room command/menu blocks (for example a Codex action)
-  // are not an agent turn waiting on the operator, so do not surface them as a
-  // header-level "waiting on" state.
-  const pendingActionLabel = useMemo(() => {
-    if (!isAgentRoom) return null;
-    // Every block id the operator has already responded to (singular or batched),
-    // across the whole thread — so an answered block stops being "pending".
-    const answered = new Set<string>();
-    for (const m of messages) {
-      const responses = m.block_responses ?? (m.block_response ? [m.block_response] : []);
-      for (const r of responses) {
-        if (r && typeof r.block_id === 'string' && r.block_id) answered.add(r.block_id);
-      }
-    }
-    // Newest message first; the first inbound message with an unanswered
-    // interactive block wins.
-    const newestFirst = [...messages].sort((a, b) => b.timestamp - a.timestamp);
-    for (const m of newestFirst) {
-      if (m.direction !== 'in' || !m.blocks) continue;
-      for (const block of m.blocks) {
-        if (!isInteractiveBlock(block)) continue;
-        if (typeof block.id === 'string' && block.id && answered.has(block.id)) continue;
-        const label = describeInteractiveBlock(block);
-        if (label) return label;
-      }
-    }
-    return null;
-  }, [messages, isAgentRoom]);
   const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
 
   const {
@@ -2036,11 +1978,9 @@ const RoomController = () => {
     const connectionColor =
       connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
     // Optional agent/control-room context strip below the header pills. The
-    // git/cwd line may appear in agent or control rooms; "waiting on:" appears
-    // only in agent rooms with an unanswered interactive block.
+    // git/cwd line may appear in agent or control rooms.
     const contextLine = (isAgentRoom || isControlRoom) ? formatRoomContext(roomContext) : null;
-    const waitingLabel = pendingActionLabel;
-    const showContextStrip = !!contextLine || !!waitingLabel;
+    const showContextStrip = !!contextLine;
 
     return (
       <main className="app-shell app-chrome room-with-rail relative text-ink">
@@ -2169,10 +2109,9 @@ const RoomController = () => {
 
         {/* ---- Agent/control context strip (optional) ----
             A thin glass pill under the header showing the daemon's working
-            context (git branch / cwd), plus a one-line "waiting on:" summary in
-            agent rooms only. Both are optional and the whole strip is omitted
-            when neither is present, so chat rooms and un-stamped agent rooms
-            keep the original chrome. Fixed below the
+            context (git branch / cwd) in agent and control rooms only. It is
+            optional and the whole strip is omitted when absent, so chat rooms
+            and un-stamped agent rooms keep the original chrome. Fixed below the
             header pills (which sit at safe-area-inset-top + a 9-unit pill);
             pointer-events:none on the wrapper lets gaps click through to the
             messages, the pill itself stays inert (no interaction needed). */}
@@ -2185,11 +2124,6 @@ const RoomController = () => {
               {contextLine && (
                 <p className="truncate font-mono text-[0.6875rem] leading-tight text-ink-soft" title={contextLine}>
                   {contextLine}
-                </p>
-              )}
-              {waitingLabel && (
-                <p className="truncate text-[0.6875rem] leading-tight text-ink-dim" title={waitingLabel}>
-                  <span className="text-accent-strong">waiting on:</span> {waitingLabel}
                 </p>
               )}
             </div>
