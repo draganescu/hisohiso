@@ -75,7 +75,6 @@ import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
 import { ControlCommandBar } from '../components/ControlCommandBar';
-import { AgentQuickActions } from '../components/AgentQuickActions';
 import { RoomRow } from '../components/RoomRow';
 import RoomsRail from '../components/RoomsRail';
 
@@ -1515,10 +1514,8 @@ const RoomController = () => {
   );
 
   // The single normal-send path, parameterized by the text to send. The
-  // composer calls this with the live draft (`chatInput`); quick-action chips
-  // call it with a preset string. Either way the wire format, encryption,
-  // optimistic record, and reply-pointer handling are IDENTICAL — there is no
-  // separate send path for presets.
+  // composer calls this with the live draft (`chatInput`). The wire format,
+  // encryption, optimistic record, and reply-pointer handling all live here.
   const sendText = useCallback(async (rawText: string) => {
     if (!roomHash || !token || !cryptoKey || !rawText.trim()) {
       return;
@@ -1605,11 +1602,9 @@ const RoomController = () => {
   // The composer's normal send: fire the live draft through the shared path.
   const sendMessage = useCallback(() => sendText(chatInput), [sendText, chatInput]);
 
-  // Agent rooms: a reply doesn't send — it joins the batch. Parameterized by
-  // text so both the composer (live draft) and quick-action chips stage into
-  // the SAME batch the same way. We reopen the message we replied to so the
-  // operator stays in context (spec: remain in the detail view after the
-  // composer closes) and can keep answering.
+  // Agent rooms: a reply doesn't send — it joins the batch. We reopen the
+  // message we replied to so the operator stays in context (spec: remain in
+  // the detail view after the composer closes) and can keep answering.
   const queueReply = useCallback((rawText: string) => {
     const trimmed = rawText.trim();
     if (!trimmed || !replyToId || !replyTarget) return;
@@ -1635,18 +1630,6 @@ const RoomController = () => {
       void sendMessage();
     }
   }, [isAgentRoom, replyToId, addReplyToBatch, sendMessage]);
-
-  // Quick-action chips (agent rooms only). A chip is just a preset string fed
-  // through the room's EXISTING paths — no new send path, no extra data leaves.
-  // It mirrors submitComposer's choice: if the operator is mid-reply, the
-  // preset joins the batch; otherwise it sends as one normal encrypted message.
-  const sendQuickAction = useCallback((command: string) => {
-    if (isAgentRoom && replyToId) {
-      queueReply(command);
-    } else {
-      void sendText(command);
-    }
-  }, [isAgentRoom, replyToId, queueReply, sendText]);
 
   const removeQueuedReply = useCallback((index: number) => {
     setReplyQueue((prev) => prev.filter((_, i) => i !== index));
@@ -2578,18 +2561,6 @@ const RoomController = () => {
             daemon takes no arbitrary instructions there. Every verb it
             accepts is reachable through these two buttons and their
             downstream blocks (launcher / list with per-row Join/Kill). */}
-        {/* ---- Agent quick-action chips ----
-            Agent rooms only. A horizontally-scrollable bar of preset commands
-            pinned just above the composer FAB / dispatch button. Each chip
-            fires its preset through the SAME send/batch path the composer uses
-            (sendQuickAction → sendText / queueReply); they're pure client-side
-            convenience and send nothing the composer couldn't. */}
-        {isAgentRoom && (
-          <AgentQuickActions
-            batchPending={replyQueue.length > 0}
-            onAction={sendQuickAction}
-          />
-        )}
         {!isControlRoom && !(isAgentRoom && replyQueue.length > 0) && (
           <button
             className="floating-action px-5 py-3.5 text-sm font-semibold"
