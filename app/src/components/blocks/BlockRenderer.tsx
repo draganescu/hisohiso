@@ -25,6 +25,7 @@ import { LinkPreviewBlockView } from './LinkPreviewBlock';
 import { ListBlockView } from './ListBlock';
 import { ProseBlockView } from './ProseBlock';
 import { LabelBlockView } from './LabelBlock';
+import { SwatchesBlockView } from './SwatchesBlock';
 
 /** One block's selection. The renderer always hands back an array so a single
  *  agent message that carries several interactive blocks is answered with ONE
@@ -145,6 +146,8 @@ export const BlockRenderer = ({ blocks, onRespond, progressOverrides }: Props) =
         return <ProseBlockView block={block} />;
       case 'label':
         return <LabelBlockView block={block} />;
+      case 'swatches':
+        return <SwatchesBlockView block={block} />;
       default:
         return null;
     }

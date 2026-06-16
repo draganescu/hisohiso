@@ -165,6 +165,11 @@ Include a stable \`id\` and re-emit the block with the same \`id\` as steps comp
 {"type": "link-preview", "url": "https://...", "title": "Page Title", "description": "Description", "domain": "example.com"}
 \`\`\`
 
+**swatches** — color chips rendered from hex; one or more named schemes for showing palette variations side by side. Only literal hex (#rgb / #rgba / #rrggbb / #rrggbbaa) renders — any other value is dropped.
+\`\`\`json
+{"type": "swatches", "title": "Toned-down palette", "schemes": [{"name": "Dusty Pop", "note": "~30% less chroma", "colors": [{"hex": "#e0728f", "name": "pink"}, {"hex": "#6470cf", "name": "blue"}, {"hex": "#abc55a", "name": "lime"}]}]}
+\`\`\`
+
 ## Common misuses to avoid
 
 - ❌ Prose/report in \`code\` (no word wrap) — use \`prose\`/\`list\`/\`text\`.
