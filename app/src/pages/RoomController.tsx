@@ -453,13 +453,12 @@ const RoomController = () => {
     return map;
   }, [messages]);
   // "waiting on: <latest pending action>" — derived purely client-side from
-  // messages already received (no server field). Finds the most recent inbound
-  // message carrying interactive blocks whose block ids have NOT yet been
-  // answered by any block_response anywhere in the thread, and labels its first
-  // unanswered block. Only meaningful in agent/control rooms; null otherwise (or
-  // when nothing is pending) so the header summary renders nothing.
+  // messages already received (no server field). This is only meaningful in
+  // agent rooms: control-room command/menu blocks (for example a Codex action)
+  // are not an agent turn waiting on the operator, so do not surface them as a
+  // header-level "waiting on" state.
   const pendingActionLabel = useMemo(() => {
-    if (!isAgentRoom && !isControlRoom) return null;
+    if (!isAgentRoom) return null;
     // Every block id the operator has already responded to (singular or batched),
     // across the whole thread — so an answered block stops being "pending".
     const answered = new Set<string>();
@@ -482,7 +481,7 @@ const RoomController = () => {
       }
     }
     return null;
-  }, [messages, isAgentRoom, isControlRoom]);
+  }, [messages, isAgentRoom]);
   const replyTarget = useMemo(() => messages.find((entry) => entry.id === replyToId) ?? null, [messages, replyToId]);
 
   const {
@@ -2053,11 +2052,9 @@ const RoomController = () => {
       connection === 'connected' ? 'live' : connection === 'error' ? 'reconnecting…' : 'connecting…';
     const connectionColor =
       connection === 'connected' ? '#16a34a' : connection === 'error' ? '#b91c1c' : '#9a9a9a';
-    // Optional agent/control-room context strip below the header pills. Both
-    // halves degrade independently: the git/cwd line shows only if the daemon
-    // stamped `context`; the "waiting on:" summary shows only if an unanswered
-    // interactive block is in the thread. The strip itself renders nothing when
-    // both are empty, so chat rooms and un-stamped agent rooms are unchanged.
+    // Optional agent/control-room context strip below the header pills. The
+    // git/cwd line may appear in agent or control rooms; "waiting on:" appears
+    // only in agent rooms with an unanswered interactive block.
     const contextLine = (isAgentRoom || isControlRoom) ? formatRoomContext(roomContext) : null;
     const waitingLabel = pendingActionLabel;
     const showContextStrip = !!contextLine || !!waitingLabel;
@@ -2189,10 +2186,10 @@ const RoomController = () => {
 
         {/* ---- Agent/control context strip (optional) ----
             A thin glass pill under the header showing the daemon's working
-            context (git branch / cwd) and a one-line "waiting on:" summary of
-            the latest unanswered interactive block. Both are optional and the
-            whole strip is omitted when neither is present, so chat rooms and
-            un-stamped agent rooms keep the original chrome. Fixed below the
+            context (git branch / cwd), plus a one-line "waiting on:" summary in
+            agent rooms only. Both are optional and the whole strip is omitted
+            when neither is present, so chat rooms and un-stamped agent rooms
+            keep the original chrome. Fixed below the
             header pills (which sit at safe-area-inset-top + a 9-unit pill);
             pointer-events:none on the wrapper lets gaps click through to the
             messages, the pill itself stays inert (no interaction needed). */}
