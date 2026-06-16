@@ -173,6 +173,21 @@ export const postPushUnsubscribe = async (
   });
 };
 
+export const postPushForeground = async (
+  roomHash: string,
+  token: string,
+  endpoint: string,
+  foreground: boolean,
+  keepalive = false,
+): Promise<Response> => {
+  return fetch(`/api/rooms/${roomHash}/push-foreground`, {
+    method: 'POST',
+    headers: { ...jsonHeaders, 'X-Chat-Token': token },
+    body: JSON.stringify({ endpoint, foreground }),
+    keepalive,
+  });
+};
+
 // Ping the room's other subscribed devices (content-less). The PWA calls this
 // after sending a chat message so a backgrounded peer gets notified — mirrors
 // what the CLI daemon does on an agent turn. `excludeEndpoint` is the sender's

@@ -1,5 +1,11 @@
 import { base64UrlDecode } from './crypto';
-import { fetchVapidPublicKey, postPushSubscribe, postPushTrigger, postPushUnsubscribe } from './room-session';
+import {
+  fetchVapidPublicKey,
+  postPushForeground,
+  postPushSubscribe,
+  postPushTrigger,
+  postPushUnsubscribe,
+} from './room-session';
 import {
   clearPushPreference,
   getPushEndpointPreference,
@@ -124,4 +130,31 @@ export const triggerRoomPush = async (roomHash: string, token: string): Promise<
     }
   }
   await postPushTrigger(roomHash, token, 'normal', ownEndpoint).catch(() => {});
+};
+
+
+// Tell the server that this subscribed endpoint is currently viewing this room.
+// notify_room() suppresses only this room+endpoint while the marker is fresh,
+// so the live channel gets in-app updates without a duplicate OS banner. The
+// endpoint is already registered server-side for this room when push is ON; we
+// do not reveal it for rooms where notifications are disabled.
+export const markPushForeground = async (
+  roomHash: string,
+  token: string,
+  foreground: boolean,
+  options: { keepalive?: boolean; force?: boolean } = {},
+): Promise<void> => {
+  if (!options.force && getPushStatus(roomHash) !== 'on') return;
+
+  let endpoint = getPushEndpointPreference(roomHash);
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    endpoint = sub?.endpoint ?? endpoint;
+  } catch {
+    // Fall back to the endpoint cached when push was enabled.
+  }
+  if (!endpoint) return;
+
+  await postPushForeground(roomHash, token, endpoint, foreground, options.keepalive).catch(() => {});
 };

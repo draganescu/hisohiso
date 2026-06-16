@@ -132,6 +132,19 @@ t('notify_room excludes the sender endpoint (no network for the only device)', f
     push_subscription_delete($ROOM, 'https://push.example.com/self');
 });
 
+t('notify_room skips an endpoint foregrounded in the same room', function () use ($ROOM) {
+    push_subscription_upsert($ROOM, 'https://push.example.com/foreground', 'p', 'a');
+    push_subscription_mark_foreground($ROOM, 'https://push.example.com/foreground', true);
+    eq(0, notify_room($ROOM), 'foreground endpoint skipped, no send');
+    $stmt = db()->prepare('SELECT foreground_at FROM push_subscriptions WHERE room_hash = :h AND endpoint = :e');
+    $stmt->execute([':h' => $ROOM, ':e' => 'https://push.example.com/foreground']);
+    truthy((int) $stmt->fetchColumn() > 0, 'foreground marker was recorded');
+    push_subscription_mark_foreground($ROOM, 'https://push.example.com/foreground', false);
+    $stmt->execute([':h' => $ROOM, ':e' => 'https://push.example.com/foreground']);
+    eq(0, (int) $stmt->fetchColumn(), 'foreground marker was cleared');
+    push_subscription_delete($ROOM, 'https://push.example.com/foreground');
+});
+
 // ── VAPID JWT ────────────────────────────────────────────────────────────────
 t('vapid_jwt produces a 3-part ES256 token bound to the audience', function () {
     $jwt = vapid_jwt('https://push.example.com');

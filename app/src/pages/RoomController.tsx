@@ -68,7 +68,7 @@ import {
   type OutboxMessage,
   type RoomLookupResponse,
 } from '../lib/room-session';
-import { disablePush, enablePush, getPushStatus, triggerRoomPush, type PushStatus } from '../lib/push';
+import { disablePush, enablePush, getPushStatus, markPushForeground, triggerRoomPush, type PushStatus } from '../lib/push';
 import { wipeLocalRoomArtifacts } from '../lib/room-local-cleanup';
 import { BlockRenderer, type BlockResponseInput } from '../components/blocks/BlockRenderer';
 import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
@@ -1728,6 +1728,40 @@ const RoomController = () => {
     if (!roomHash) return;
     setPushStatus(getPushStatus(roomHash));
   }, [roomHash]);
+
+  // While this subscribed channel is open in the foreground, keep a short-lived
+  // room+endpoint marker on the server. Push fan-out skips that exact endpoint
+  // so an agent/peer update appears live in-app without a duplicate OS banner.
+  useEffect(() => {
+    if (roomState !== 'PARTICIPANT' || !roomHash || !token || pushStatus !== 'on') return;
+
+    let stopped = false;
+    const isVisible = () => document.visibilityState === 'visible';
+    const send = (foreground: boolean, keepalive = false) => {
+      if (stopped && foreground) return;
+      void markPushForeground(roomHash, token, foreground, { keepalive, force: true });
+    };
+    const refresh = () => {
+      if (isVisible()) send(true);
+      else send(false, true);
+    };
+    const clear = () => send(false, true);
+
+    refresh();
+    const interval = window.setInterval(refresh, 10000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('pageshow', refresh);
+    window.addEventListener('pagehide', clear);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('pageshow', refresh);
+      window.removeEventListener('pagehide', clear);
+      clear();
+    };
+  }, [roomState, roomHash, token, pushStatus]);
 
   useEffect(() => {
     if (!showMenu || !menuFocusTarget) return;

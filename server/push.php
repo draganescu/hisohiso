@@ -193,6 +193,28 @@ function push_subscription_upsert(string $room_hash, string $endpoint, string $p
     });
 }
 
+// Mark one subscribed device as actively foregrounded in this room. The marker
+// is intentionally short-lived and room-scoped: notify_room() only uses it to
+// skip redundant OS notifications while the same channel is open on the same
+// device. If the page is killed before it can clear the marker, it expires on
+// its own after PUSH_FOREGROUND_TTL seconds.
+const PUSH_FOREGROUND_TTL = 20;
+
+function push_subscription_mark_foreground(string $room_hash, string $endpoint, bool $foreground): void
+{
+    $pdo = db();
+    sqlite_write_with_retry(function () use ($pdo, $room_hash, $endpoint, $foreground): void {
+        $stmt = $pdo->prepare('UPDATE push_subscriptions
+            SET foreground_at = :foreground_at
+            WHERE room_hash = :room_hash AND endpoint = :endpoint');
+        $stmt->execute([
+            ':foreground_at' => $foreground ? time() : 0,
+            ':room_hash' => $room_hash,
+            ':endpoint' => $endpoint,
+        ]);
+    });
+}
+
 function push_subscription_delete(string $room_hash, string $endpoint): void
 {
     $pdo = db();
@@ -216,21 +238,30 @@ function notify_room(string $room_hash, string $urgency = 'normal', ?string $exc
         return 0;
     }
     $pdo = db();
-    $stmt = $pdo->prepare('SELECT endpoint FROM push_subscriptions WHERE room_hash = :room_hash');
+    $stmt = $pdo->prepare('SELECT endpoint, foreground_at FROM push_subscriptions WHERE room_hash = :room_hash');
     $stmt->execute([':room_hash' => $room_hash]);
-    $endpoints = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $subscriptions = $stmt->fetchAll();
+    $foreground_cutoff = time() - PUSH_FOREGROUND_TTL;
 
     // Endpoints to the same push service share an audience, so mint the VAPID
     // JWT once per audience (each is an openssl_sign) and reuse it across that
     // service's endpoints.
     $jwt_by_audience = [];
     $sent = 0;
-    foreach ($endpoints as $endpoint) {
+    foreach ($subscriptions as $subscription) {
+        $endpoint = $subscription['endpoint'] ?? null;
         if (!is_string($endpoint)) {
             continue;
         }
         // Never notify the sender's own device of their own message.
         if ($exclude_endpoint !== null && $endpoint === $exclude_endpoint) {
+            continue;
+        }
+        // If this same endpoint recently reported that this room is open and
+        // foregrounded, the live app is already showing the update. Skipping at
+        // fan-out avoids relying solely on flaky mobile SW visibility signals.
+        $foreground_at = (int) ($subscription['foreground_at'] ?? 0);
+        if ($foreground_at >= $foreground_cutoff) {
             continue;
         }
         $parts = parse_url($endpoint);

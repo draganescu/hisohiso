@@ -117,9 +117,19 @@ function db(): PDO
         p256dh TEXT NOT NULL,
         auth TEXT NOT NULL,
         created_at INTEGER NOT NULL,
+        foreground_at INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (room_hash, endpoint),
         FOREIGN KEY(room_hash) REFERENCES rooms(room_hash) ON DELETE CASCADE
     );');
+
+    // Migrate existing push_subscriptions tables that pre-date foreground_at.
+    $push_cols = [];
+    foreach ($pdo->query('PRAGMA table_info(push_subscriptions)') as $col) {
+        $push_cols[(string) ($col['name'] ?? '')] = true;
+    }
+    if (!isset($push_cols['foreground_at'])) {
+        $pdo->exec('ALTER TABLE push_subscriptions ADD COLUMN foreground_at INTEGER NOT NULL DEFAULT 0');
+    }
 
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_push_room ON push_subscriptions(room_hash);');
 

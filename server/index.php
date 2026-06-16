@@ -663,6 +663,26 @@ if (preg_match('#^/api/rooms/([^/]+)/push-unsubscribe$#', $path, $matches) && $m
     json_response(['status' => 'ok']);
 }
 
+// The PWA calls this while a subscribed room is visible on this device, and
+// clears it when hidden/unmounted. notify_room() uses the short-lived marker to
+// avoid redundant OS notifications for the exact channel already open on-screen.
+if (preg_match('#^/api/rooms/([^/]+)/push-foreground$#', $path, $matches) && $method === 'POST') {
+    $room_hash = $matches[1];
+    if (!room_exists($room_hash)) {
+        json_response(['error' => 'room_not_found'], 404);
+    }
+    require_participant_token($room_hash);
+    enforce_rate_limit('push_foreground', 120, 60);
+    $body = read_json_body();
+    $endpoint = $body['endpoint'] ?? null;
+    if (!is_string($endpoint) || $endpoint === '') {
+        json_response(['error' => 'missing_endpoint'], 400);
+    }
+    $foreground = (bool) ($body['foreground'] ?? false);
+    push_subscription_mark_foreground($room_hash, $endpoint, $foreground);
+    json_response(['status' => 'ok']);
+}
+
 // Fan a content-less push out to the room's subscribed devices. Two callers:
 // the CLI daemon (when an agent finishes a turn or needs attention) and the PWA
 // (after sending a chat message, so a backgrounded peer gets pinged). Both hold
