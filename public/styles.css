@@ -23,11 +23,14 @@
   --card: #ffffff;
   --card-2: #ece6d8;
 
-  /* riso ink set */
-  --pink: #ff4d8d;
-  --blue: #4b57ff;
-  --lime: #bfe93f;
-  --tang: #ff7a36;
+  /* riso ink set — Sorbet Pastel. Toned down from the original neon inks.
+     pink/blue/tang stay deep enough to double as accent *text* (they're used
+     both as fills and as coloured type on the warm paper); lime is fills-only
+     so it can be a true pastel. */
+  --pink: #de6b97;
+  --blue: #6470cf;
+  --lime: #d2e29a;
+  --tang: #e0935c;
   --console: #16140f;
   --console-2: #211e16;
 
@@ -440,10 +443,10 @@ code {
   font-weight: 700;
   font-size: 1rem;
   letter-spacing: 0.01em;
-  background: linear-gradient(176deg, #ff86b3 0%, var(--pink) 42%, #d63a72 100%);
+  background: linear-gradient(176deg, #e996b6 0%, var(--pink) 42%, #b94871 100%);
   color: #fff;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 -2px 6px rgba(0, 0, 0, 0.16) inset,
-    0 8px 20px rgba(255, 77, 141, 0.32), 0 2px 4px rgba(0, 0, 0, 0.16);
+    0 8px 20px rgba(222, 107, 151, 0.32), 0 2px 4px rgba(0, 0, 0, 0.16);
   transition: transform 0.12s ease;
 }
 .cta::before {
@@ -543,7 +546,7 @@ code {
 }
 .split-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 22px 46px rgba(75, 87, 255, 0.14), 0 0 0 1px var(--rule);
+  box-shadow: 0 22px 46px rgba(100, 112, 207, 0.14), 0 0 0 1px var(--rule);
 }
 .split-tag {
   font-family: var(--mono);
@@ -812,7 +815,7 @@ code {
   height: 8px;
   border-radius: 50%;
   background: var(--lime);
-  box-shadow: 0 0 0 3px rgba(191, 233, 63, 0.25);
+  box-shadow: 0 0 0 3px rgba(210, 226, 154, 0.25);
 }
 .msg {
   font-family: var(--disp);
@@ -857,8 +860,8 @@ code {
   text-overflow: ellipsis;
   color: var(--ink-soft);
 }
-.diff-add { color: #5a7a14; background: rgba(191, 233, 63, 0.18); }
-.diff-del { color: #c23; background: rgba(255, 77, 141, 0.12); text-decoration: line-through; }
+.diff-add { color: #5a7a14; background: rgba(210, 226, 154, 0.22); }
+.diff-del { color: #c23; background: rgba(222, 107, 151, 0.12); text-decoration: line-through; }
 .block--buttons {
   border: none;
   background: none;
@@ -882,7 +885,7 @@ code {
   color: #2c3a06;
 }
 .block--danger { border-color: var(--tang); }
-.danger-head { color: var(--tang); border-bottom-color: rgba(255, 122, 54, 0.3); }
+.danger-head { color: var(--tang); border-bottom-color: rgba(224, 147, 92, 0.3); }
 .danger-body { padding: 7px 8px; color: var(--ink-soft); }
 .danger-body code { background: var(--paper-2); color: var(--ink); border: none; }
 
