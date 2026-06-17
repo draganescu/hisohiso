@@ -1986,6 +1986,10 @@ const RoomController = () => {
     } else {
       // Parked in history: never move the viewport — just count the arrival so
       // the pill shows and persists until tapped or the user reaches bottom.
+      // Force autoScroll false here too: the scroll-state flag can still be
+      // stale true (for example after window expansion / browser scroll
+      // restoration), and the pill visibility is gated on that state.
+      setAutoScroll(false);
       setUnreadCount((count) => count + (messages.length - prevCount));
     }
   }, [messages, scrollToLatest]);
@@ -2568,7 +2572,7 @@ const RoomController = () => {
             <button
               aria-hidden={!pillActive}
               tabIndex={pillActive ? 0 : -1}
-              className={`fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-1/2 z-40 -translate-x-1/2 btn-primary btn-sm shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)] transition-opacity duration-150 ${
+              className={`unread-pill btn-primary btn-sm shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)] transition-opacity duration-150 ${
                 pillActive ? 'opacity-100' : 'pointer-events-none opacity-0'
               }`}
               onClick={() => {

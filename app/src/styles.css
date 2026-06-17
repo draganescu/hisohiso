@@ -651,6 +651,26 @@ body { font-weight: 500; }
 .btn-primary:active { transform: translateY(1px) scale(0.99); }
 .btn-primary:disabled { opacity: 0.5; cursor: default; transform: none; filter: none; }
 
+/* Floating unread pill. This must come AFTER .btn-primary: that primitive sets
+   position:relative for its shine pseudo-element, which otherwise overrides
+   Tailwind's .fixed utility and drops the pill back into message flow. */
+.unread-pill {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 4.75rem);
+  z-index: 40;
+  transform: translateX(-50%);
+}
+
+.unread-pill:hover { transform: translateX(-50%) translateY(-1px); }
+.unread-pill:active { transform: translateX(-50%) translateY(1px) scale(0.99); }
+
+@media (min-width: 1024px) {
+  .room-with-rail .unread-pill {
+    left: calc(var(--rail-w) + (100vw - var(--rail-w)) / 2);
+  }
+}
+
 .btn-ghost {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
   padding: 0.65rem 1.3rem; border-radius: 999px; border: 1.5px solid var(--rule);
