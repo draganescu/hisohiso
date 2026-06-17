@@ -91,6 +91,20 @@ export const clearRoomSetupDismissed = (roomHash: string): void => {
   localStorage.removeItem(roomSetupDismissedKey(roomHash));
 };
 
+// Marks a room as one THIS device minted (vs joined via an invite link). Set
+// once in the room-creation path; read to gate creator-only affordances like
+// the in-room setup nudge. A joiner who reloads also has a stored token, so
+// presence-of-token can't distinguish the two — this flag is the durable proof.
+const roomCreatedByMeKey = (roomHash: string): string => `hisohiso.room_created_by_me.${roomHash}`;
+
+export const getRoomCreatedByMe = (roomHash: string): boolean => {
+  return localStorage.getItem(roomCreatedByMeKey(roomHash)) === '1';
+};
+
+export const setRoomCreatedByMe = (roomHash: string): void => {
+  localStorage.setItem(roomCreatedByMeKey(roomHash), '1');
+};
+
 // --- App lock: a single GLOBAL setting (not per room). On by default, but it
 // only actually engages once a PIN has been set — see isAppLockArmed. The
 // passkey credential, when enrolled, lives separately in app-passkey.ts. ---

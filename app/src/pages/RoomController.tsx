@@ -21,6 +21,7 @@ import {
   getHandle,
   getRoomPassword,
   getRoomSetupDismissed,
+  getRoomCreatedByMe,
   getRoomColor,
   getRoomKind,
   getRoomNickname,
@@ -286,6 +287,9 @@ const RoomController = () => {
   const [pushError, setPushError] = useState('');
   const [expectedKnockMessage, setExpectedKnockMessageState] = useState('');
   const [roomSetupDismissed, setRoomSetupDismissedState] = useState(false);
+  const [roomCreatedByMe, setRoomCreatedByMeState] = useState(() =>
+    initialContext ? getRoomCreatedByMe(initialContext.roomHash) : false
+  );
   const [roomSetupStage, setRoomSetupStage] = useState<RoomSetupStage>('security');
   const [menuFocusTarget, setMenuFocusTarget] = useState<'password' | 'knock' | null>(null);
   // Reveal-on-tap for the pairing code in the room menu. Auto-hides after a few
@@ -317,6 +321,9 @@ const RoomController = () => {
   // the stale-closure capture entirely. See the 4G→WiFi authorship-flip bug.
   const tokenHashRef = useRef<string | null>(null);
   const prevCountRef = useRef(0);
+  // Holds the last non-zero unread tally so the always-mounted pill can keep
+  // its label while it fades out (count resets to 0 the instant you hit bottom).
+  const lastUnreadRef = useRef(0);
   const knockKeyRef = useRef<CryptoKey | null>(null);
   // Ephemeral keypair used to receive the wrapped participant token after a
   // knock. Set right before /knock fires; consulted when the matching `token`
@@ -342,6 +349,7 @@ const RoomController = () => {
   const showRoomSetupNudge =
     showEmptyState &&
     roomKind === 'chat' &&
+    roomCreatedByMe &&
     !roomSetupDismissed;
 
   useEffect(() => {
@@ -453,6 +461,7 @@ const RoomController = () => {
     setRoomPasswordState('');
     setExpectedKnockMessageState('');
     setRoomSetupDismissedState(false);
+    setRoomCreatedByMeState(false);
     setRoomSetupStage('security');
     setMenuFocusTarget(null);
     setCryptoKey(null);
@@ -769,6 +778,7 @@ const RoomController = () => {
           setRoomPasswordState('');
           setExpectedKnockMessageState('');
           setRoomSetupDismissedState(false);
+          setRoomCreatedByMeState(false);
           setRoomSetupStage('security');
           setMenuFocusTarget(null);
           knockEphemeralRef.current = null;
@@ -800,6 +810,7 @@ const RoomController = () => {
         setRoomPasswordState(savedRoomPassword ?? '');
         setExpectedKnockMessageState(getExpectedKnockMessage(hash) ?? '');
         setRoomSetupDismissedState(getRoomSetupDismissed(hash));
+        setRoomCreatedByMeState(getRoomCreatedByMe(hash));
         setRoomSetupStage('security');
         setRoomColor(getRoomColor(hash));
         setRoomNickname(getRoomNickname(hash) ?? '');
@@ -1919,20 +1930,29 @@ const RoomController = () => {
 
   const scrollToLatest = useCallback(() => {
     // Reset render window to newest BEFORE scrolling so the destination is
-    // actually the newest message rather than the visual top of whatever
-    // slice was rendered.
+    // actually the newest message rather than the visual edge of whatever
+    // slice was rendered. Classic order keeps newest at the BOTTOM, so the
+    // latest message lives at the foot of the document.
     jumpWindowToLatest();
+    // Double rAF: the first frame commits the window reset + any just-added
+    // message, the second reads the settled scrollHeight. A single frame can
+    // measure a stale (shorter) height mid-keyboard-close and land short of
+    // the foot — which read as "jumped to the top" in classic order.
     requestAnimationFrame(() => {
-      window.scrollTo({ top: 0 });
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: document.documentElement.scrollHeight });
+      });
     });
   }, [jumpWindowToLatest]);
 
   const handleScroll = useCallback(() => {
     const top = window.scrollY;
-    const atTop = top <= 40;
-    setAutoScroll(atTop);
+    const distanceFromBottom =
+      document.documentElement.scrollHeight - (window.innerHeight + top);
+    const atBottom = distanceFromBottom <= 40;
+    setAutoScroll(atBottom);
     setHeaderCondensed(top > 32);
-    if (atTop) {
+    if (atBottom) {
       setUnreadCount(0);
     }
   }, []);
@@ -1944,14 +1964,35 @@ const RoomController = () => {
 
   useEffect(() => {
     const prevCount = prevCountRef.current;
-    if (messages.length > prevCount && !autoScroll) {
+    const grew = messages.length > prevCount;
+    prevCountRef.current = messages.length;
+    if (!grew) return;
+    // `messages` is ascending (oldest→newest), so the tail is the newest.
+    const newest = messages[messages.length - 1];
+    const newestIsMine = newest?.direction === 'out';
+    // Measure the live scroll position instead of trusting the `autoScroll`
+    // state: a layout/scroll event around the insert can leave that flag
+    // stale, and a stale `true` here fires scrollToLatest — which resets the
+    // render window (a visible reflow "flash") and clears the unread pill even
+    // though the user is parked up in history. Reading geometry now is exact.
+    const distanceFromBottom =
+      document.documentElement.scrollHeight - (window.innerHeight + window.scrollY);
+    const atBottom = distanceFromBottom <= 40;
+    if (newestIsMine || atBottom) {
+      // Sending, or following the live tail: jump to the foot.
+      setAutoScroll(true);
+      setUnreadCount(0);
+      requestAnimationFrame(scrollToLatest);
+    } else {
+      // Parked in history: never move the viewport — just count the arrival so
+      // the pill shows and persists until tapped or the user reaches bottom.
+      // Force autoScroll false here too: the scroll-state flag can still be
+      // stale true (for example after window expansion / browser scroll
+      // restoration), and the pill visibility is gated on that state.
+      setAutoScroll(false);
       setUnreadCount((count) => count + (messages.length - prevCount));
     }
-    prevCountRef.current = messages.length;
-    if (autoScroll) {
-      requestAnimationFrame(scrollToLatest);
-    }
-  }, [messages, autoScroll, scrollToLatest]);
+  }, [messages, scrollToLatest]);
 
   // Reveal-on-tap pairing code panel for the room menu drawer. Rendered in
   // both the main and fallback menu drawers below; defining it once here keeps
@@ -2183,8 +2224,14 @@ const RoomController = () => {
               paddingTop above), so this padding must carry the same inset —
               otherwise on notch / Dynamic Island devices the flat 4rem lands
               behind the lowered pills. Matching the inset keeps a constant
-              gap below the pills on every device. */}
-          <div className="room-message-column mx-auto w-full max-w-[820px] px-4 pt-[calc(env(safe-area-inset-top)+4rem)] pb-28 sm:px-6 sm:pb-32">
+              gap below the pills on every device.
+              In CLASSIC order the newest message lives at this foot, so the
+              bottom clearance must guarantee it never hides under the FAB.
+              The FAB is fixed at bottom:max(1rem,inset) with min-height 3.25rem,
+              so it reaches inset+3.25rem; we pad inset + ~6rem to leave a real
+              gap above it on every device (the flat pb-28/32 ignored the
+              bottom inset and only cleared the FAB by luck). */}
+          <div className="room-message-column mx-auto w-full max-w-[820px] px-4 pt-[calc(env(safe-area-inset-top)+4rem)] pb-[calc(env(safe-area-inset-bottom)+6rem)] sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+7rem)]">
 	            {showEmptyState && (
 	              <div className="glass-panel rounded-[28px] border-dashed p-6 text-center sm:p-8">
                 <p className="text-lg font-bold tracking-[-0.02em] text-ink sm:text-xl">
@@ -2309,13 +2356,18 @@ const RoomController = () => {
               </div>
             )}
 
-            <div className="flex flex-col gap-3">
+            {/* Classic order: flex-col-reverse renders children bottom-to-top, so
+                the newest-first arrays land newest-at-the-BOTTOM. It also flips the
+                two sentinels to the right visual edges (older→top, newer→bottom) and
+                keeps the live work indicators next to the freshest message — all
+                without touching the windowing hook's index math. */}
+            <div className="flex flex-col-reverse gap-3">
               {hasNewer && (
                 <div ref={topSentinelRef} aria-hidden="true" className="h-px w-full shrink-0" />
               )}
 
               {/* Live work indicator: one in-place bubble per active agent, sitting
-                  where its reply will land (newest is at the top). It updates as
+                  where its reply will land (newest is at the bottom). It updates as
                   the agent's state changes and is removed the instant the reply
                   arrives. Only shown on the latest window, never over history. */}
               {!hasNewer && Object.entries(agentStatuses).map(([key, st]) => (
@@ -2503,24 +2555,37 @@ const RoomController = () => {
           </div>
         </div>
 
-        {/* Unread-on-scroll pill. Pinned to the viewport (above the floating
-            Compose button) instead of sticky inside the scroll container — the
-            list is reverse-chronological, so a sticky-bottom element would
-            naturally sit far below the viewport when the user is anywhere near
-            the newest messages and never get pulled into view. */}
-        {!autoScroll && unreadCount > 0 && (
-          <button
-            className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2 btn-primary btn-sm shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)]"
-            onClick={() => {
-              scrollToLatest();
-              setAutoScroll(true);
-              setUnreadCount(0);
-            }}
-            type="button"
-          >
-            ↑ {unreadCount} new
-          </button>
-        )}
+        {/* Unread-on-scroll pill. Viewport-fixed and floated just ABOVE the
+            compose FAB (same env(safe-area-inset-bottom) the FAB carries, so the
+            notch-taller FAB can't swallow it; z-40 keeps it over the FAB). Newest
+            lives at the BOTTOM, so the arrow points down and tapping jumps there.
+
+            It is ALWAYS mounted and merely faded in/out — never conditionally
+            inserted. iOS Safari paints a freshly-inserted position:fixed node at
+            its document-flow position for one frame before the compositor pins
+            it, which made the pill flash "as the last element" mid-scroll. A
+            stable, always-present layer sidesteps that entirely. */}
+        {(() => {
+          const pillActive = !autoScroll && unreadCount > 0;
+          if (unreadCount > 0) lastUnreadRef.current = unreadCount;
+          return (
+            <button
+              aria-hidden={!pillActive}
+              tabIndex={pillActive ? 0 : -1}
+              className={`unread-pill btn-primary btn-sm shadow-[0_8px_24px_-4px_rgba(10,10,10,0.3)] transition-opacity duration-150 ${
+                pillActive ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}
+              onClick={() => {
+                scrollToLatest();
+                setAutoScroll(true);
+                setUnreadCount(0);
+              }}
+              type="button"
+            >
+              ↓ {lastUnreadRef.current} new
+            </button>
+          );
+        })()}
 
         {/* ---- Bottom-anchored chrome ----
             Non-control rooms get the floating Compose trigger (FAB). Control

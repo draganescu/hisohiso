@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { deriveRoomHash, generateRoomSecret } from '../lib/crypto';
-import { setToken, setSubscriberJwt, upsertRoom } from '../lib/storage';
+import { setToken, setSubscriberJwt, upsertRoom, setRoomCreatedByMe } from '../lib/storage';
 import { navigateTo } from '../lib/navigation';
 
 // Creating a channel no longer asks for a name or nickname up front. The room
@@ -49,6 +49,9 @@ const RoomCreator = () => {
       // an auto-generated label until renamed, and the in-room nudge handles the
       // rest.
       upsertRoom(hash, secret, null, 'chat');
+      // Mark this room as self-minted so RoomController only shows the
+      // creator-only setup nudge here, never to someone who joined via link.
+      setRoomCreatedByMe(hash);
 
       navigateTo(`/room#${secret}`);
     } catch (err) {
