@@ -1005,6 +1005,31 @@ code {
   .topbar-inner { position: relative; }
   .nav-toggle { display: inline-flex; }
 
+  /* Mobile: dissolve the bar — brand + menu float as frosted pills over the
+     page, so there's no opaque header strip under the notch/Dynamic Island. */
+  .topbar {
+    background: transparent;
+    backdrop-filter: none;
+    border-bottom: none;
+  }
+  .topbar-inner {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .brand {
+    padding: 9px 15px;
+    border-radius: var(--pill);
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: saturate(150%) blur(10px);
+    border: 1px solid var(--rule-soft);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  }
+  .nav-toggle {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: saturate(150%) blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  }
+
   body.js-nav .topnav {
     display: none;
     position: absolute;
