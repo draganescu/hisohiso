@@ -1967,6 +1967,10 @@ const RoomController = () => {
     const grew = messages.length > prevCount;
     prevCountRef.current = messages.length;
     if (!grew) return;
+    // First hydration / room entry starts at the document top in classic order.
+    // Treat that as following the live tail so existing rooms open on the
+    // newest message instead of showing the oldest history.
+    const firstPopulation = prevCount === 0;
     // `messages` is ascending (oldest→newest), so the tail is the newest.
     const newest = messages[messages.length - 1];
     const newestIsMine = newest?.direction === 'out';
@@ -1978,8 +1982,8 @@ const RoomController = () => {
     const distanceFromBottom =
       document.documentElement.scrollHeight - (window.innerHeight + window.scrollY);
     const atBottom = distanceFromBottom <= 40;
-    if (newestIsMine || atBottom) {
-      // Sending, or following the live tail: jump to the foot.
+    if (firstPopulation || newestIsMine || atBottom) {
+      // Initial room entry, sending, or following the live tail: jump to the foot.
       setAutoScroll(true);
       setUnreadCount(0);
       requestAnimationFrame(scrollToLatest);
