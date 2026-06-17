@@ -1965,20 +1965,30 @@ const RoomController = () => {
   useEffect(() => {
     const prevCount = prevCountRef.current;
     const grew = messages.length > prevCount;
+    prevCountRef.current = messages.length;
+    if (!grew) return;
     // `messages` is ascending (oldest→newest), so the tail is the newest.
-    // Sending always yanks you to your own message at the foot, even if a
-    // keyboard-close scroll event had just flipped autoScroll off.
     const newest = messages[messages.length - 1];
-    const newestIsMine = grew && newest?.direction === 'out';
-    if (grew && !autoScroll && !newestIsMine) {
+    const newestIsMine = newest?.direction === 'out';
+    // Measure the live scroll position instead of trusting the `autoScroll`
+    // state: a layout/scroll event around the insert can leave that flag
+    // stale, and a stale `true` here fires scrollToLatest — which resets the
+    // render window (a visible reflow "flash") and clears the unread pill even
+    // though the user is parked up in history. Reading geometry now is exact.
+    const distanceFromBottom =
+      document.documentElement.scrollHeight - (window.innerHeight + window.scrollY);
+    const atBottom = distanceFromBottom <= 40;
+    if (newestIsMine || atBottom) {
+      // Sending, or following the live tail: jump to the foot.
+      setAutoScroll(true);
+      setUnreadCount(0);
+      requestAnimationFrame(scrollToLatest);
+    } else {
+      // Parked in history: never move the viewport — just count the arrival so
+      // the pill shows and persists until tapped or the user reaches bottom.
       setUnreadCount((count) => count + (messages.length - prevCount));
     }
-    prevCountRef.current = messages.length;
-    if (autoScroll || newestIsMine) {
-      if (newestIsMine && !autoScroll) setAutoScroll(true);
-      requestAnimationFrame(scrollToLatest);
-    }
-  }, [messages, autoScroll, scrollToLatest]);
+  }, [messages, scrollToLatest]);
 
   // Reveal-on-tap pairing code panel for the room menu drawer. Rendered in
   // both the main and fallback menu drawers below; defining it once here keeps
