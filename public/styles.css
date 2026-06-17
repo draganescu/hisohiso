@@ -142,11 +142,18 @@ body::after {
   backdrop-filter: saturate(150%) blur(10px);
   background: linear-gradient(var(--paper) 78%, rgba(243, 239, 230, 0.7));
   border-bottom: 1px solid var(--rule-soft);
+  /* iPhone notch / Dynamic Island: pad the header up into the top safe-area so
+     its solid top edge fills the "ears" instead of letting page content scroll
+     through a transparent inset. Needs viewport-fit=cover (set in the meta). */
+  padding-top: env(safe-area-inset-top);
 }
 .topbar-inner {
   max-width: var(--measure);
   margin: 0 auto;
   padding: 16px 32px;
+  /* Keep nav clear of the side safe-areas (notch in landscape). */
+  padding-left: max(32px, env(safe-area-inset-left));
+  padding-right: max(32px, env(safe-area-inset-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
