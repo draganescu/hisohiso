@@ -36,8 +36,9 @@ const DEFAULT_APPROVAL_TIMEOUT_MS = 30_000;
 // so callers can pass either.
 const extractSecret = (url: string): string => {
   const hashIdx = url.indexOf('#');
-  if (hashIdx === -1) return url.replace(/^#\/?/, '');
-  return url.slice(hashIdx + 1).replace(/^\/?/, '');
+  // No '#' → already a bare secret. Otherwise take everything after it, minus a
+  // leading slash (`/room#/secret`).
+  return hashIdx === -1 ? url : url.slice(hashIdx + 1).replace(/^\/?/, '');
 };
 
 export class TestClient {

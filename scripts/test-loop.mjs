@@ -33,6 +33,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node
 import { fileURLToPath } from 'node:url';
 import { relayUp, relayDown } from './relay.mjs';
 import { deriveWorktreeEnv } from './lib/worktree-env.mjs';
+import { runInherit } from './lib/proc.mjs';
 import { TestClient } from '../cli/src/lib/test-client.ts';
 
 const cwd = process.cwd();
@@ -59,20 +60,9 @@ const log = (msg) => console.log(`▶  ${msg}`);
 const argv = process.argv.slice(2);
 const fresh = argv.includes('--fresh');
 const headed = argv.includes('--headed');
-let mode = 'fast';
+let mode = 'fast'; // --fast (or no flag) is the default
 if (argv.includes('--browser')) mode = 'browser';
 else if (argv.includes('--manual')) mode = 'manual';
-else if (argv.includes('--fast')) mode = 'fast';
-
-// ── child-process helpers ─────────────────────────────────────────────────────
-// Run a command to completion, streaming to the parent's stdio.
-function runInherit(cmd, args, opts = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: 'inherit', ...opts });
-    child.on('error', () => resolve(1));
-    child.on('exit', (code) => resolve(code ?? 1));
-  });
-}
 
 // ── test-daemon lifecycle ─────────────────────────────────────────────────────
 // Seed the test home so the daemon talks to THIS worktree's relay and can spawn

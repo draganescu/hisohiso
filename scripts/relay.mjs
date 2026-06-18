@@ -7,79 +7,17 @@
 //   down   — docker compose down with the same COMPOSE_PROJECT_NAME
 //   status — report container health + URL
 // Runnable (`bun scripts/relay.mjs up|down|status`) and importable.
-import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { deriveWorktreeEnv } from './lib/worktree-env.mjs';
-import { generateVapidKeypair } from './lib/vapid.mjs';
+import { composeEnv } from './lib/compose-env.mjs';
+import { run, runInherit } from './lib/proc.mjs';
 
 // Health-wait is bounded so a wedged container fails loudly instead of hanging.
 // Roughly matches the compose healthcheck envelope (start_period + a few
 // probe cycles): the relay should be answering /api/stats well inside this.
 const HEALTH_TIMEOUT_MS = 120_000;
 const HEALTH_INTERVAL_MS = 1_000;
-
-// Build the env dev.mjs injects into docker compose for a given worktree.
-async function relayEnv(cwd) {
-  const { project, port, pubKey, subKey } = deriveWorktreeEnv(cwd);
-  // Dev VAPID keypair, minted once and cached under ./data so it stays stable
-  // across restarts — a rotating key would orphan every subscription in the
-  // dev DB. Mirrors scripts/dev.mjs's loadOrCreateVapid.
-  const vapid = await loadOrCreateVapid(cwd, join(cwd, 'data', '.vapid-dev.json'));
-  return {
-    project,
-    port,
-    composeEnv: {
-      ...process.env,
-      COMPOSE_PROJECT_NAME: project,
-      HISOHISO_PORT: String(port),
-      MERCURE_PUBLISHER_JWT_KEY: pubKey,
-      MERCURE_SUBSCRIBER_JWT_KEY: subKey,
-      VAPID_PUBLIC_KEY: vapid.publicKey,
-      VAPID_PRIVATE_KEY: vapid.privateKey,
-      // NOT a localhost mailto: Apple rejects those (403 BadJwtToken). The sub is
-      // just an abuse contact for the push service; any real https:/mailto works.
-      VAPID_SUBJECT: 'https://hisohiso.org',
-    },
-  };
-}
-
-async function loadOrCreateVapid(cwd, path) {
-  if (existsSync(path)) {
-    try {
-      return JSON.parse(readFileSync(path, 'utf8'));
-    } catch {
-      // fall through and regenerate a corrupt cache
-    }
-  }
-  const vapid = await generateVapidKeypair();
-  mkdirSync(join(cwd, 'data'), { recursive: true });
-  writeFileSync(path, JSON.stringify(vapid), { mode: 0o600 });
-  return vapid;
-}
-
-// Run a command to completion, capturing stdout/stderr. Never rejects on a
-// nonzero exit — callers inspect `code` so they can attach context.
-function run(cmd, args, opts = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], ...opts });
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (d) => { stdout += d; });
-    child.stderr?.on('data', (d) => { stderr += d; });
-    child.on('error', (err) => resolve({ code: 1, stdout, stderr: String(err?.message ?? err) }));
-    child.on('exit', (code) => resolve({ code: code ?? 1, stdout, stderr }));
-  });
-}
-
-// Stream a command to the parent's stdio (for the noisy `up --build`).
-function runInherit(cmd, args, opts = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: 'inherit', ...opts });
-    child.on('error', () => resolve(1));
-    child.on('exit', (code) => resolve(code ?? 1));
-  });
-}
 
 // Fail loudly when the Docker daemon is down rather than hanging on compose.
 async function ensureDockerUp() {
@@ -108,13 +46,14 @@ function ensureNoBuildPoison(cwd) {
   }
 }
 
+// Resolves true once /api/stats answers OK, false if the deadline passes first.
 async function pollHealth(port) {
   const url = `http://localhost:${port}/api/stats`;
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
   for (;;) {
     try {
       const res = await fetch(url);
-      if (res.ok) return;
+      if (res.ok) return true;
     } catch {
       // not up yet
     }
@@ -126,23 +65,22 @@ async function pollHealth(port) {
 export async function relayUp(cwd = process.cwd()) {
   await ensureDockerUp();
   ensureNoBuildPoison(cwd);
-  const { project, port, composeEnv } = await relayEnv(cwd);
+  const { project, port, env } = await composeEnv(cwd);
   const url = `http://localhost:${port}/`;
 
   console.log(`▶  ${project}`);
   console.log(`▶  ${url}\n`);
 
-  const code = await runInherit('docker', ['compose', 'up', '-d', '--build'], { cwd, env: composeEnv });
+  const code = await runInherit('docker', ['compose', 'up', '-d', '--build'], { cwd, env });
   if (code !== 0) {
     throw new Error(`docker compose up exited ${code}`);
   }
 
-  const ok = await pollHealth(port);
-  if (ok === false) {
+  if (!(await pollHealth(port))) {
     const { stdout } = await run(
       'docker',
       ['compose', 'ps'],
-      { cwd, env: composeEnv },
+      { cwd, env },
     );
     throw new Error(
       `relay did not become healthy within ${HEALTH_TIMEOUT_MS / 1000}s (${url}api/stats).\n${stdout}`,
@@ -153,8 +91,8 @@ export async function relayUp(cwd = process.cwd()) {
 }
 
 export async function relayDown(cwd = process.cwd()) {
-  const { project, composeEnv } = await relayEnv(cwd);
-  const { code, stderr } = await run('docker', ['compose', 'down'], { cwd, env: composeEnv });
+  const { project, env } = await composeEnv(cwd);
+  const { code, stderr } = await run('docker', ['compose', 'down'], { cwd, env });
   if (code !== 0) {
     throw new Error(`docker compose down (${project}) exited ${code}\n${stderr}`);
   }
@@ -173,9 +111,7 @@ export async function relayStatus(cwd = process.cwd()) {
   return { healthy, url, project };
 }
 
-const RUN_AS_MAIN = import.meta.main ?? (process.argv[1] && import.meta.url === `file://${process.argv[1]}`);
-
-if (RUN_AS_MAIN) {
+if (import.meta.main) {
   const cmd = process.argv[2];
   try {
     if (cmd === 'up') {
