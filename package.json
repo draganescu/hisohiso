@@ -2,6 +2,8 @@
   "name": "hisohiso",
   "private": true,
   "scripts": {
-    "dev": "bun scripts/dev.mjs"
+    "dev": "bun scripts/dev.mjs",
+    "test:loop": "bun scripts/test-loop.mjs",
+    "test:loop:fresh": "bun scripts/test-loop.mjs --fast --fresh"
   }
 }

@@ -3,6 +3,9 @@
 /app/dist
 /cli/node_modules
 /cli/dist
+/e2e/node_modules
+/e2e/test-results
+/e2e/playwright-report
 # bun is not this repo's package manager (cli uses npm + package-lock.json);
 # a stray bun.lock appears when tooling runs `bun install` in the worktree.
 bun.lock

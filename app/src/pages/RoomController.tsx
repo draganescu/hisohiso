@@ -2422,6 +2422,8 @@ const RoomController = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedId(msg.id)}
+                      data-testid="message-card"
+                      data-message-direction={isMine ? 'out' : 'in'}
                       className={`message-card max-w-[84%] cursor-pointer rounded-[22px] px-4 py-3 text-left leading-6 transition-colors sm:max-w-[72%] ${
                         isMine
                           ? 'message-card-out rounded-br-[7px] hover:brightness-110'

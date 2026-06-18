@@ -1046,6 +1046,20 @@ export const setupControlRoom = async (
     // knock here so the headless re-pair doesn't prompt. Consume it once.
     sessionKnockMessage = carriedEnvKnock;
     delete process.env.HISOHISO_CARRY_KNOCK;
+  } else if (typeof process.env.HISOHISO_KNOCK_MESSAGE === 'string') {
+    // Non-interactive pairing: a headless harness sources the session knock
+    // message from the env, bypassing the hidden TTY prompt. An explicitly-set
+    // empty value is rejected exactly as the prompt path rejects an empty line
+    // — it does NOT fall through. Ordered AFTER the carry-knock signals (a
+    // re-exec/re-pair takes priority) and BEFORE the underService refusal so a
+    // service can pair with no prior foreground run. Consume it once so it can't
+    // leak into spawned children's env.
+    sessionKnockMessage = process.env.HISOHISO_KNOCK_MESSAGE;
+    delete process.env.HISOHISO_KNOCK_MESSAGE;
+    if (sessionKnockMessage === '') {
+      console.error('Knock message cannot be empty. Aborting.');
+      process.exit(1);
+    }
   } else if (underService) {
     // No carried knock and no TTY — can't pair headlessly. This shouldn't happen
     // (`daemon install` requires a prior foreground pair), but fail loudly rather

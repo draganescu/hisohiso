@@ -133,3 +133,100 @@ COMPOSE_PROJECT_NAME=<project> docker compose down
 Stop the daemon with Ctrl-C in its terminal (or `… -- daemon stop` from `cli/`).
 Dev state lives in `~/.hisohiso-dev` and persists between runs — wipe it for a
 truly clean slate.
+
+## Automated testing loops
+
+The procedure above is the **manual fallback** — the irreducibly-interactive
+QR-scan path, where a human drives the real PWA in a browser. For everything that
+*can* be automated, `scripts/test-loop.mjs` is one orchestrator entrypoint that
+brings up the worktree's relay, runs the flows with assertions, and tears the
+stack back down. It is runnable by a coding agent with **no TTY**.
+
+```bash
+bun scripts/test-loop.mjs                 # --fast (default)
+bun scripts/test-loop.mjs --browser       # real PWA via Playwright
+bun scripts/test-loop.mjs --manual        # the §1–4 procedure, one command
+bun scripts/test-loop.mjs --fast --fresh  # wipe stale test state first
+```
+
+It runs against the **same** per-worktree isolated relay as `scripts/dev.mjs`
+(same derived port/project/JWT/VAPID — `scripts/relay.mjs up` promotes the §1
+detached-launch bash into code), but the daemon state lives under a **separate**
+home, `~/.hisohiso-test` (`HISOHISO_HOME`), distinct from your `~/.hisohiso-dev`
+and your real `~/.hisohiso`. An agent's loop never disturbs a daemon you have
+running.
+
+### `--fast` (default)
+
+Seconds, offline, deterministic — the inner loop. No browser, no real model. It
+brings the relay up, then runs two flows with headless "virtual participants"
+(`cli/src/lib/test-client.ts`, composed from the existing `crypto.ts` /
+`api-client.ts` / `sse-client.ts` — no new protocol code):
+
+- **human↔human** — client A creates a room, client B joins by secret; A→B and
+  B→A each assert the decrypted plaintext round-trips identically.
+- **human↔agent** — a client pairs the daemon's control room (non-interactively,
+  see below), sends `bash`, joins the returned agent room, sends a line, and
+  asserts the echoed reply. The agent leg uses the built-in **`bash`** agent on
+  purpose: it asserts the *transport* (pair → spawn → join → prompt → reply)
+  without depending on a model. Driving real `claude` is a `--browser` / `--manual`
+  job.
+
+Teardown is trap-guarded — any assertion failure still runs `docker compose down`,
+and the loop exits nonzero so an agent/CI reads pass/fail. No orphaned stacks.
+
+### `--browser`
+
+Higher fidelity, on demand. Brings the relay up, then Playwright launches 2+
+Chromium contexts against the relay URL, creates/joins a room through the **actual
+PWA UI**, and asserts the typed message renders A→B; then drives a browser into a
+daemon-spawned agent room (`e2e/`). Chromium only, headless by default; pass
+`--headed` to watch. The orchestrator owns the Docker relay lifecycle —
+Playwright does not (the relay is a built bundle, not a `vite dev` server).
+
+### `--manual`
+
+Wraps the §1–4 procedure into one command: relay up + daemon in the foreground,
+printing the URL(s) and the knock message for you to drive the genuine QR-scan
+path from a browser. Reach for this when you need a human in the loop — the path
+the rest of this doc describes by hand.
+
+### Non-interactive pairing
+
+The joiner never needed a TTY. Auto-approval gates on **session knock message +
+per-room pairing code** — both fold into the PBKDF2 `k_knock` derivation
+(`cli/src/lib/crypto.ts`), so a joiner that holds room secret + pairing code +
+knock message is auto-admitted with **no QR scan**. The only TTY dependency was
+on the daemon/`wrap` side, where the hidden `promptLine` collects the knock
+message.
+
+Setting **`HISOHISO_KNOCK_MESSAGE`** sources that one value from the environment,
+bypassing the prompt — this is what lets the fast loop pair fully headlessly:
+
+```bash
+HISOHISO_HOME=$HOME/.hisohiso-test HISOHISO_KNOCK_MESSAGE='loop-secret' \
+  bun run dev -- daemon start --fresh
+```
+
+When the var is set and non-empty, no TTY is required. Unset → unchanged
+interactive behaviour (the hidden prompt). Empty → rejected exactly as an empty
+prompt line is. It slots in alongside the existing `HISOHISO_SERVICE` /
+`!process.stdin.isTTY` handling, and applies to both `wrap` and the daemon's
+control-room setup. The orchestrator sets it for you; you only need it by hand if
+you're pairing a headless daemon yourself.
+
+### How a coding agent runs the fast loop
+
+No TTY, no browser, no human:
+
+```bash
+bun scripts/test-loop.mjs --fast --fresh   # from the worktree root
+echo $?                                     # 0 = pass, nonzero = fail
+```
+
+`--fresh` wipes any stale pairing state in `~/.hisohiso-test` (a previous
+worktree's now-gone port/JWT — same hazard as `daemon start --fresh`, just on the
+test home). The loop derives the relay env, brings the stack up, spawns its own
+isolated test daemon with `HISOHISO_KNOCK_MESSAGE` set, runs both round-trips, and
+tears everything down on the way out — pass or fail. Read the exit code; the stack
+is gone either way.
