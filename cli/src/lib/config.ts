@@ -52,6 +52,12 @@ export type DaemonState = {
   // pairing-code + sessionKnockMessage can win the first-device race; this is
   // the ceiling without a stable phone-side device key.
   controlBound?: boolean;
+  // The ephemeral knock pubkey of the device that bound the control room. A
+  // retry from this same pubkey is the same first device missing the live-only
+  // wrapped-token delivery race; the daemon should re-send the pass instead of
+  // treating it as a new device. Optional / missing => safe default: no retry
+  // fast path, so additional knocks still require explicit operator approval.
+  controlBoundPubkey?: string;
   // KDF generation this control room was paired under (finding #93). Absent /
   // !== 1 means the room predates the PBKDF2 + high-entropy-code upgrade and was
   // paired with a weak 4-digit code; such state is NOT reused — the daemon

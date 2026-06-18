@@ -34,7 +34,8 @@
 //   - Control:  button "spawn" (ControlCommandBar). Launcher/list are daemon-
 //               sent interactive blocks rendered as round buttons whose text is
 //               the option label; the bash option + the "Join bash …" action
-//               are matched by accessible text.
+//               are matched by accessible text. Message DOM is newest-first
+//               because the thread uses flex-col-reverse.
 //   - Compose:  button "compose" → textarea[aria-label="new message"] →
 //               button "done".
 //   - Assert:   [data-testid="message-card"][data-message-direction="in"]
@@ -52,7 +53,21 @@ const NONCE = () => Math.random().toString(36).slice(2, 10);
 // to reveal it; expanding clears its "tap to view" text, so `.last()` always
 // targets the freshest unexpanded block.
 async function revealLatestBlock(page: Page): Promise<void> {
-  const chip = page.getByRole('button', { name: /tap to view/i }).last();
+  // If a previous block detail sheet is still open after a button response,
+  // close it before trying to click the next card in the thread.
+  const back = page.locator('.room-overlay').getByRole('button', { name: 'back' });
+  if (await back.isVisible().catch(() => false)) {
+    await back.click({ force: true, timeout: 2_000 }).catch(() => {});
+    await expect(back).toBeHidden({ timeout: 5_000 }).catch(() => {});
+  }
+
+  // Message DOM is newest-first (rendered inside flex-col-reverse). Target the
+  // newest message that actually carries an interactive block; older plain
+  // messages can also contain “tap to view” wording in detail/reply previews.
+  const chip = page
+    .locator('[data-testid="message-card"]')
+    .filter({ hasText: /interactive .*blocks? — tap to view/i })
+    .first();
   await expect(chip).toBeVisible({ timeout: 30_000 });
   await chip.click();
 }
@@ -95,15 +110,18 @@ async function knockAndEnter(page: Page, code: string, note: string): Promise<vo
   await requestBtn.click();
   await expect
     .poll(async () => {
-      if (await sent.isVisible()) return true;
+      if (await sent.isVisible().catch(() => false)) return true;
+      // If the request button disappeared, we already advanced out of the lobby
+      // (local auto-admit can be faster than the transient waiting text).
+      if (!(await requestBtn.isVisible().catch(() => false))) return true;
       // Re-tap ONLY when the UI is showing "preparing" — that state only appears
       // after a no-op tap (k_knock not yet derived), so a re-tap here can't
       // double-send. A second *successful* knock would mint a fresh ephemeral
       // keypair and break the daemon's first-device token binding.
-      if (await preparing.isVisible()) {
-        await requestBtn.click();
+      if (await preparing.isVisible().catch(() => false)) {
+        await requestBtn.click().catch(() => {});
       }
-      return sent.isVisible();
+      return false;
     }, { timeout: 30_000 })
     .toBe(true);
 }
@@ -139,12 +157,13 @@ test('a browser pairs a daemon control room, spawns bash, and round-trips a repl
     const bashOption = page.getByRole('button', { name: /^bash$/i });
     await expect(bashOption).toBeVisible({ timeout: 30_000 });
     await bashOption.click();
+    await page.getByRole('button', { name: /^Send/ }).click();
 
     // --- 3. Tap the join-room action the daemon posts for the new agent room ---
     // Also a collapsed interactive block; expand it, then tap the "Join …" button
     // (a role="button" span reading "Join <agentName> →").
     await revealLatestBlock(page);
-    const joinAction = page.getByRole('button', { name: /^Join\b.*→$/ });
+    const joinAction = page.getByRole('button', { name: /^Join\b.*→$/ }).last();
     await expect(joinAction).toBeVisible({ timeout: 30_000 });
     await joinAction.click();
 
