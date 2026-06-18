@@ -398,6 +398,27 @@ export const runDaemon = async (): Promise<void> => {
           // into THIS control room. A single-device operator who lost their
           // token recovers only via terminal `daemon start --fresh`.
           if (iterState.controlBound) {
+            // Same first device retrying. The wrapped token is a live-only lobby
+            // event, so the browser may miss it if its lobby SSE was not open
+            // when we first approved. Re-approving this identical device/pubkey
+            // re-sends the pass without admitting a new device; a different
+            // pubkey still goes through explicit operator confirmation.
+            if (iterState.controlBoundPubkey && knockPubkey === iterState.controlBoundPubkey) {
+              try {
+                const binding = await beginApprove(knockPubkey, knockMsgId);
+                const approveRes = await api.approveKnock(server, iterState.controlRoomHash, iterState.participantToken, binding.claimTagHash);
+                const bundle = JSON.stringify({
+                  token: approveRes.new_participant_token,
+                  subscriber_jwt: approveRes.subscriber_jwt,
+                });
+                const wrapped = await binding.wrap(bundle);
+                await api.sendWrappedToken(server, iterState.controlRoomHash, iterState.participantToken, knockMsgId, wrapped);
+                console.log('Re-sent control-room join pass to the bound device (knock retry).');
+              } catch (err) {
+                console.error('Failed to re-approve control-room retry:', err);
+              }
+              return;
+            }
             console.warn('Additional device knocked on a bound control room — awaiting operator confirm.');
             await iterCtrl.requestControlKnockConfirm(knockPubkey, knockMsgId);
             return;
@@ -413,6 +434,7 @@ export const runDaemon = async (): Promise<void> => {
             const wrapped = await binding.wrap(bundle);
             await api.sendWrappedToken(server, iterState.controlRoomHash, iterState.participantToken, knockMsgId, wrapped);
             iterState.controlBound = true;
+            iterState.controlBoundPubkey = knockPubkey;
             await saveDaemonState(iterState);
             console.log('Phone connected to control room.');
           } catch (err) {
@@ -1033,9 +1055,14 @@ export const setupControlRoom = async (
   // string is the expected knock cleartext for every agent room minted later.
   // A re-pair carries the existing knockMessage forward — no re-prompt.
   // A backgrounded daemon (#125) has no TTY to scan a QR or type a knock on.
-  // Gated strictly on the unit-set HISOHISO_SERVICE env so foreground behaviour
-  // is byte-for-byte unchanged.
+  // Agentic/browser test harnesses are also non-TTY: they can provide the
+  // session knock via HISOHISO_KNOCK_MESSAGE and then ask the daemon's local
+  // control socket for pair material. Treat those like service startup for
+  // pairing: create an unbound room and let the daemon runtime approve the
+  // first authenticated knock, instead of blocking forever in the pre-runtime
+  // QR wait. Interactive foreground behavior is unchanged.
   const underService = Boolean(process.env.HISOHISO_SERVICE);
+  const headlessPairing = underService || !process.stdin.isTTY;
 
   let sessionKnockMessage: string;
   const carriedEnvKnock = process.env.HISOHISO_CARRY_KNOCK;
@@ -1060,11 +1087,12 @@ export const setupControlRoom = async (
       console.error('Knock message cannot be empty. Aborting.');
       process.exit(1);
     }
-  } else if (underService) {
-    // No carried knock and no TTY — can't pair headlessly. This shouldn't happen
-    // (`daemon install` requires a prior foreground pair), but fail loudly rather
-    // than hang on an invisible prompt.
-    console.error('Cannot pair headlessly with no carried knock — pair once in the foreground first.');
+  } else if (headlessPairing) {
+    // No carried/env knock and no usable TTY — can't pair headlessly. Fail loudly
+    // rather than hanging on an invisible prompt. Services normally get here only
+    // if install/provisioning skipped the foreground pair; tests should set
+    // HISOHISO_KNOCK_MESSAGE.
+    console.error('Cannot pair headlessly with no carried knock — set HISOHISO_KNOCK_MESSAGE or pair once in the foreground first.');
     process.exit(1);
   } else {
     sessionKnockMessage = (await promptLine('Session knock message (used to authenticate every join in this session): ', { hidden: true })).trim();
@@ -1092,12 +1120,13 @@ export const setupControlRoom = async (
   // Start presence so room shows as active
   const tempPresence = startPresence(server, controlRoomHash, participantToken);
 
-  // Headless (under a service): don't block on the first knock against a QR no
-  // one can scan — that's the motivating bug. Persist an UNBOUND control room
-  // and return; runDaemon's own onKnock handler binds the first authenticated
-  // device, and `hisohiso pair` renders this QR on demand over the control
-  // socket. `hisohiso status` reports "awaiting pairing" until a device binds.
-  if (underService) {
+  // Headless (service or non-TTY test harness): don't block on the first knock
+  // against a QR no one can scan/read — that's the motivating bug. Persist an
+  // UNBOUND control room and return; runDaemon's own onKnock handler binds the
+  // first authenticated device, and `hisohiso pair` / the local control socket
+  // renders or returns this pair material on demand. `hisohiso status` reports
+  // "awaiting pairing" until a device binds.
+  if (headlessPairing) {
     tempPresence.stop();
     const awaitingState: DaemonState = {
       controlRoomSecret,
@@ -1107,6 +1136,7 @@ export const setupControlRoom = async (
       controlRoomPassword: password,
       sessionKnockMessage,
       controlBound: false,
+      controlBoundPubkey: undefined,
       kdfVersion: 1,
     };
     await saveDaemonState(awaitingState);
@@ -1138,6 +1168,7 @@ export const setupControlRoom = async (
   };
   process.on('SIGINT', cancelPairing);
 
+  let pairedControlBoundPubkey: string | undefined;
   try {
     await new Promise<void>((resolve, reject) => {
       const sse = subscribeToRoom(server, controlRoomHash, subscriberJwt, {
@@ -1178,6 +1209,7 @@ export const setupControlRoom = async (
             });
             const wrapped = await binding.wrap(bundle);
             await api.sendWrappedToken(server, controlRoomHash, participantToken, knockMsgId, wrapped);
+            pairedControlBoundPubkey = knockPubkey;
             console.log('Phone connected to control room.');
             sse.close();
             resolve();
@@ -1206,6 +1238,7 @@ export const setupControlRoom = async (
     // The device we just approved above IS the first device — bind to it so any
     // subsequent knock requires an explicit operator confirm tap.
     controlBound: true,
+    controlBoundPubkey: pairedControlBoundPubkey,
     kdfVersion: 1,
   };
   await saveDaemonState(state);

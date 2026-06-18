@@ -321,6 +321,21 @@ const RoomController = () => {
   // the stale-closure capture entirely. See the 4G→WiFi authorship-flip bug.
   const tokenHashRef = useRef<string | null>(null);
   const prevCountRef = useRef(0);
+  // Room entry / switch owes an unconditional jump to the newest message (#211).
+  // Entry scroll was erratic because it relied on a single geometry measure
+  // taken right after the first paint: SSE catch-up messages trickle in one by
+  // one AFTER that, and late-laying-out content (message blocks, images) grows
+  // the document below the fold — both leave the measure reading "not at bottom"
+  // so the room opened parked in history with an unread pill instead of at the
+  // foot. While this is set we follow the tail unconditionally and re-pin as the
+  // document grows; it's released on the first deliberate user scroll-up or once
+  // the room has settled.
+  const initialScrollPendingRef = useRef(false);
+  // Last observed window.scrollY, so handleScroll can tell a deliberate user
+  // scroll-up (scrollY decreases) from content growth knocking us off the foot
+  // (scrollY unchanged, scrollHeight increases) — only the former releases the
+  // entry pin.
+  const lastScrollYRef = useRef(0);
   // Holds the last non-zero unread tally so the always-mounted pill can keep
   // its label while it fades out (count resets to 0 the instant you hit bottom).
   const lastUnreadRef = useRef(0);
@@ -575,10 +590,27 @@ const RoomController = () => {
     if (from && messageRecord.direction === 'in' && ts > (lastInboundMsgTsRef.current[from] ?? 0)) {
       lastInboundMsgTsRef.current[from] = ts;
     }
-    // NOTE: the work indicator is NOT cleared here. Clearing is driven by the
-    // daemon's terminal `done`/`failed` status event (see the status handler),
-    // so intermediate daemon chats ("queued", "exit code N") that share this
-    // sender hash can't prematurely dismiss a still-running agent's bubble.
+    // Live reconcile of the work indicator (#210). The daemon's terminal
+    // `done`/`failed` status is ephemeral and fire-and-forget (see
+    // agent-manager onStatus): if it's dropped, nothing on a live connection
+    // clears the "working…" bubble and it strands above the reply that already
+    // landed — only a reconnect used to reconcile it (the SSE onopen handler).
+    // So apply that same reconcile on every inbound message: if this message is
+    // at/after the sender's active status, the turn produced its reply, so drop
+    // the indicator. A still-working agent keeps emitting status with a NEWER ts
+    // (the reply is always sent after the last status), so an intermediate
+    // daemon chat that clears the bubble early is immediately restored by the
+    // next status; only the genuine final reply — with no status after it —
+    // stays cleared.
+    if (from && messageRecord.direction === 'in') {
+      setAgentStatuses((prev) => {
+        const st = prev[from];
+        if (!st || ts < st.ts) return prev;
+        const next = { ...prev };
+        delete next[from];
+        return next;
+      });
+    }
     setMessages((prev) => {
       const existing = prev.find((item) => item.id === msgId);
       if (existing) {
@@ -1987,6 +2019,15 @@ const RoomController = () => {
 
   const handleScroll = useCallback(() => {
     const top = window.scrollY;
+    const prevTop = lastScrollYRef.current;
+    lastScrollYRef.current = top;
+    // A deliberate scroll-up (the viewport moves up by more than a jitter
+    // threshold) means the user has taken control — stop force-following the
+    // tail for this room entry. Content growth pushes the floor down without
+    // moving scrollY up, so it never trips this.
+    if (initialScrollPendingRef.current && top < prevTop - 8) {
+      initialScrollPendingRef.current = false;
+    }
     const distanceFromBottom =
       document.documentElement.scrollHeight - (window.innerHeight + top);
     const atBottom = distanceFromBottom <= 40;
@@ -2002,6 +2043,32 @@ const RoomController = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
+  // Entry/switch scroll pin (#211). On a room change, owe an unconditional jump
+  // to the foot and keep re-pinning as the document grows (catch-up messages,
+  // late block/image layout) until the user scrolls up or the room settles.
+  // A ResizeObserver is what makes this robust where the old single measure
+  // raced: it re-asserts the foot every time height changes during the window.
+  useEffect(() => {
+    if (!roomHash) return;
+    initialScrollPendingRef.current = true;
+    lastScrollYRef.current = window.scrollY;
+    const ro = new ResizeObserver(() => {
+      if (!initialScrollPendingRef.current) return;
+      window.scrollTo({ top: document.documentElement.scrollHeight });
+    });
+    ro.observe(document.documentElement);
+    // Backstop: release the pin once the room has had time to settle so a later
+    // organic arrival is handled history-aware (counted, not force-scrolled)
+    // rather than yanking a reader who paused exactly at the foot.
+    const settle = setTimeout(() => {
+      initialScrollPendingRef.current = false;
+    }, 1500);
+    return () => {
+      ro.disconnect();
+      clearTimeout(settle);
+    };
+  }, [roomHash]);
+
   useEffect(() => {
     const prevCount = prevCountRef.current;
     const grew = messages.length > prevCount;
@@ -2011,6 +2078,12 @@ const RoomController = () => {
     // Treat that as following the live tail so existing rooms open on the
     // newest message instead of showing the oldest history.
     const firstPopulation = prevCount === 0;
+    // While the room is still entering/settling, follow the tail unconditionally
+    // (#211): catch-up messages arrive after the first scroll, and a geometry
+    // read here can transiently see "not at bottom" mid-settle and wrongly park
+    // the room in history with an unread pill. The pin is released on a user
+    // scroll-up or the settle timeout (see the entry-scroll effect).
+    const entering = initialScrollPendingRef.current;
     // `messages` is ascending (oldest→newest), so the tail is the newest.
     const newest = messages[messages.length - 1];
     const newestIsMine = newest?.direction === 'out';
@@ -2022,7 +2095,7 @@ const RoomController = () => {
     const distanceFromBottom =
       document.documentElement.scrollHeight - (window.innerHeight + window.scrollY);
     const atBottom = distanceFromBottom <= 40;
-    if (firstPopulation || newestIsMine || atBottom) {
+    if (firstPopulation || entering || newestIsMine || atBottom) {
       // Initial room entry, sending, or following the live tail: jump to the foot.
       setAutoScroll(true);
       setUnreadCount(0);
