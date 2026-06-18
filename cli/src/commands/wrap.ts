@@ -44,11 +44,21 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     profile = builtin;
   }
 
-  // Prompt the operator for a session knock message BEFORE generating the QR.
-  // Hidden input so it stays out of scrollback. This is the secret the phone
-  // must type as the knock body — only knowing it AND the pairing code AND the
-  // room URL together gets a phone past the auto-approve gate below.
-  const sessionKnockMessage = (await promptLine('Knock message (the secret the phone will type as the knock body): ', { hidden: true })).trim();
+  // Session knock message: the secret the phone must type as the knock body —
+  // only knowing it AND the pairing code AND the room URL together gets a phone
+  // past the auto-approve gate below. A headless harness sources it from
+  // HISOHISO_KNOCK_MESSAGE (bypassing the hidden TTY prompt); an explicitly-set
+  // empty value is rejected exactly as the prompt path rejects an empty line,
+  // and it does NOT fall through. Unset => unchanged interactive prompt. Consume
+  // the env once so it can't leak into the wrapped command's env.
+  let sessionKnockMessage: string;
+  if (typeof process.env.HISOHISO_KNOCK_MESSAGE === 'string') {
+    sessionKnockMessage = process.env.HISOHISO_KNOCK_MESSAGE;
+    delete process.env.HISOHISO_KNOCK_MESSAGE;
+  } else {
+    // Hidden input so it stays out of scrollback.
+    sessionKnockMessage = (await promptLine('Knock message (the secret the phone will type as the knock body): ', { hidden: true })).trim();
+  }
   if (sessionKnockMessage === '') {
     console.error('Knock message cannot be empty. Aborting.');
     process.exit(1);

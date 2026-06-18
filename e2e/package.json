@@ -1,0 +1,15 @@
+{
+  "name": "hisohiso-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Playwright (Chromium) PWA fidelity tests. The orchestrator (scripts/test-loop.mjs --browser) owns the Docker relay + daemon; these specs only drive the browser against HISOHISO_URL.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

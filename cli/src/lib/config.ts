@@ -97,6 +97,15 @@ export type ActiveRoom = {
   // rooms stay unbound until their next knock flips it). Cleared by
   // `daemon start --fresh` (which deletes rooms.json).
   bound?: boolean;
+  // The ephemeral knock pubkey of the device that bound this room (set alongside
+  // `bound`). A later knock from THIS exact pubkey is the same device retrying —
+  // its first wrapped-token can be lost to a live-only delivery race (the phone's
+  // lobby SSE may not be open yet when the daemon replies), so it is re-approved
+  // (the pass re-sent) rather than parked. A knock from any OTHER pubkey is still
+  // treated as a new device and routed to a control-room confirm. Optional /
+  // missing => no same-device fast path (every extra knock confirms), which is
+  // the safe default for a pre-existing rooms.json.
+  boundPubkey?: string;
   // Per-room replay ledger: msg_id -> local Date.now() first-seen ms. Persisted
   // so a daemon restart (or 6h auto-update re-exec) can't be made to re-execute
   // an outbox-retained turn the server re-publishes. Pruned to a 24h TTL on load

@@ -104,6 +104,11 @@ export type SubscribeOptions = {
   // (typically POST /sub-token, persisting it) or null to give up. While this
   // is wired, an expired JWT self-heals instead of retrying into 401 forever.
   refreshJwt?: () => Promise<string | null>;
+  // Topic scope. Participants subscribe to the members topic (room:<hash>) —
+  // the default; a knocker awaiting its wrapped token holds only a lobby JWT,
+  // which authorizes room:<hash>:lobby (where /token + /reject + destroy fan
+  // out). Mirrors the PWA's topicFor(scope) split (app/src/lib/mercure.ts).
+  scope?: 'members' | 'lobby';
 };
 
 // Floor between refresh attempts so a refresh that yields another 401 (e.g.
@@ -118,7 +123,8 @@ export const subscribeToRoom = (
   handlers: SSEHandlers,
   options?: SubscribeOptions
 ): SSESubscription => {
-  const topic = encodeURIComponent(`room:${roomHash}`);
+  const topicName = options?.scope === 'lobby' ? `room:${roomHash}:lobby` : `room:${roomHash}`;
+  const topic = encodeURIComponent(topicName);
   const url = `${server}/.well-known/mercure?topic=${topic}`;
   let currentJwt = jwt;
   let closed = false;

@@ -327,8 +327,11 @@ const RoomController = () => {
   const knockKeyRef = useRef<CryptoKey | null>(null);
   // Ephemeral keypair used to receive the wrapped participant token after a
   // knock. Set right before /knock fires; consulted when the matching `token`
-  // event arrives. Cleared once we upgrade to PARTICIPANT.
-  const knockEphemeralRef = useRef<{ privateKey: CryptoKey; msgId: string } | null>(null);
+  // event arrives. Cleared once we upgrade to PARTICIPANT. `publicKey` + `body`
+  // are the exact wire values of the sent knock, retained so the retry effect
+  // can re-POST the IDENTICAL knock (same msg_id) if the live-only token reply
+  // was missed before our lobby SSE opened.
+  const knockEphemeralRef = useRef<{ privateKey: CryptoKey; msgId: string; publicKey: string; body: string } | null>(null);
   // Claim tag derived alongside the unwrap. Sent as X-Chat-Claim-Tag on the
   // first /presence to prove this client is the same one that knocked — a
   // sniffer who somehow got the plaintext token cannot forge the tag without
@@ -1026,7 +1029,12 @@ const RoomController = () => {
           }
 
           setKnocks((prev) => {
-            if (prev.find((item) => item.id === knockId)) {
+            // Dedup by msg_id, not the ts-stamped knockId: a knocker whose
+            // live-only token reply was missed re-sends the IDENTICAL knock
+            // (same msg_id, fresh server ts) every ~1.2s. Keying on msg_id
+            // collapses those retries into the one pending request instead of
+            // stacking a new card each time.
+            if (prev.find((item) => item.msgId === msgId)) {
               return prev;
             }
             const next = [
@@ -1334,9 +1342,9 @@ const RoomController = () => {
     const knockMessage = message.trim() || 'Knock';
     try {
       const ephemeral = await generateEphemeralKeyPair();
-      knockEphemeralRef.current = { privateKey: ephemeral.privateKey, msgId };
-      const encrypted = await encryptText(knockKey, roomHash, 'knock', msgId, knockMessage);
-      const response = await postKnock(roomHash, msgId, JSON.stringify(encrypted), ephemeral.publicKey);
+      const body = JSON.stringify(await encryptText(knockKey, roomHash, 'knock', msgId, knockMessage));
+      knockEphemeralRef.current = { privateKey: ephemeral.privateKey, msgId, publicKey: ephemeral.publicKey, body };
+      const response = await postKnock(roomHash, msgId, body, ephemeral.publicKey);
 
       if (response.ok) {
         // Capture the lobby JWT so the SSE effect can subscribe to the room
@@ -1358,6 +1366,38 @@ const RoomController = () => {
       setKnockNotice('unable to send join request.');
     }
   }, [roomHash, message, knockKey]);
+
+  // Re-knock safety net for the live-only join pass. The approver's wrapped
+  // token is delivered over a lobby event the server does NOT store or replay
+  // (server/index.php /token → publish_lobby_event). If our lobby SSE wasn't
+  // open yet when the approver replied — e.g. the daemon auto-approves before
+  // this tab finishes rendering + connecting — we miss the pass and would wait
+  // forever. While waiting, re-POST the IDENTICAL knock (same ephemeral key +
+  // msg_id) a few times: an auto-approver (daemon's same-device fast path, or a
+  // PWA auto-approve) re-sends the pass, and a human approver sees the retries
+  // collapse into the one pending request (the knock queue dedups by msg_id).
+  // Stops the instant we become a participant or leave the lobby.
+  useEffect(() => {
+    if (roomState !== 'LOBBY_WAITING' || !knockSent || token || !roomHash) {
+      return;
+    }
+    const KNOCK_RETRY_INTERVAL_MS = 1200;
+    const KNOCK_RETRY_MAX = 6; // ~7s of coverage past the first knock
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      const pending = knockEphemeralRef.current;
+      if (!pending) {
+        return;
+      }
+      attempts += 1;
+      if (attempts > KNOCK_RETRY_MAX) {
+        window.clearInterval(timer);
+        return;
+      }
+      void postKnock(roomHash, pending.msgId, pending.body, pending.publicKey).catch(() => {});
+    }, KNOCK_RETRY_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [roomState, knockSent, token, roomHash]);
 
   // The approve crypto handshake, factored out so BOTH the manual "approve"
   // button and the opt-in auto-approve branch run the exact same verification:
@@ -2422,6 +2462,8 @@ const RoomController = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedId(msg.id)}
+                      data-testid="message-card"
+                      data-message-direction={isMine ? 'out' : 'in'}
                       className={`message-card max-w-[84%] cursor-pointer rounded-[22px] px-4 py-3 text-left leading-6 transition-colors sm:max-w-[72%] ${
                         isMine
                           ? 'message-card-out rounded-br-[7px] hover:brightness-110'
