@@ -84,6 +84,11 @@ type AgentSession = {
   // being silently auto-approved or silently dropped. Persisted to
   // ActiveRoom.bound so it survives a daemon restart.
   bound: boolean;
+  // The knock pubkey that bound the room (set with `bound`). A repeat knock from
+  // this exact device is re-approved (pass re-sent) instead of parked — it covers
+  // the live-only token-delivery race where the phone's lobby SSE wasn't open yet
+  // when we first replied. Any other pubkey is still a new device → confirm.
+  boundPubkey: string | null;
   // Messages that arrived while `running` was true. Instead of bouncing them
   // with "still running", we buffer here and the in-flight turn drains the
   // whole batch into ONE coalesced follow-up turn when it finishes. `from`
@@ -129,6 +134,10 @@ type AttachArgs = {
   // and on pre-#94 rooms => treated as false (unbound) so the first knock is
   // still auto-admitted.
   bound?: boolean;
+  // The pubkey that bound the room, if known (paired with `bound`). Undefined on
+  // a fresh spawn() and on rooms.json written before same-device re-approve
+  // existed => no same-device fast path until the next bind sets it.
+  boundPubkey?: string;
 };
 
 export type RestoreResult = {
@@ -369,6 +378,7 @@ export class AgentManager {
           sessionId: r.sessionId,
           seenMsgIds: r.seenMsgIds,
           bound: r.bound,
+          boundPubkey: r.boundPubkey,
         });
 
         restored.push(r.agentId);
@@ -426,6 +436,7 @@ export class AgentManager {
       lastReplyNeedsAttention: false,
       statusSeq: 0,
       bound: args.bound ?? false,
+      boundPubkey: args.boundPubkey ?? null,
       pending: [],
       sse: null!,
       presence,
@@ -625,6 +636,20 @@ export class AgentManager {
         // approve/deny. Recovery for a single-device operator who lost their
         // token: re-pair from the terminal with `daemon start --fresh`.
         if (session.bound) {
+          // Same device retrying. The very first knock binds the room and we
+          // reply with the wrapped token, but that token rides a live-only lobby
+          // event (no store/replay) — if the phone's lobby SSE wasn't open yet
+          // it misses the pass and re-knocks (same ephemeral pubkey + msg_id).
+          // Re-approving re-sends the pass to that same device; it admits no one
+          // new (the bundle is sealed to that device's ephemeral key, so a replay
+          // by anyone else is useless) and never reaches the confirm path below.
+          if (session.boundPubkey && knockPubkey === session.boundPubkey) {
+            const reok = await this.approveAgentKnock(agentId, knockPubkey, knockMsgId);
+            if (reok) {
+              console.log(`[${agentName}:${agentId}] Re-sent join pass to the bound device (knock retry).`);
+            }
+            return;
+          }
           // Evict any already-expired parked knocks before adding this one so a
           // flood of never-answered knocks can't grow the map without bound
           // (no timer needed — the next knock prunes the stale entries).
@@ -661,6 +686,7 @@ export class AgentManager {
         const ok = await this.approveAgentKnock(agentId, knockPubkey, knockMsgId);
         if (ok) {
           session.bound = true;
+          session.boundPubkey = knockPubkey;
           void this.persistRooms();
           console.log(`[${agentName}:${agentId}] Phone joined agent room (room bound to first device).`);
         }
@@ -998,6 +1024,7 @@ export class AgentManager {
       subscriberJwt: s.subscriberJwt,
       sessionId: s.sessionId,
       bound: s.bound,
+      boundPubkey: s.boundPubkey ?? undefined,
       // Prune the replay ledger to the TTL window + count cap before serializing
       // so rooms.json can't grow unbounded across restarts.
       seenMsgIds: pruneSeenMsgIds(Object.fromEntries(s.seenMsgIds)),

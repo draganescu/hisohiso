@@ -46,6 +46,17 @@ import { test, expect, type Page } from '@playwright/test';
 
 const NONCE = () => Math.random().toString(36).slice(2, 10);
 
+// Daemon-sent interactive blocks (the launcher picker, the "Join …" action)
+// render COLLAPSED in the PWA as a "… tap to view" chip — their inner buttons
+// aren't in the DOM until the chip is expanded. Tap the newest collapsed chip
+// to reveal it; expanding clears its "tap to view" text, so `.last()` always
+// targets the freshest unexpanded block.
+async function revealLatestBlock(page: Page): Promise<void> {
+  const chip = page.getByRole('button', { name: /tap to view/i }).last();
+  await expect(chip).toBeVisible({ timeout: 30_000 });
+  await chip.click();
+}
+
 const CONTROL_URL = process.env.HISOHISO_CONTROL_URL;
 const CONTROL_CODE = process.env.HISOHISO_CONTROL_CODE ?? '';
 const KNOCK_MESSAGE = process.env.HISOHISO_KNOCK_MESSAGE;
@@ -122,14 +133,17 @@ test('a browser pairs a daemon control room, spawns bash, and round-trips a repl
 
     // --- 2. Spawn the bash agent via the launcher block ---
     await spawnButton.click();
-    // The daemon replies with an agent picker (interactive buttons). Pick the
-    // built-in `bash` option by its label.
+    // The daemon replies with an agent picker (interactive buttons), rendered as
+    // a collapsed block — expand it, then pick the `bash` option by its label.
+    await revealLatestBlock(page);
     const bashOption = page.getByRole('button', { name: /^bash$/i });
     await expect(bashOption).toBeVisible({ timeout: 30_000 });
     await bashOption.click();
 
     // --- 3. Tap the join-room action the daemon posts for the new agent room ---
-    // Rendered as a role="button" span reading "Join <agentName> →".
+    // Also a collapsed interactive block; expand it, then tap the "Join …" button
+    // (a role="button" span reading "Join <agentName> →").
+    await revealLatestBlock(page);
     const joinAction = page.getByRole('button', { name: /^Join\b.*→$/ });
     await expect(joinAction).toBeVisible({ timeout: 30_000 });
     await joinAction.click();
