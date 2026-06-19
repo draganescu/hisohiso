@@ -336,6 +336,14 @@ const RoomController = () => {
   // (scrollY unchanged, scrollHeight increases) — only the former releases the
   // entry pin.
   const lastScrollYRef = useRef(0);
+  // True once a *real* user gesture (wheel / touchmove) has happened since this
+  // room entry. Only a real gesture should hand scroll control to the user and
+  // release the entry pin: an installed PWA's WKWebView can fire an involuntary
+  // scroll-to-top on a hash switch (browser scroll restoration), and without
+  // this guard handleScroll would read that as a deliberate scroll-up and
+  // permanently disarm the pin, stranding the room on its oldest message (#224).
+  // Reset to false on every room entry (the entry-scroll effect / navigateToRoom).
+  const userScrolledRef = useRef(false);
   // Holds the last non-zero unread tally so the always-mounted pill can keep
   // its label while it fades out (count resets to 0 the instant you hit bottom).
   const lastUnreadRef = useRef(0);
@@ -387,6 +395,10 @@ const RoomController = () => {
     // behaves like entering from /rooms: land on the newest message, not the
     // previous room's scroll/window position.
     initialScrollPendingRef.current = true;
+    // Fresh entry: no user gesture has happened in the destination room yet, so
+    // a WKWebView scroll-restoration jump right after the hash change can't be
+    // mistaken for the user scrolling up and disarming the pin (#224).
+    userScrolledRef.current = false;
     prevCountRef.current = 0;
     if (window.location.hash.replace(/^#\/?/, '') !== nextSecret) {
       window.location.hash = `#${nextSecret}`;
@@ -2033,8 +2045,11 @@ const RoomController = () => {
     // A deliberate scroll-up (the viewport moves up by more than a jitter
     // threshold) means the user has taken control — stop force-following the
     // tail for this room entry. Content growth pushes the floor down without
-    // moving scrollY up, so it never trips this.
-    if (initialScrollPendingRef.current && top < prevTop - 8) {
+    // moving scrollY up, so it never trips this. Gate on userScrolledRef so an
+    // *involuntary* upward jump — e.g. an installed-PWA WKWebView restoring
+    // scroll to the top on the hash switch — can't be mistaken for the user
+    // taking control and permanently disarm the pin (#224).
+    if (initialScrollPendingRef.current && userScrolledRef.current && top < prevTop - 8) {
       initialScrollPendingRef.current = false;
     }
     const distanceFromBottom =
@@ -2052,6 +2067,23 @@ const RoomController = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
+  // Mark that the user has actually driven a scroll. Only these real gestures
+  // (mouse wheel / touch drag) flip userScrolledRef; programmatic or browser-
+  // driven scrolls (scroll restoration, visualViewport settle, our own
+  // scrollTo) never fire them. handleScroll consults this before releasing the
+  // entry pin so an involuntary jump can't disarm it (#224).
+  useEffect(() => {
+    const markUserScroll = () => {
+      userScrolledRef.current = true;
+    };
+    window.addEventListener('wheel', markUserScroll, { passive: true });
+    window.addEventListener('touchmove', markUserScroll, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', markUserScroll);
+      window.removeEventListener('touchmove', markUserScroll);
+    };
+  }, []);
+
   // Entry/switch scroll pin (#211). On a room change, owe an unconditional jump
   // to the foot and keep re-pinning as the document grows (catch-up messages,
   // late block/image layout) until the user scrolls up or the room settles.
@@ -2060,6 +2092,8 @@ const RoomController = () => {
   useEffect(() => {
     if (!roomHash) return;
     initialScrollPendingRef.current = true;
+    // Fresh entry: control hasn't been handed to the user yet (#224).
+    userScrolledRef.current = false;
     lastScrollYRef.current = window.scrollY;
     const ro = new ResizeObserver(() => {
       if (!initialScrollPendingRef.current) return;
