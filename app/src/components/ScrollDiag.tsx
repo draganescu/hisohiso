@@ -62,14 +62,20 @@ export const ScrollDiag = ({ roomHash, roomKind, roomState, messageCount }: Prop
   const lines = getScrollDiagLog();
   const text = lines.map((l) => `${l.t}ms ${l.msg}`).join('\n');
   return (
-    <div className="fixed bottom-2 left-2 right-2 z-[100] max-h-[42vh] overflow-auto rounded-lg bg-black/85 p-2 font-mono text-[10px] leading-tight text-green-300">
+    // pointer-events-none so every tap passes THROUGH to the app underneath
+    // (compose, switcher, scroll all keep working); only the button row opts
+    // back in. Anchored top, below the header pills, to stay clear of the
+    // bottom compose FAB. Capped height + its own scroll for the log.
+    <div
+      className="pointer-events-none fixed left-1 right-1 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[100] max-h-[28vh] overflow-auto rounded-lg bg-black/80 p-1.5 font-mono text-[10px] leading-tight text-green-300"
+    >
       <div className="mb-1 flex items-center justify-between gap-2 text-white">
         <span className="truncate">scroll-diag · {roomKind}/{roomState} · {messageCount} msgs</span>
-        <span className="flex shrink-0 gap-3">
-          <button type="button" onClick={() => void navigator.clipboard?.writeText(text)}>
+        <span className="pointer-events-auto flex shrink-0 gap-3">
+          <button type="button" className="rounded bg-white/15 px-2 py-0.5" onClick={() => void navigator.clipboard?.writeText(text)}>
             copy
           </button>
-          <button type="button" onClick={() => resetScrollDiag()}>
+          <button type="button" className="rounded bg-white/15 px-2 py-0.5" onClick={() => resetScrollDiag()}>
             clear
           </button>
         </span>
