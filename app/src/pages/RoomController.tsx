@@ -2922,17 +2922,26 @@ const RoomController = () => {
                   }
                 }}
                 onBlur={() => {
-                  // iOS Done = send: a blur with no suppress flag (i.e. not
-                  // triggered by our own Cancel/Done buttons) and a
-                  // non-empty draft is treated as the user dismissing the
-                  // keyboard via the accessory bar's Done button. The
+                  // iOS Done = send: on a TOUCH device, a blur with no suppress
+                  // flag (i.e. not triggered by our own Cancel/Done buttons) and
+                  // a non-empty draft is the user dismissing the soft keyboard
+                  // via the accessory bar's Done button — treat it as send. The
                   // composer is still open at this point (the modal isn't
-                  // unmounted on blur), so sendMessage will close it.
+                  // unmounted on blur), so submitComposer will close it.
+                  //
+                  // DESKTOP has no soft keyboard, so a blur is just focus moving
+                  // away — clicking the rooms rail to switch channels, tabbing
+                  // out, clicking any other control. Sending on those fires the
+                  // open draft unintentionally (the rail-switch-submits bug).
+                  // On desktop the ONLY send paths are the Done button and
+                  // ⌘/Ctrl↵; blur never submits. Match the (pointer: coarse)
+                  // gate already used by useKeyboardViewport and line ~1993.
                   if (suppressSendOnBlurRef.current) {
                     suppressSendOnBlurRef.current = false;
                     return;
                   }
-                  if (chatInput.trim()) {
+                  const isTouch = window.matchMedia('(pointer: coarse)').matches;
+                  if (isTouch && chatInput.trim()) {
                     submitComposer();
                   }
                 }}
