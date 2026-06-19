@@ -3,7 +3,12 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { markInAppNavigation } from './lib/storage';
+import { installScrollDiag } from './lib/scroll-diag';
 import './styles.css';
+
+// Opt-in scroll diagnostics (?scrolldiag=1). No-op unless enabled. Installs a
+// window.scrollTo logger used to debug the iOS-PWA switcher-scroll bug (#224).
+installScrollDiag();
 
 // Same-origin <a> navigations are full page loads here; mark them so the
 // app-lock does not mistake the unload for a backgrounding and re-prompt for
@@ -34,6 +39,18 @@ document.addEventListener(
   },
   true,
 );
+
+// Own scroll position ourselves; never let the browser restore/reset it. An
+// installed PWA on iOS runs in a stricter WKWebView that, under the default
+// 'auto' restoration, resets scroll to the top on a same-document (hash)
+// navigation — which is exactly how the in-room channel switcher changes rooms
+// (navigateToRoom sets window.location.hash). That top-reset fights
+// RoomController's scroll-to-newest entry pin and strands the reader on the
+// oldest message (#224). RoomController re-asserts the foot itself on entry, so
+// browser restoration only ever does harm here.
+if ('scrollRestoration' in history) {
+  history.scrollRestoration = 'manual';
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

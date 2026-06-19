@@ -37,6 +37,10 @@ export default defineConfig({
   use: {
     baseURL,
     headless: true,
+    // Headless Chromium dies with "Target page/browser has been closed" when
+    // /dev/shm is small (common on CI / containers). Route shared memory to
+    // /tmp instead so the agent-room specs don't lose the browser mid-run.
+    launchOptions: { args: ['--disable-dev-shm-usage'] },
     // Local loopback relay serves plain HTTP with no TLS in dev; the PWA's
     // crypto runs in a secure context only on https or localhost, so the relay
     // URL must be localhost-based (it is — derived loopback). Ignore HTTPS
