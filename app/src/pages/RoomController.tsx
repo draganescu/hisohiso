@@ -3535,10 +3535,17 @@ const RoomController = () => {
                           room={r}
                           isCurrent={isCurrent}
                           onSelect={() => {
-                            if (isCurrent) {
-                              setShowSwitcher(false);
-                              return;
-                            }
+                            // Close the switcher synchronously, in the same
+                            // event batch as the navigation. Leaving it open and
+                            // relying on the async room-init effect to clear it
+                            // (RoomController init) keeps `scroll-locked` on for
+                            // a render while the new room hydrates, so main.tsx's
+                            // scrollTo(0,0) fights the room-switch foot-pin and
+                            // wins — landing on the oldest message (#221). The
+                            // gap is widest on human<->agent switches whose late
+                            // header/context layout fires extra viewport events.
+                            setShowSwitcher(false);
+                            if (isCurrent) return;
                             navigateToRoom(r.roomSecret);
                           }}
                         />

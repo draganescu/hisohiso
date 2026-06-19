@@ -137,7 +137,16 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
     rowEl = <a href={href} className={rowBaseClass}>{innerContent}</a>;
   } else if (onSelect) {
     rowEl = (
-      <button type="button" onClick={onSelect} className={rowBaseClass}>
+      // data-room-secret lets the switcher e2e target a specific row by room,
+      // mirroring how the /rooms list already exposes the secret via `href`
+      // (`/room#${secret}`). Same client-only exposure on the user's own device;
+      // no new server-side secret storage (see AGENTS.md E2EE rule).
+      <button
+        type="button"
+        onClick={onSelect}
+        data-room-secret={room.roomSecret}
+        className={rowBaseClass}
+      >
         {innerContent}
       </button>
     );
