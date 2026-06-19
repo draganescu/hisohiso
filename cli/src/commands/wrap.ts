@@ -233,8 +233,8 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
 
       const result = await runCommand(profile.command, args, { env });
 
-      // oneshot profiles can still emit structured output (e.g. codex-once uses
-      // `--json`); sessionId capture is gated on session mode.
+      // oneshot profiles can still emit structured output (e.g. a custom agent
+      // run with `--json`); sessionId capture is gated on session mode.
       let parsedText: string;
       let parsedSessionId: string | null = null;
       if (profile.outputFormat === 'codex-ndjson') {

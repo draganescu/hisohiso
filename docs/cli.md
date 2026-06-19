@@ -132,11 +132,10 @@ in [frontend.md](frontend.md).
 ## Agent profiles
 
 `claude` and `codex` are first-class: multi-turn **sessions** (the CLI resumes
-the same conversation between your messages) with full block rendering. Each
-also has a thinner one-shot variant — `claude-once` / `codex-once` — that runs a
-single prompt and skips the session handling. Run `hisohiso agents` to list
-them. The daemon only offers profiles whose command is installed on the host,
-so the phone launcher never shows an agent that can't actually start.
+the same conversation between your messages) with full block rendering. Run
+`hisohiso agents` to list them. The daemon only offers profiles whose command is
+installed on the host, so the phone launcher never shows an agent that can't
+actually start.
 
 You can also register your own:
 
