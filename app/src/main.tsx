@@ -3,7 +3,12 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { markInAppNavigation } from './lib/storage';
+import { installScrollDiag } from './lib/scroll-diag';
 import './styles.css';
+
+// Opt-in scroll diagnostics (?scrolldiag=1). No-op unless enabled. Installs a
+// window.scrollTo logger used to debug the iOS-PWA switcher-scroll bug (#224).
+installScrollDiag();
 
 // Same-origin <a> navigations are full page loads here; mark them so the
 // app-lock does not mistake the unload for a backgrounding and re-prompt for

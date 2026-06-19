@@ -78,6 +78,7 @@ import QrModal from '../components/QrModal';
 import { ControlCommandBar } from '../components/ControlCommandBar';
 import { RoomRow } from '../components/RoomRow';
 import RoomsRail from '../components/RoomsRail';
+import { ScrollDiag } from '../components/ScrollDiag';
 
 const readRoomSecretFromHash = (): string => window.location.hash.replace(/^#\/?/, '');
 
@@ -2350,6 +2351,13 @@ const RoomController = () => {
             header pills (which sit at safe-area-inset-top + a 9-unit pill);
             pointer-events:none on the wrapper lets gaps click through to the
             messages, the pill itself stays inert (no interaction needed). */}
+        <ScrollDiag
+          roomHash={roomHash}
+          roomKind={roomKind}
+          roomState={roomState}
+          messageCount={messages.length}
+        />
+
         {showContextStrip && (
           <div
             className="room-header-bar pointer-events-none fixed left-0 right-0 z-30 flex justify-start px-3"

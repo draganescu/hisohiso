@@ -50,3 +50,16 @@ This file is the source of truth for coding agents working in `hisohiso`. Follow
 - Remote feature branch is deleted.
 - Related issue is closed with a comment or via PR auto-close.
 - Main is fast-forwarded to the merge commit.
+
+## Known gotchas (read before debugging these)
+
+- **Message-list scroll / room switcher** — see [`docs/debugging-scroll.md`](./docs/debugging-scroll.md).
+  The thread is document-scrolled with an entry "foot-pin"; `/rooms` entry
+  remounts while the header switcher does an in-place hash switch. The
+  agent/control "switcher lands on oldest message" bug (#224) reproduces **only**
+  in the installed iOS PWA (WKWebView), NOT in headless Chromium — debug it
+  on-device with the `?scrolldiag=1` overlay, not in the e2e harness.
+- **Agent-room e2e dies with `Channel closed` / `Target … has been closed`** —
+  that's the headless Chromium process OOM/`/dev/shm`-dying, not your test. The
+  fix (`--disable-dev-shm-usage`) is in `e2e/playwright.config.ts`; keep it.
+  Details in [`docs/debugging-scroll.md`](./docs/debugging-scroll.md).
