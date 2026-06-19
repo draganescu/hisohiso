@@ -183,9 +183,7 @@ isolated second daemon alongside your main one.
 | Name           | Mode    | Description                                        |
 | -------------- | ------- | -------------------------------------------------- |
 | `claude`       | session | Claude Code, multi-turn (`--resume` between msgs)  |
-| `claude-once`  | oneshot | Claude Code, single question each time             |
 | `codex`        | session | Codex CLI (OpenAI), multi-turn (`exec resume`)     |
-| `codex-once`   | oneshot | Codex CLI (OpenAI), single question each time      |
 
 `claude` and `codex` are the two first-class agents. Anything else is a
 [custom agent](#registering-custom-agents) you register yourself. A profile is

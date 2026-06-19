@@ -24,7 +24,7 @@ program
 program
   .command('wrap')
   .description('Bridge an agent to your phone. Built-in agents: ' + Object.keys(listAgents()).join(', '))
-  .argument('<agent>', 'Agent name (claude, codex, claude-once, codex-once) or custom command after --')
+  .argument('<agent>', 'Agent name (claude, codex) or custom command after --')
   .action(async (agent: string, _opts: unknown, cmd: Command) => {
     // Check if there are extra args after -- (custom command)
     const extraArgs = cmd.args.slice(1);

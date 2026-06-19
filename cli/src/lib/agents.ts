@@ -45,13 +45,6 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
     provider: 'claude',
     appendSystemPrompt: BLOCK_PROMPT,
   },
-  'claude-once': {
-    command: 'claude',
-    args: ['-p', '--dangerously-skip-permissions'],
-    description: 'Claude Code autonomous (single question)',
-    mode: 'oneshot',
-    appendSystemPrompt: BLOCK_PROMPT,
-  },
   'codex': {
     command: 'codex',
     // Runs with the sandbox/approval bypass, like main — agents are trusted.
@@ -63,15 +56,6 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
     outputFormat: 'codex-ndjson',
     systemPromptMode: 'codex-config',
     buildResumeArgs: (id) => ['exec', 'resume', id, '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
-  },
-  'codex-once': {
-    command: 'codex',
-    args: ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
-    description: 'Codex CLI (OpenAI) autonomous (single question)',
-    mode: 'oneshot',
-    appendSystemPrompt: BLOCK_PROMPT,
-    outputFormat: 'codex-ndjson',
-    systemPromptMode: 'codex-config',
   },
 };
 
