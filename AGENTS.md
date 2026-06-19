@@ -1,0 +1,52 @@
+# Agent workflow for this repository
+
+This file is the source of truth for coding agents working in `hisohiso`. Follow it for every repository task unless the human explicitly says otherwise.
+
+## Default lifecycle
+
+1. **Keep `main` current first.**
+   - In `/home/vagabond/hisohiso`: `git checkout main && git pull --ff-only origin main`.
+   - Before opening or merging a PR, fetch/rebase the task branch on latest `origin/main`.
+
+2. **Track the work in GitHub.**
+   - If no issue exists for the task, open one with a concise title, repro/expected behavior, and acceptance notes.
+   - Reference the issue number in the branch/worktree name and PR body.
+
+3. **Use an isolated worktree.**
+   - Create task worktrees under `.claude/worktrees/` from latest `main`:
+     `git worktree add .claude/worktrees/<slug> -b worktree-<issue>-<slug> main`.
+   - Do not edit directly on `main` except for emergency recovery explicitly requested by the human.
+
+4. **Reproduce before fixing when possible.**
+   - For bugs, add or run the smallest failing repro first.
+   - Prefer e2e/browser repros for PWA behavior, and keep them as regression tests.
+   - If true reproduction is impossible, document exactly what was attempted and why.
+
+5. **Fix with the narrowest safe change.**
+   - Preserve hisohiso’s E2EE/security model; never store room secrets, passwords, or access keys on the server to make tests easier.
+   - Prefer local daemon/control-socket/test-harness state for agentic testing.
+   - Keep UI behavior consistent across direct route entry, hash-only room switches, mobile/desktop, and reload/catch-up paths.
+
+6. **Verify locally.**
+   - Run the focused repro/regression test.
+   - Run the fast loop when code touches room/daemon/transport behavior:
+     `npx --yes bun scripts/test-loop.mjs --fast --fresh`.
+   - Run relevant typechecks/builds when dependencies are present; if a repo tool is blocked by missing config, report that precisely.
+   - Avoid leaving `app/node_modules` in a worktree before Docker builds; it poisons the image build.
+
+7. **Commit and PR.**
+   - Commit only the intended files.
+   - Push the task branch and open a PR against `main`.
+   - PR body must include summary, issue link (`Fixes #...` when appropriate), and tests run.
+
+8. **Merge only when explicitly asked.**
+   - If the human asks to merge, use admin merge when requested.
+   - After merge, ensure the issue is closed/commented, delete the remote branch, pull `main` latest, remove/prune the worktree, and delete local task branches.
+
+## Cleanup checklist
+
+- `git status --short --branch` is clean on `main`.
+- `git worktree list` has no stale task worktree for merged work.
+- Remote feature branch is deleted.
+- Related issue is closed with a comment or via PR auto-close.
+- Main is fast-forwarded to the merge commit.
