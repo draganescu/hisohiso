@@ -381,6 +381,13 @@ const RoomController = () => {
   const navigateToRoom = useCallback((nextRoomSecret: string) => {
     const nextSecret = nextRoomSecret.replace(/^#\/?/, '');
     if (!nextSecret) return;
+    // Hash-only in-app switches keep the current document/scroll state alive.
+    // Arm the entry pin synchronously (before the new room's cached messages
+    // hydrate) and reset the message-count heuristic so switcher/rail selection
+    // behaves like entering from /rooms: land on the newest message, not the
+    // previous room's scroll/window position.
+    initialScrollPendingRef.current = true;
+    prevCountRef.current = 0;
     if (window.location.hash.replace(/^#\/?/, '') !== nextSecret) {
       window.location.hash = `#${nextSecret}`;
     }
@@ -807,6 +814,8 @@ const RoomController = () => {
           setLobbyJwt(null);
           setConnection('idle');
           setUnreadCount(0);
+          prevCountRef.current = 0;
+          initialScrollPendingRef.current = true;
           setHasCompanion(false);
           setEmptyQrSrc('');
           setCatchUpEnabled(false);
