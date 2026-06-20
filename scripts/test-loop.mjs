@@ -207,15 +207,24 @@ async function runHumanToAgent(server) {
 
     // scheduler (#232): add an ephemeral schedule and run it now; assert the
     // daemon ran the agent headless and posted the result into the control room.
-    // The bash echo agent makes the result deterministic (it echoes the prompt).
-    const stamp = `sched-ping-${Date.now()}`;
-    await control.send(`schedule add daily 0 bash ${stamp}`);
+    // The bash echo agent echoes the prompt, so making the prompt a hisohiso
+    // block-envelope JSON exercises the parse path (#241): the daemon must post
+    // the parsed TEXT (+ blocks), NOT the raw JSON. Compact JSON (no spaces) so
+    // the `schedule add` token split rejoins it intact.
+    const stamp = `blk-${Date.now()}`;
+    const envelope = `{"text":"SUMMARY-${stamp}","blocks":[{"type":"list","style":"bullet","items":["x"]}]}`;
+    await control.send(`schedule add daily 0 bash ${envelope}`);
     const added = await awaitText(control, 'Scheduled', MESSAGE_TIMEOUT_MS);
     const idMatch = added.text.match(/\[(sch_[a-z0-9]+)\]/i);
     if (!idMatch) throw new Error(`scheduler: no id in add reply: ${JSON.stringify(added.text)}`);
     await control.send(`schedule run ${idMatch[1]}`);
-    await awaitText(control, stamp, MESSAGE_TIMEOUT_MS); // "⏰ … — done\n\n<stamp>"
-    log('scheduler (add + run-now → ephemeral result) ✓');
+    const result = await awaitText(control, `SUMMARY-${stamp}`, MESSAGE_TIMEOUT_MS);
+    // Regression for #241: the message text must be the PARSED envelope text, not
+    // the raw block-JSON (which would still contain a "blocks" key).
+    if (result.text.includes('"blocks"')) {
+      throw new Error(`scheduler: result was raw JSON, not parsed blocks: ${JSON.stringify(result.text)}`);
+    }
+    log('scheduler (add + run-now → parsed blocks, not raw JSON) ✓');
 
     // Spawn the bash echo agent via the control-room text path ("bash" → spawn).
     await control.send('bash');
