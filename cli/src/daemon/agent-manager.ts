@@ -561,29 +561,29 @@ export class AgentManager {
           ...(session.profile.needsRoomSecret ? { HISOHISO_ROOM_SECRET: session.roomSecret } : {}),
         };
 
+        // Forward one transient, in-place indicator on the phone — an ephemeral
+        // `status` signal, never a chat message. The terminal 'done'/'failed' IS
+        // sent before the final reply: it is the explicit clear, so an
+        // intermediate "queued"/"exit code" chat can't prematurely clear the
+        // bubble, and a dropped reply can't strand it. A monotonic seq lets the
+        // phone discard statuses that arrive out of order (a late 'tool' after
+        // 'done'). Streaming providers call this from their event reducer;
+        // buffered providers below use the same protocol with coarse heartbeats.
+        const onStatus = (s: TurnStatus): void => {
+          const seq = ++session.statusSeq;
+          void encryptAndSend(this.server, roomHash, participantToken, messageKey, describeStatus(s), {
+            ephemeral: true,
+            status: { state: s.kind, seq },
+          }).catch(() => {});
+        };
+
         // Streaming providers (Claude/Codex): run the turn with full permissions
         // (the profile carries the provider's bypass flag, like main) while
-        // pushing live status into the room.
+        // pushing parsed live status into the room.
         if (provider === 'claude' || provider === 'codex') {
           console.log(
             `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${provider}${isResume ? ' resume' : ''})`,
           );
-
-          // Forward every status from the runner (it already dedups by state and
-          // heartbeats, so this is the single cadence source) as ONE transient,
-          // in-place indicator on the phone — an ephemeral `status` signal, never
-          // a chat message. The terminal 'done'/'failed' IS sent: it's the
-          // explicit clear, so the indicator no longer rides on the reply (an
-          // intermediate "queued"/"exit code" chat can't prematurely clear it,
-          // and a dropped reply can't strand it). A monotonic seq lets the phone
-          // discard a status that arrives out of order (a late 'tool' after 'done').
-          const onStatus = (s: TurnStatus): void => {
-            const seq = ++session.statusSeq;
-            void encryptAndSend(this.server, roomHash, participantToken, messageKey, describeStatus(s), {
-              ephemeral: true,
-              status: { state: s.kind, seq },
-            }).catch(() => {});
-          };
 
           const result = await runStreamingTurn({
             command: session.profile.command,
@@ -616,13 +616,33 @@ export class AgentManager {
           return;
         }
 
-        // Non-streaming providers (bash/python/aider/registry): unchanged
-        // buffered spawn→parse→send. No permission surface, no live status.
+        // Non-streaming providers (bash/python/aider/registry): buffered
+        // spawn→parse→send, but still participate in the same ephemeral status
+        // protocol. We cannot name tools without a provider event stream, so the
+        // bubble is intentionally coarse: starting, keepalive, quiet/stuck, then
+        // terminal clear before the final reply.
         argv.push(messageToSend);
         const displayArgs = argv.map((a) => (a.length > 80 ? `"${a.slice(0, 40)}..."` : a.includes(' ') ? `"${a}"` : a));
         console.log(`[${agentName}:${agentId}]   $ ${session.profile.command} ${displayArgs.join(' ')}`);
 
+        onStatus({ kind: 'starting' });
+        const startedAt = Date.now();
+        const heartbeat = setInterval(() => {
+          const quietMs = Date.now() - startedAt;
+          const quietSec = Math.round(quietMs / 1000);
+          if (quietMs >= 90_000) {
+            onStatus({ kind: 'stuck', quietSec });
+          } else if (quietMs >= 20_000) {
+            onStatus({ kind: 'quiet', quietSec });
+          } else {
+            onStatus({ kind: 'working' });
+          }
+        }, 10_000);
+        heartbeat.unref?.();
+
         const result = await runCommand(session.profile.command, argv, { env });
+        clearInterval(heartbeat);
+        onStatus(result.code === 0 ? { kind: 'done' } : { kind: 'failed' });
 
         let parsedText: string;
         let parsedSessionId: string | null = null;
