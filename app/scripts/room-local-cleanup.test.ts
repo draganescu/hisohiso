@@ -1,11 +1,13 @@
 import { clearLocalRoomStorage } from '../src/lib/room-local-storage-cleanup.js';
 import {
   getHandle,
+  getLastKnockMessage,
   getRoomPassword,
   getSubscriberJwt,
   getToken,
   listRooms,
   setHandle,
+  setLastKnockMessage,
   setRoomPassword,
   setSubscriberJwt,
   setToken,
@@ -43,6 +45,7 @@ setToken(roomHash, 'token-a');
 setSubscriberJwt(roomHash, 'jwt-a');
 setHandle(roomHash, 'alice');
 setRoomPassword(roomHash, 'key-a');
+setLastKnockMessage(roomHash, 'open sesame');
 setPresenceEnabled(roomHash, true);
 setAutoApproveEnabled(roomHash, true);
 setPendingKnockCount(roomHash, 2);
@@ -58,6 +61,7 @@ assert(getToken(roomHash) === null, 'token should be cleared');
 assert(getSubscriberJwt(roomHash) === null, 'subscriber jwt should be cleared');
 assert(getHandle(roomHash) === null, 'handle should be cleared');
 assert(getRoomPassword(roomHash) === null, 'room password should be cleared');
+assert(getLastKnockMessage(roomHash) === null, 'last knock message should be cleared');
 assert(!isPresenceEnabled(roomHash), 'presence opt-in should be cleared');
 assert(!isAutoApproveEnabled(roomHash), 'auto-approve opt-in should be cleared');
 assert(getPendingKnockCount(roomHash) === 0, 'pending knock count should be cleared');

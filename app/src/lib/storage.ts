@@ -73,6 +73,25 @@ export const clearExpectedKnockMessage = (roomHash: string): void => {
   localStorage.removeItem(expectedKnockMessageKey(roomHash));
 };
 
+const lastKnockMessageKey = (roomHash: string): string => `hisohiso.last_knock.${roomHash}`;
+
+export const getLastKnockMessage = (roomHash: string): string | null => {
+  return localStorage.getItem(lastKnockMessageKey(roomHash));
+};
+
+export const setLastKnockMessage = (roomHash: string, message: string): void => {
+  const trimmed = message.trim();
+  if (trimmed) {
+    localStorage.setItem(lastKnockMessageKey(roomHash), trimmed);
+  } else {
+    localStorage.removeItem(lastKnockMessageKey(roomHash));
+  }
+};
+
+export const clearLastKnockMessage = (roomHash: string): void => {
+  localStorage.removeItem(lastKnockMessageKey(roomHash));
+};
+
 const roomSetupDismissedKey = (roomHash: string): string => `hisohiso.room_setup_dismissed.${roomHash}`;
 
 export const getRoomSetupDismissed = (roomHash: string): boolean => {
