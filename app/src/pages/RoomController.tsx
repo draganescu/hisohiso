@@ -78,6 +78,7 @@ import { useKeyboardViewport } from '../hooks/useKeyboardViewport';
 import { useMessageWindow } from '../hooks/useMessageWindow';
 import QrModal from '../components/QrModal';
 import { ControlCommandBar } from '../components/ControlCommandBar';
+import { SchedulePanel } from '../components/SchedulePanel';
 import { RoomRow } from '../components/RoomRow';
 import RoomsRail from '../components/RoomsRail';
 import { ScrollDiag } from '../components/ScrollDiag';
@@ -217,6 +218,7 @@ const RoomController = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [showSchedules, setShowSchedules] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
@@ -2339,6 +2341,20 @@ const RoomController = () => {
                 </span>
               )}
             </button>
+            {isControlRoom && (
+              <button
+                aria-label="schedules"
+                title="schedules"
+                className="pointer-events-auto pill-control inline-flex h-9 w-9 items-center justify-center rounded-full text-ink"
+                onClick={() => setShowSchedules(true)}
+                type="button"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+              </button>
+            )}
             <button
               aria-label="channel info"
               className="pointer-events-auto pill-control inline-flex h-9 w-9 items-center justify-center rounded-full text-ink"
@@ -3156,6 +3172,17 @@ const RoomController = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* ---- Schedules (#232): create-schedule sheet, control rooms only ---- */}
+        {isControlRoom && (
+          <SchedulePanel
+            open={showSchedules}
+            onClose={() => setShowSchedules(false)}
+            onSend={(command) => {
+              void sendText(command);
+            }}
+          />
         )}
 
         {/* ---- Knock queue ---- */}

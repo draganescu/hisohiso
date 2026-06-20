@@ -919,18 +919,22 @@ class ControlRoom {
 
     if (subcmd === 'add') {
       const days = parseDaysToken(tokens[1] ?? '');
-      const hour = Number(tokens[2]);
+      // Time token is UTC "H" or "H:MM" — the phone clock UI sends :MM for
+      // half-hour offset zones (India +5:30, Nepal +5:45) so they round-trip.
+      const timeTok = (tokens[2] ?? '').match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+      const hour = timeTok ? Number(timeTok[1]) : NaN;
+      const minute = timeTok && timeTok[2] !== undefined ? Number(timeTok[2]) : 0;
       const agent = tokens[3];
       const prompt = tokens.slice(4).join(' ').trim();
-      if (!days || !Number.isInteger(hour) || hour < 0 || hour > 23 || !agent || !prompt) {
+      if (!days || !Number.isInteger(hour) || hour < 0 || hour > 23 || minute < 0 || minute > 59 || !agent || !prompt) {
         await this.reply(
-          'Usage: `schedule add <days> <hourUTC> <agent> <prompt>`\n' +
-            'Days: mon,wed,fri | weekdays | daily | 0-6 (0=Sun). Hour: 0-23 UTC.\n' +
+          'Usage: `schedule add <days> <timeUTC> <agent> <prompt>`\n' +
+            'Days: mon,wed,fri | weekdays | daily | 0-6 (0=Sun). Time: 0-23 UTC, or H:MM (e.g. 20:30).\n' +
             'e.g. `schedule add weekdays 7 claude summarize overnight GitHub notifications`',
         );
         return;
       }
-      const cron = `0 ${hour} * * ${days}`;
+      const cron = `${minute} ${hour} * * ${days}`;
       const s = this.scheduler.add({ cron, agent, prompt });
       if (!s) {
         await this.reply('Could not create that schedule (invalid cron).');
