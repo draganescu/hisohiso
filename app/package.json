@@ -13,7 +13,8 @@
     "test:app-passkey": "tsc --module ES2022 --moduleResolution Bundler --target ES2022 --outDir /tmp/hisohiso-passkey-test --noEmit false scripts/app-passkey.test.ts && node /tmp/hisohiso-passkey-test/scripts/app-passkey.test.js",
     "test:room-message": "tsc --module ES2022 --moduleResolution Bundler --target ES2022 --outDir /tmp/hisohiso-room-message-test --noEmit false scripts/room-message-contracts.test.ts && node /tmp/hisohiso-room-message-test/scripts/room-message-contracts.test.js",
     "test:design": "node scripts/design-system-smoke.test.mjs",
-    "test:room-cleanup": "esbuild scripts/room-local-cleanup.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hisohiso-room-cleanup-test.mjs && node /tmp/hisohiso-room-cleanup-test.mjs"
+    "test:room-cleanup": "esbuild scripts/room-local-cleanup.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hisohiso-room-cleanup-test.mjs && node /tmp/hisohiso-room-cleanup-test.mjs",
+    "test:schedule": "esbuild scripts/schedule-time.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hisohiso-schedule-test.mjs && node /tmp/hisohiso-schedule-test.mjs"
   },
   "dependencies": {
     "dexie": "^4.0.4",
