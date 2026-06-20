@@ -19,6 +19,7 @@ import {
   clearToken,
   getExpectedKnockMessage,
   getHandle,
+  getLastKnockMessage,
   getRoomPassword,
   getRoomSetupDismissed,
   getRoomCreatedByMe,
@@ -30,6 +31,7 @@ import {
   listRooms,
   setHandle,
   setExpectedKnockMessage,
+  setLastKnockMessage,
   setRoomKind,
   setRoomPassword,
   setRoomSetupDismissed,
@@ -437,6 +439,17 @@ const RoomController = () => {
       setRoomPassword(nextHash, action.code);
     }
 
+    // Agent rooms use the daemon's session knock message as their join note. If
+    // this device already entered the parent control room, carry that last
+    // successful knock note forward deterministically instead of relying on
+    // whatever transient textarea state survived the hash switch.
+    if (action.room_kind === 'agent') {
+      const parentKnock = parentControlHash ? getLastKnockMessage(parentControlHash) : null;
+      if (parentKnock) {
+        setLastKnockMessage(nextHash, parentKnock);
+      }
+    }
+
     navigateToRoom(nextSecret);
   }, [navigateToRoom, roomHash, roomKind]);
 
@@ -800,6 +813,7 @@ const RoomController = () => {
           setError('');
           setKnockSent(false);
           setKnockNotice('');
+          setMessage('');
           setKnocks([]);
           setMessages([]);
           setAgentStatuses({});
@@ -865,6 +879,7 @@ const RoomController = () => {
         const savedRoomPassword = getRoomPassword(hash);
         setHandleState(savedHandle ?? '');
         setRoomPasswordState(savedRoomPassword ?? '');
+        setMessage(getLastKnockMessage(hash) ?? '');
         setExpectedKnockMessageState(getExpectedKnockMessage(hash) ?? '');
         setRoomSetupDismissedState(getRoomSetupDismissed(hash));
         setRoomCreatedByMeState(getRoomCreatedByMe(hash));
@@ -1393,7 +1408,8 @@ const RoomController = () => {
     }
 
     const msgId = base64UrlEncode(randomBytes(12));
-    const knockMessage = message.trim() || 'Knock';
+    const enteredKnockMessage = message.trim();
+    const knockMessage = enteredKnockMessage || 'Knock';
     try {
       const ephemeral = await generateEphemeralKeyPair();
       const body = JSON.stringify(await encryptText(knockKey, roomHash, 'knock', msgId, knockMessage));
@@ -1401,6 +1417,7 @@ const RoomController = () => {
       const response = await postKnock(roomHash, msgId, body, ephemeral.publicKey);
 
       if (response.ok) {
+        setLastKnockMessage(roomHash, enteredKnockMessage);
         // Capture the lobby JWT so the SSE effect can subscribe to the room
         // topic just long enough to receive the wrapped-token event.
         const knockData = (await response.json()) as { lobby_jwt?: string };
