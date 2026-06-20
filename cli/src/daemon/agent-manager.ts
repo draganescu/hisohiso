@@ -11,6 +11,7 @@ import { subscribeToRoom, type RoomEvent, type SSESubscription } from '../lib/ss
 import { jwtExpiresWithin, SUBSCRIBER_JWT_REFRESH_MARGIN_MS } from '../lib/jwt.js';
 import { startPresence, type PresenceHandle } from '../lib/presence.js';
 import * as api from '../lib/api-client.js';
+import { TimeoutError } from '../lib/scheduler.js';
 
 // event.from is server-stamped as sha256_hex(token) = 64 lowercase hex chars
 // (server/utils.php sha256_hex = hash('sha256',...); CLI bufferToHex is also
@@ -276,6 +277,72 @@ export class AgentManager {
 
     await this.persistRooms();
     return { agentId, roomSecret: room.roomSecret, roomPassword };
+  }
+
+  /**
+   * Run an agent headless for one prompt and return its final text — the engine
+   * behind ephemeral scheduled runs (#232). Unlike spawn() this mints NO room and
+   * leaves NO session: it builds the same per-turn argv, runs the process once,
+   * and returns the result for the caller to post into the control room. Bounded
+   * by timeoutMs via a race (a timed-out child may linger — acceptable for v1;
+   * the caller reports 'timed-out').
+   */
+  async runEphemeral(agentName: string, prompt: string, opts: { timeoutMs?: number } = {}): Promise<string> {
+    let profile = getAgent(agentName);
+    if (!profile) {
+      const registry = await loadRegistry();
+      const entry = registry.find((a) => a.name === agentName);
+      if (entry) {
+        profile = { command: entry.command, args: [], description: entry.name, mode: 'oneshot', needsRoomSecret: entry.needsRoomSecret };
+      }
+    }
+    if (!profile) throw new Error(`Unknown agent "${agentName}".`);
+    if (!(await isCommandAvailable(profile.command))) {
+      throw new Error(`Agent "${agentName}" needs "${profile.command}", which isn't installed on this host.`);
+    }
+    const resolved = profile;
+    const provider = providerOf(resolved);
+
+    const argv = [...resolved.args];
+    let messageToSend = prompt;
+    if (resolved.appendSystemPrompt) {
+      if (resolved.systemPromptMode === 'codex-config') {
+        argv.push('--config', `instructions=${resolved.appendSystemPrompt}`);
+      } else if (resolved.systemPromptMode === 'prepend-message-once') {
+        messageToSend = `${resolved.appendSystemPrompt}\n\n${prompt}`;
+      } else {
+        argv.push('--append-system-prompt', resolved.appendSystemPrompt);
+      }
+    }
+    // No room => no room env; needsRoomSecret is moot here.
+    const env: Record<string, string> = {};
+
+    const run = async (): Promise<string> => {
+      if (provider === 'claude' || provider === 'codex') {
+        const result = await runStreamingTurn({ command: resolved.command, argv, prompt: messageToSend, format: provider, env });
+        const text = (result.text || '').trim();
+        if ((result.code !== 0 || result.isError) && !text) {
+          throw new Error(`agent exited${result.code != null ? ` code ${result.code}` : ''}`);
+        }
+        return text || '(no output)';
+      }
+      argv.push(messageToSend);
+      const result = await runCommand(resolved.command, argv, { env });
+      let parsedText: string;
+      if (resolved.outputFormat === 'codex-ndjson') parsedText = parseCodexNdjson(result.stdout).text;
+      else if (resolved.mode === 'session') parsedText = parseJsonOutput(result.stdout).text;
+      else parsedText = result.stdout;
+      return (parsedText || result.stderr || '(no output)').trim();
+    };
+
+    const timeoutMs = opts.timeoutMs;
+    if (!timeoutMs || timeoutMs <= 0) return run();
+    return await Promise.race([
+      run(),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new TimeoutError(`scheduled run exceeded ${Math.round(timeoutMs / 1000)}s`)), timeoutMs),
+      ),
+    ]);
   }
 
   /**
