@@ -280,14 +280,18 @@ export class AgentManager {
   }
 
   /**
-   * Run an agent headless for one prompt and return its final text — the engine
-   * behind ephemeral scheduled runs (#232). Unlike spawn() this mints NO room and
-   * leaves NO session: it builds the same per-turn argv, runs the process once,
-   * and returns the result for the caller to post into the control room. Bounded
-   * by timeoutMs via a race (a timed-out child may linger — acceptable for v1;
-   * the caller reports 'timed-out').
+   * Run an agent headless for one prompt and return its final text + any blocks —
+   * the engine behind ephemeral scheduled runs (#232). Unlike spawn() this mints
+   * NO room and leaves NO session: it builds the same per-turn argv, runs the
+   * process once, and returns the parsed result for the caller to post into the
+   * control room. Bounded by timeoutMs via a race (a timed-out child may linger —
+   * acceptable for v1; the caller reports 'timed-out').
+   *
+   * Scheduled agents emit hisohiso block-JSON exactly like interactive ones, so
+   * the raw output is run through parseBlockOutput (mirroring sendAgentOutput) —
+   * otherwise the control room renders the literal JSON instead of blocks.
    */
-  async runEphemeral(agentName: string, prompt: string, opts: { timeoutMs?: number } = {}): Promise<string> {
+  async runEphemeral(agentName: string, prompt: string, opts: { timeoutMs?: number } = {}): Promise<{ text: string; blocks?: unknown[] }> {
     let profile = getAgent(agentName);
     if (!profile) {
       const registry = await loadRegistry();
@@ -336,13 +340,17 @@ export class AgentManager {
     };
 
     const timeoutMs = opts.timeoutMs;
-    if (!timeoutMs || timeoutMs <= 0) return run();
-    return await Promise.race([
-      run(),
-      new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new TimeoutError(`scheduled run exceeded ${Math.round(timeoutMs / 1000)}s`)), timeoutMs),
-      ),
-    ]);
+    const raw =
+      !timeoutMs || timeoutMs <= 0
+        ? await run()
+        : await Promise.race([
+            run(),
+            new Promise<string>((_, reject) =>
+              setTimeout(() => reject(new TimeoutError(`scheduled run exceeded ${Math.round(timeoutMs / 1000)}s`)), timeoutMs),
+            ),
+          ]);
+    const parsed = parseBlockOutput(raw);
+    return { text: parsed?.text ?? raw, blocks: parsed?.blocks ?? undefined };
   }
 
   /**

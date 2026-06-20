@@ -138,9 +138,11 @@ export const runDaemon = async (): Promise<void> => {
     fire: async (s: Schedule) => {
       const c = ctrl;
       try {
-        const text = await manager.runEphemeral(s.agent, s.prompt, { timeoutMs: s.timeoutMs });
+        // runEphemeral parses the agent's block-JSON into { text, blocks }, so the
+        // control room renders blocks instead of raw JSON (the body is the text).
+        const { text, blocks } = await manager.runEphemeral(s.agent, s.prompt, { timeoutMs: s.timeoutMs });
         const body = text.length > 1500 ? `${text.slice(0, 1500)}…` : text;
-        await c?.reply(`⏰ ${s.name} — done\n\n${body}`);
+        await c?.reply(`⏰ ${s.name} — done${body ? `\n\n${body}` : ''}`, blocks);
       } catch (err) {
         if (s.notifyOnError) {
           await c?.reply(`⏰ ${s.name} — failed: ${err instanceof Error ? err.message : String(err)}`).catch(() => {});
