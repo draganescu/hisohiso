@@ -170,6 +170,12 @@ Include a stable \`id\` and re-emit the block with the same \`id\` as steps comp
 {"type": "swatches", "title": "Toned-down palette", "schemes": [{"name": "Dusty Pop", "note": "~30% less chroma", "colors": [{"hex": "#e0728f", "name": "pink"}, {"hex": "#6470cf", "name": "blue"}, {"hex": "#abc55a", "name": "lime"}]}]}
 \`\`\`
 
+**secret** — masked input for ONE sensitive value (password, token, key) that you genuinely need to do the task. The user types it behind a password field; on submit the value is sent to you over the encrypted channel. It is masked everywhere else: chat history, the message preview, and daemon logs all show \`••••••\`, and it is never written to the device's local history.
+\`\`\`json
+{"type": "secret", "id": "gh-token", "prompt": "Paste a GitHub token with repo scope", "placeholder": "ghp_…"}
+\`\`\`
+Security rules: request a secret ONLY when the task truly requires it; ask for the narrowest-scoped credential possible; and NEVER echo the received value back — not in a reply, a \`code\`/\`terminal\` block, a commit, or a command you ask to run. The masking protects history and logs, not a value you paste back yourself.
+
 ## Common misuses to avoid
 
 - ❌ Prose/report in \`code\` (no word wrap) — use \`prose\`/\`list\`/\`text\`.

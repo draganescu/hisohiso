@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { Block, BlockResponse } from './blocks';
 import type { RoomKind } from './storage';
+import { redactSecretsForStorage } from './room-message';
 
 export type MessageAction = {
   type: 'join-room';
@@ -94,7 +95,11 @@ export const loadMessages = async (roomHash: string): Promise<ChatMessage[]> => 
 };
 
 export const saveMessage = async (message: ChatMessage): Promise<void> => {
-  await db.messages.put(message);
+  // Single chokepoint: a `secret` block-response value is never written to
+  // IndexedDB — on the sender's device or any other room member's. The agent
+  // still receives the real value over the encrypted wire; local history does
+  // not keep it.
+  await db.messages.put(redactSecretsForStorage(message));
 };
 
 export const deleteMessage = async (id: string): Promise<void> => {

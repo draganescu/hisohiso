@@ -328,6 +328,17 @@ export interface SwatchesBlock extends BlockBase {
   schemes: SwatchScheme[];
 }
 
+// ─── 26. Secret ───────────────────────────────────────────────────────────
+
+export interface SecretBlock extends BlockBase {
+  type: 'secret';
+  id: string;
+  /** What the agent is asking for, e.g. "GitHub personal access token". */
+  prompt: string;
+  placeholder?: string;
+  confirm_label?: string;
+}
+
 // ─── Union type ───────────────────────────────────────────────────────────
 
 export type Block =
@@ -354,7 +365,8 @@ export type Block =
   | ListBlock
   | ProseBlock
   | LabelBlock
-  | SwatchesBlock;
+  | SwatchesBlock
+  | SecretBlock;
 
 // ─── Block response (user interaction reply) ──────────────────────────────
 
@@ -374,7 +386,8 @@ export type InteractiveBlock =
   | SortableBlock
   | ConfirmDangerBlock
   | CommitBlock
-  | RunCommandBlock;
+  | RunCommandBlock
+  | SecretBlock;
 
 export const isInteractiveBlock = (block: Block): block is InteractiveBlock =>
-  ['buttons', 'swipe', 'slider', 'checklist', 'sortable', 'confirm-danger', 'commit', 'run-command'].includes(block.type);
+  ['buttons', 'swipe', 'slider', 'checklist', 'sortable', 'confirm-danger', 'commit', 'run-command', 'secret'].includes(block.type);

@@ -808,6 +808,10 @@ export class AgentManager {
 
         // Decrypt inbound message
         let text: string;
+        // Real secret values arrive only inside block_responses (masked out of
+        // `text`). Collected here so the agent gets the real value while the log
+        // line below stays masked.
+        let secretSuffix = '';
         try {
           const encPayload = typeof event.body.encrypted_payload === 'string'
             ? JSON.parse(event.body.encrypted_payload) as EncryptedPayload
@@ -817,6 +821,7 @@ export class AgentManager {
           const parsed = JSON.parse(decrypted) as {
             text?: string;
             replies?: Array<{ text?: string; reply_to?: { quote?: string } }>;
+            block_responses?: Array<{ block_id?: string; type?: string; value?: unknown }>;
           };
 
           // A block selection (the user tapping an option in an agent-emitted
@@ -840,6 +845,20 @@ export class AgentManager {
           } else {
             text = parsed.text ?? '';
           }
+
+          // Append any secret block-responses verbatim so the agent receives
+          // the real value. These never appear in `text` and are never logged.
+          if (Array.isArray(parsed.block_responses)) {
+            const secrets = parsed.block_responses.filter((br) => br && br.type === 'secret' && br.value != null);
+            if (secrets.length > 0) {
+              secretSuffix = secrets
+                .map((br) => {
+                  const v = typeof br.value === 'string' ? br.value : JSON.stringify(br.value);
+                  return `[secret for block ${br.block_id ?? '?'}]: ${v}`;
+                })
+                .join('\n');
+            }
+          }
         } catch (err) {
           console.error(`[${agentName}:${agentId}] Failed to decrypt:`, err);
           return;
@@ -848,12 +867,16 @@ export class AgentManager {
 
         console.log(`[${agentName}:${agentId}] <- ${text}`);
 
+        // The agent turn gets the real secret appended; the log above stayed
+        // masked. Everything downstream uses turnInput, not the masked text.
+        const turnInput = secretSuffix ? `${text}\n${secretSuffix}` : text;
+
         // Mid-turn message: queue it instead of bouncing with "still running".
         // The in-flight turn drains the queue when it finishes, coalescing the
         // whole pending batch into ONE follow-up resume turn — so rapid-fire
         // steering messages land in order on the next turn.
         if (session.running) {
-          session.pending.push({ text, from: event.from || 'unknown' });
+          session.pending.push({ text: turnInput, from: event.from || 'unknown' });
           await encryptAndSend(
             this.server, roomHash, participantToken, messageKey,
             `📥 Queued — will run after the current turn (${session.pending.length} pending).`
@@ -863,7 +886,7 @@ export class AgentManager {
 
         session.running = true;
         try {
-          await runTurn(text, event.from || 'unknown');
+          await runTurn(turnInput, event.from || 'unknown');
           // Drain whatever queued while we ran. Coalesce the batch into a single
           // turn so several steering messages become one combined instruction;
           // the loop re-checks because more can arrive during this drain turn.

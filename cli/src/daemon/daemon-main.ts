@@ -517,7 +517,9 @@ export const runDaemon = async (): Promise<void> => {
 
             if (responses.length > 0) {
               for (const br of responses) {
-                console.log(`Control [block ${br.block_id}]: ${JSON.stringify(br.value)}`);
+                // Never log a secret's value; the handler below still gets it.
+                const shown = br.type === 'secret' ? '[secret redacted]' : JSON.stringify(br.value);
+                console.log(`Control [block ${br.block_id}]: ${shown}`);
               }
               for (const br of responses) {
                 await iterCtrl.handleControl(br, text);
