@@ -27,11 +27,12 @@ const CHIP_ORDER = [1, 2, 3, 4, 5, 6, 0];
 export const SchedulePanel: FC<Props> = ({ open, onClose, onSend }) => {
   const [days, setDays] = useState<number[]>([]);
   const [hour, setHour] = useState(9);
+  const [minute, setMinute] = useState(0);
   const [agent, setAgent] = useState('claude');
   const [prompt, setPrompt] = useState('');
 
-  const cron = useMemo(() => (days.length ? localToUtcCron(days, hour) : null), [days, hour]);
-  const localPreview = days.length ? formatLocal(days, hour, 0) : null;
+  const cron = useMemo(() => (days.length ? localToUtcCron(days, hour, minute) : null), [days, hour, minute]);
+  const localPreview = days.length ? formatLocal(days, hour, minute) : null;
   const canSave = !!cron && agent.trim() !== '' && prompt.trim() !== '';
 
   if (!open) return null;
@@ -94,21 +95,36 @@ export const SchedulePanel: FC<Props> = ({ open, onClose, onSend }) => {
             })}
           </div>
 
-          <label className="mb-1 block text-xs font-medium text-ink-dim" htmlFor="sched-hour">
-            Time (your local time)
-          </label>
-          <select
-            id="sched-hour"
-            value={hour}
-            onChange={(e) => setHour(Number(e.target.value))}
-            className="mb-4 w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink"
-          >
-            {Array.from({ length: 24 }, (_, h) => (
-              <option key={h} value={h}>
-                {String(h).padStart(2, '0')}:00
-              </option>
-            ))}
-          </select>
+          <span className="mb-1 block text-xs font-medium text-ink-dim">Time (your local time)</span>
+          <div className="mb-4 flex items-center gap-2">
+            <select
+              id="sched-hour"
+              aria-label="hour"
+              value={hour}
+              onChange={(e) => setHour(Number(e.target.value))}
+              className="flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink"
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, '0')}
+                </option>
+              ))}
+            </select>
+            <span className="text-ink-dim" aria-hidden="true">:</span>
+            <select
+              id="sched-minute"
+              aria-label="minute"
+              value={minute}
+              onChange={(e) => setMinute(Number(e.target.value))}
+              className="flex-1 rounded-lg border border-rule bg-surface px-3 py-2 text-sm text-ink"
+            >
+              {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                <option key={m} value={m}>
+                  {String(m).padStart(2, '0')}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <label className="mb-1 block text-xs font-medium text-ink-dim" htmlFor="sched-agent">
             Agent
