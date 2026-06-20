@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, access, unlink, rename } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import type { Schedule } from './scheduler.js';
 
 // State directory. Defaults to ~/.hisohiso, but HISOHISO_HOME overrides it so a
 // second (e.g. worktree / dev) daemon can run with isolated config + PID + rooms
@@ -9,6 +10,7 @@ const CONFIG_DIR = process.env.HISOHISO_HOME || join(homedir(), '.hisohiso');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 const REGISTRY_FILE = join(CONFIG_DIR, 'registry.json');
 const ROOMS_FILE = join(CONFIG_DIR, 'rooms.json');
+const SCHEDULES_FILE = join(CONFIG_DIR, 'schedules.json');
 const PID_FILE = join(CONFIG_DIR, 'daemon.pid');
 const LOGS_DIR = join(CONFIG_DIR, 'logs');
 // Owner-only control socket (#134) — same local trust boundary as the PID file.
@@ -207,4 +209,38 @@ export const clearDaemonState = async (): Promise<void> => {
 
 export const clearActiveRooms = async (): Promise<void> => {
   await unlink(ROOMS_FILE).catch(() => {});
+};
+
+// --- scheduler (#232): persisted recurring schedules ---
+
+// Tolerant load: a missing/corrupt file yields no schedules (the daemon just
+// runs without any) rather than crashing the boot path.
+export const loadSchedules = async (): Promise<Schedule[]> => {
+  try {
+    const raw = await readFile(SCHEDULES_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Schedule[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Atomic write, serialized like saveActiveRooms: the scheduler persists on every
+// add/pause/remove and after each fire, so two writes can overlap; a fixed temp
+// path + a write chain keeps the rename() safe.
+let schedulesWriteChain: Promise<void> = Promise.resolve();
+export const saveSchedules = (schedules: Schedule[]): Promise<void> => {
+  const run = async (): Promise<void> => {
+    await ensureConfigDir();
+    const tmp = SCHEDULES_FILE + '.tmp';
+    await writeFile(tmp, JSON.stringify(schedules, null, 2) + '\n', 'utf-8');
+    await rename(tmp, SCHEDULES_FILE);
+  };
+  const result = schedulesWriteChain.then(run, run);
+  schedulesWriteChain = result.catch(() => {});
+  return result;
+};
+
+export const clearSchedules = async (): Promise<void> => {
+  await unlink(SCHEDULES_FILE).catch(() => {});
 };

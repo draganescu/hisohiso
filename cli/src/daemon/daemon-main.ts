@@ -6,8 +6,11 @@ import {
   saveDaemonState,
   clearDaemonState,
   clearActiveRooms,
+  loadSchedules,
+  saveSchedules,
   type DaemonState,
 } from '../lib/config.js';
+import { Scheduler, parseCron, type Schedule } from '../lib/scheduler.js';
 import { reExecSelf } from '../lib/reexec.js';
 import {
   generateRoomSecret,
@@ -126,6 +129,30 @@ export const runDaemon = async (): Promise<void> => {
   // identity is transparent to the socket.
   let controlServer: ControlServerHandle | null = null;
 
+  // #232 daemon-owned scheduler. Constructed once; each fire reads the live
+  // `ctrl` (mutable — rotates on re-pair) so a re-pair is transparent. An
+  // ephemeral fire runs the agent headless and posts a summary into the control
+  // room; on failure it notifies (unless opted out) and rethrows so the
+  // scheduler records the failed status.
+  const scheduler = new Scheduler({
+    fire: async (s: Schedule) => {
+      const c = ctrl;
+      try {
+        const text = await manager.runEphemeral(s.agent, s.prompt, { timeoutMs: s.timeoutMs });
+        const body = text.length > 1500 ? `${text.slice(0, 1500)}…` : text;
+        await c?.reply(`⏰ ${s.name} — done\n\n${body}`);
+      } catch (err) {
+        if (s.notifyOnError) {
+          await c?.reply(`⏰ ${s.name} — failed: ${err instanceof Error ? err.message : String(err)}`).catch(() => {});
+        }
+        throw err;
+      }
+    },
+    persist: saveSchedules,
+    log: (m) => console.log(`[scheduler] ${m}`),
+  });
+  scheduler.load(await loadSchedules());
+
   // Periodic reconciliation against the server. Catches silent SSE death,
   // missed destroy events, and any other failure mode where local in-memory
   // session state drifts from server truth. Five-minute cadence is a
@@ -146,6 +173,7 @@ export const runDaemon = async (): Promise<void> => {
     shuttingDown = true;
     console.log('Shutting down daemon...');
     clearInterval(reconcileTimer);
+    scheduler.stop();
     currentSse?.close();
     currentPresence?.stop();
     manager.detachAll();
@@ -337,7 +365,7 @@ export const runDaemon = async (): Promise<void> => {
 
     const ownTokenHash = await sha256Hex(state.participantToken);
     currentPresence = startPresence(server, state.controlRoomHash, state.participantToken);
-    ctrl = new ControlRoom(server, state, messageKey, manager, suggestedControlRoomName);
+    ctrl = new ControlRoom(server, state, messageKey, manager, suggestedControlRoomName, scheduler);
 
     if (firstIteration) {
       if (restoreResult && restoreResult.restored > 0) {
@@ -681,6 +709,37 @@ type PendingControlKnock = {
 // server/index.php LOBBY_JWT_TTL=600s).
 const PENDING_CONTROL_KNOCK_TTL_MS = 10 * 60 * 1000;
 
+// --- scheduler control-room command helpers (#232) ---
+
+const DOW_NAMES: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Parse a days token into a normalized cron dow list (0-6, 0=Sun). Accepts
+// digits ("1,3,5"), names ("mon,wed,fri"), or the shortcuts "weekdays"/"daily".
+// Returns null on anything unrecognized so a bad `schedule add` is rejected, not
+// silently mis-scheduled.
+function parseDaysToken(tok: string): string | null {
+  const out = new Set<number>();
+  for (const part of tok.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+    if (part === 'weekdays') { [1, 2, 3, 4, 5].forEach((x) => out.add(x)); continue; }
+    if (part === 'daily' || part === 'everyday' || part === '*') { [0, 1, 2, 3, 4, 5, 6].forEach((x) => out.add(x)); continue; }
+    if (/^[0-6]$/.test(part)) { out.add(Number(part)); continue; }
+    if (part in DOW_NAMES) { out.add(DOW_NAMES[part]!); continue; }
+    return null;
+  }
+  if (out.size === 0) return null;
+  return [...out].sort((a, b) => a - b).join(',');
+}
+
+// Render a stored UTC cron as a readable line. The control-room text surface
+// shows UTC; the (future) phone clock UI renders in the device's local time.
+function formatCronUtc(cron: string): string {
+  const spec = parseCron(cron);
+  if (!spec) return cron;
+  const days = [...spec.days].sort((a, b) => a - b).map((d) => DOW_LABEL[d]).join('/');
+  return `${days} ${String(spec.hour).padStart(2, '0')}:${String(spec.minute).padStart(2, '0')} UTC`;
+}
+
 // Bundles the per-iteration control-room context (server, room identity,
 // message key, manager) so every send/handle stops threading five positional
 // parameters by hand. Recreated each main-loop iteration because the room
@@ -696,7 +755,8 @@ class ControlRoom {
     private readonly state: DaemonState,
     private readonly messageKey: CryptoKey,
     private readonly manager: AgentManager,
-    private readonly suggestedName: string | null
+    private readonly suggestedName: string | null,
+    private readonly scheduler: Scheduler
   ) {}
 
   // Park an additional-device knock against a bound control room and post a
@@ -827,9 +887,88 @@ class ControlRoom {
   async sendHelp(): Promise<void> {
     const agentNames = await availableAgentNames();
     await this.reply(
-      'Tap to act — or type a command (claude / list / kill <id> / help).',
+      'Tap to act — or type a command (claude / list / kill <id> / schedules / help).',
       [helpButtonsBlock(), launcherBlock(agentNames)]
     );
+  }
+
+  // #232: list the daemon's recurring schedules. Times shown in UTC (the phone
+  // clock UI will localize later).
+  async sendSchedules(): Promise<void> {
+    const all = this.scheduler.list();
+    if (all.length === 0) {
+      await this.reply(
+        'No schedules yet. Add one:\n`schedule add <days> <hourUTC> <agent> <prompt>`\n' +
+          'e.g. `schedule add weekdays 7 claude summarize overnight GitHub notifications`',
+      );
+      return;
+    }
+    const lines = all.map((s) => {
+      const state = s.enabled ? 'on' : 'paused';
+      const last = s.lastStatus ? ` · last ${s.lastStatus}` : '';
+      return `• ${s.name} [${s.id}]\n  ${formatCronUtc(s.cron)} · ${s.agent} · ${state}${last}`;
+    });
+    await this.reply(`Schedules (${all.length}):\n\n${lines.join('\n')}\n\nManage: \`schedule pause|resume|run|rm <id>\``);
+  }
+
+  // #232: handle `schedule <subcommand> ...`. Text-driven for now; the phone
+  // clock UI (next slice) will drive the same Scheduler API via blocks/buttons.
+  async handleScheduleCommand(rest: string): Promise<void> {
+    const tokens = rest.split(/\s+/).filter(Boolean);
+    const subcmd = (tokens[0] ?? '').toLowerCase();
+
+    if (subcmd === 'add') {
+      const days = parseDaysToken(tokens[1] ?? '');
+      const hour = Number(tokens[2]);
+      const agent = tokens[3];
+      const prompt = tokens.slice(4).join(' ').trim();
+      if (!days || !Number.isInteger(hour) || hour < 0 || hour > 23 || !agent || !prompt) {
+        await this.reply(
+          'Usage: `schedule add <days> <hourUTC> <agent> <prompt>`\n' +
+            'Days: mon,wed,fri | weekdays | daily | 0-6 (0=Sun). Hour: 0-23 UTC.\n' +
+            'e.g. `schedule add weekdays 7 claude summarize overnight GitHub notifications`',
+        );
+        return;
+      }
+      const cron = `0 ${hour} * * ${days}`;
+      const s = this.scheduler.add({ cron, agent, prompt });
+      if (!s) {
+        await this.reply('Could not create that schedule (invalid cron).');
+        return;
+      }
+      const next = s.nextRunAt ? new Date(s.nextRunAt).toISOString() : 'never';
+      await this.reply(`Scheduled ✓ ${s.name} [${s.id}]\n${formatCronUtc(cron)} · ${agent}\nNext run (UTC): ${next}`);
+      return;
+    }
+
+    const id = tokens[1];
+    if (!id) {
+      await this.reply('Which schedule? `schedule <pause|resume|run|rm> <id>` — see `schedules`.');
+      return;
+    }
+    if (subcmd === 'pause') {
+      await this.reply(this.scheduler.pause(id) ? `Paused ${id}.` : `No active schedule ${id}.`);
+      return;
+    }
+    if (subcmd === 'resume') {
+      await this.reply(this.scheduler.resume(id) ? `Resumed ${id}.` : `No paused schedule ${id}.`);
+      return;
+    }
+    if (subcmd === 'rm' || subcmd === 'remove' || subcmd === 'delete') {
+      await this.reply(this.scheduler.remove(id) ? `Deleted ${id}.` : `No schedule ${id}.`);
+      return;
+    }
+    if (subcmd === 'run') {
+      const sched = this.scheduler.get(id);
+      if (!sched) {
+        await this.reply(`No schedule ${id}.`);
+        return;
+      }
+      await this.reply(`Running ${sched.name} now…`);
+      await this.scheduler.runNow(id);
+      return;
+    }
+    await this.reply('Unknown schedule command. Try `schedule add|list|pause|resume|run|rm`.');
   }
 
   async spawnAndAnnounce(agentName: string): Promise<void> {
@@ -1002,6 +1141,16 @@ class ControlRoom {
 
       if (lower === 'list') {
         await this.sendList();
+        return;
+      }
+      // #232 scheduler commands. Match on the lower-cased text, but pass the
+      // ORIGINAL-case remainder to the handler so the prompt keeps its casing.
+      if (lower === 'schedules' || lower === 'schedule' || lower === 'schedule list') {
+        await this.sendSchedules();
+        return;
+      }
+      if (lower.startsWith('schedule ')) {
+        await this.handleScheduleCommand(text.slice('schedule '.length).trim());
         return;
       }
       if (lower.startsWith('kill ')) {

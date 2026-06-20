@@ -205,6 +205,18 @@ async function runHumanToAgent(server) {
     await awaitText(control, note, MESSAGE_TIMEOUT_MS);
     log('notify (host→control) ✓');
 
+    // scheduler (#232): add an ephemeral schedule and run it now; assert the
+    // daemon ran the agent headless and posted the result into the control room.
+    // The bash echo agent makes the result deterministic (it echoes the prompt).
+    const stamp = `sched-ping-${Date.now()}`;
+    await control.send(`schedule add daily 0 bash ${stamp}`);
+    const added = await awaitText(control, 'Scheduled', MESSAGE_TIMEOUT_MS);
+    const idMatch = added.text.match(/\[(sch_[a-z0-9]+)\]/i);
+    if (!idMatch) throw new Error(`scheduler: no id in add reply: ${JSON.stringify(added.text)}`);
+    await control.send(`schedule run ${idMatch[1]}`);
+    await awaitText(control, stamp, MESSAGE_TIMEOUT_MS); // "⏰ … — done\n\n<stamp>"
+    log('scheduler (add + run-now → ephemeral result) ✓');
+
     // Spawn the bash echo agent via the control-room text path ("bash" → spawn).
     await control.send('bash');
     // The daemon replies "Spawning bash…" then "bash session ready." — drain
