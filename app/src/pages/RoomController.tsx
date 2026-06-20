@@ -1418,6 +1418,15 @@ const RoomController = () => {
 
       if (response.ok) {
         setLastKnockMessage(roomHash, enteredKnockMessage);
+        // If the operator had to type the daemon session knock message manually
+        // in an agent-room lobby, teach the parent control room too. Future
+        // agent joins copied from that control room can then prefill
+        // deterministically even if the original control-room join happened
+        // before this device started remembering knock notes.
+        const currentRoom = listRooms().find((room) => room.roomHash === roomHash);
+        if (currentRoom?.kind === 'agent' && currentRoom.controlRoomHash) {
+          setLastKnockMessage(currentRoom.controlRoomHash, enteredKnockMessage);
+        }
         // Capture the lobby JWT so the SSE effect can subscribe to the room
         // topic just long enough to receive the wrapped-token event.
         const knockData = (await response.json()) as { lobby_jwt?: string };
@@ -2178,9 +2187,10 @@ const RoomController = () => {
   // rooms with no pairing factor stay clean. The intended use is "I'm on
   // phone 1, my other phone has the room link but no code; I tap, read off
   // four digits, type them on the other phone." Auto-hide is handled by the
-  // pairingCodeRevealed effect. Agent rooms already surface the daemon-minted
-  // code as their room password, so don't duplicate it with a second reveal UI.
-  const pairingCodePanel = roomPassword && !isAgentRoom ? (
+  // pairingCodeRevealed effect. Agent and control rooms already surface the
+  // daemon-minted code as their room password, so don't duplicate it with a
+  // second reveal UI.
+  const pairingCodePanel = roomPassword && !isAgentRoom && !isControlRoom ? (
     <div className="mt-2 rounded-xl border border-rule bg-bg p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
