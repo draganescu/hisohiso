@@ -31,19 +31,40 @@ import { promises as fs, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 
-// Bun-compiled binaries report a virtual /$bunfs/… path for process.execPath.
-// Resolve the real filesystem path from argv[0] instead. Exported so the
-// service-install unit (#125), `hisohiso info` (#137), and `uninstall` (#41)
-// point at the real on-disk binary rather than the /$bunfs virtual path.
-export function resolveExecPath(): string {
-  const argv0 = process.argv[0];
-  if (argv0 && !argv0.startsWith('/$bunfs')) {
+// True only when this process is the Bun single-file executable (the installed
+// `hisohiso` binary), as opposed to the source run under an interpreter
+// (`bun src/index.ts …` / `node …`). A Bun-compiled binary carries its embedded
+// entry as a `/$bunfs/…` path at argv[1]; an interpreter run has a real script
+// path there. This is the gate the updater MUST check before overwriting any
+// file on disk — see resolveExecPath for why.
+export function isInstalledBinary(argv: string[] = process.argv): boolean {
+  return (argv[1] ?? '').startsWith('/$bunfs');
+}
+
+// Real on-disk path of THIS hisohiso binary — the only file the updater may ever
+// overwrite. Exported so the service-install unit (#125), `hisohiso info`
+// (#137), and `uninstall` (#41) point at the real binary too.
+//
+// History/hazard (#228): this used to return `realpathSync(argv[0])` whenever
+// argv[0] wasn't a `/$bunfs` path. But argv[0] is the INTERPRETER when hisohiso
+// runs under one — so the updater's `fs.rename(download, EXEC_PATH)` once
+// renamed the new binary over the nvm `node`, bricking codex/npm/npx. We now
+// trust argv[0]/execPath ONLY for a compiled binary (isInstalledBinary); the
+// updater additionally refuses to swap anything when not installed.
+export function resolveExecPath(argv: string[] = process.argv, execPath: string = process.execPath): string {
+  if (isInstalledBinary(argv)) {
+    // The standalone executable. execPath is it on current Bun; older Bun put a
+    // virtual /$bunfs path there, in which case argv[0] holds the real binary.
+    const candidate = execPath.startsWith('/$bunfs') ? (argv[0] ?? execPath) : execPath;
     try {
-      return realpathSync(resolve(argv0));
+      return realpathSync(resolve(candidate));
     } catch {
-      // fall through
+      return candidate;
     }
   }
+  // Source/interpreter run: there is no installed binary to point at. Return
+  // execPath unchanged (the interpreter) — callers that MUTATE the path (the
+  // updater) gate on isInstalledBinary() and never reach a rename here.
   return process.execPath;
 }
 
@@ -128,6 +149,16 @@ export type ApplyResult =
 // new binary on its next start/tick.
 export async function applyUpdate(opts: { apiUrl?: string; log?: (m: string) => void } = {}): Promise<ApplyResult> {
   const log = opts.log ?? (() => {});
+  // Never overwrite anything unless we ARE the installed binary. From a source
+  // run (`bun src/index.ts update`) the swap target would be the interpreter
+  // (node/bun) — exactly the path that bricked the nvm node (#228).
+  if (!isInstalledBinary()) {
+    return {
+      status: 'unsupported',
+      current: pkg.version,
+      reason: 'not running as an installed hisohiso binary (source/interpreter run); `update` only swaps an installed release',
+    };
+  }
   const { current, isNewer, release } = await checkLatest(opts.apiUrl);
   if (release === null) return { status: 'no-release', current };
   if (!isNewer) return { status: 'already-latest', current };
@@ -178,6 +209,12 @@ type TickCtx = StartUpdateLoopOpts & { log: (m: string) => void; apiUrl: string 
 async function tick(ctx: TickCtx): Promise<void> {
   if (process.env.HISOHISO_AUTO_UPDATE === 'off') {
     return; // opted out, silent
+  }
+  // Same guard as applyUpdate: a non-installed (source) run must never reach the
+  // rename — the swap target would be the interpreter, not the binary (#228).
+  if (!isInstalledBinary()) {
+    ctx.log('not running as an installed binary; skipping update');
+    return;
   }
 
   const { isNewer, release } = await checkLatest(ctx.apiUrl);
