@@ -18,6 +18,7 @@ import {
   type PairResult,
   type AdmitResult,
   type ReExecResult,
+  type NotifyResult,
 } from '../lib/control-plane.js';
 
 const confirm = async (prompt: string): Promise<boolean> => {
@@ -106,6 +107,31 @@ const resolveDevice = async (op: 'admit' | 'deny', knockMsgId?: string): Promise
 
 export const admitCmd = async (knockMsgId?: string): Promise<void> => resolveDevice('admit', knockMsgId);
 export const denyCmd = async (knockMsgId?: string): Promise<void> => resolveDevice('deny', knockMsgId);
+
+// `notify <text>` — post a message into the control room from the host. The
+// everyday surface for local automation (cron, health checks, deploy hooks) to
+// reach the operator's phone. Needs only a live daemon (no Claude session).
+export const notifyCmd = async (text: string): Promise<void> => {
+  const body = text.trim();
+  if (!body) {
+    console.error('notify needs a message, e.g. `hisohiso notify "caddy is down"`.');
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    const r = await sendControlRequest<NotifyResult>({ op: 'notify', text: body });
+    console.log(r.message);
+    if (!r.delivered) process.exitCode = 1;
+  } catch (err) {
+    if (err instanceof DaemonUnreachableError) {
+      console.log(notRunningHint);
+      process.exitCode = 1;
+      return;
+    }
+    console.error(`notify failed: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+};
 
 // Non-destructive in-place re-exec: pairing and agent rooms survive. The only
 // way to bounce a backgrounded (launchd/systemd) daemon without poking the

@@ -253,6 +253,22 @@ export const runDaemon = async (): Promise<void> => {
     return { message: `Moving to ${url}: disbanded rooms on the old server; re-pairing there. Run \`hisohiso pair\` once it is back.` };
   };
 
+  // `notify <text>` — the host's channel into the control room. Local automation
+  // (cron, health checks, deploy hooks) connects to the owner-only socket and the
+  // daemon posts the text as a normal control-room message, so it lands on the
+  // paired phone. The text is encrypted like every other reply — the relay never
+  // sees plaintext. Returns delivered:false (not an error) when the room is not
+  // up yet (early boot / mid re-pair) so a cron job's stderr stays quiet.
+  const doNotify = async (text: string): Promise<{ delivered: boolean; message: string }> => {
+    const body = text.trim();
+    if (!body) throw new Error('notify requires a non-empty message');
+    if (!ctrl) {
+      return { delivered: false, message: 'Control room is not ready yet — try again once the daemon has paired.' };
+    }
+    await ctrl.reply(body);
+    return { delivered: true, message: 'Posted to the control room.' };
+  };
+
   // Bring up the #134 control socket once. Handlers read the live refs at call
   // time. A bind failure must not take down the daemon — log and carry on
   // (the daemon still works; only the CLI control verbs are unavailable).
@@ -276,6 +292,7 @@ export const runDaemon = async (): Promise<void> => {
     repair: () => doRepair(),
     server: (url) => doServer(url),
     restart: () => doRestart(),
+    notify: (text) => doNotify(text),
   }).catch((err) => {
     if (err instanceof DaemonAlreadyRunningError) {
       // Lost a start race against another daemon between the preflight probe and

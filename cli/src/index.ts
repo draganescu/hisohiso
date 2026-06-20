@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
-import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, restartCmd, serverCmd } from './commands/control.js';
+import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, restartCmd, serverCmd, notifyCmd } from './commands/control.js';
 import { info } from './commands/info.js';
 import { updateCmd } from './commands/update.js';
 import { uninstallCmd } from './commands/uninstall.js';
@@ -88,6 +88,14 @@ program
   .description('Deny a device waiting to join the control room')
   .argument('[id]', 'pending knock id (optional when only one is waiting)')
   .action(denyCmd);
+
+program
+  .command('notify')
+  .description('Post a message into your control room (for cron / scripts to ping your phone)')
+  .argument('<text...>', 'Message to send (quote it, or pass bare words)')
+  .action(async (textParts: string[]) => {
+    await notifyCmd(textParts.join(' '));
+  });
 
 program
   .command('repair')

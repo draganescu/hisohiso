@@ -45,11 +45,13 @@ export type ControlHandlers = {
   repair: () => Promise<unknown> | unknown;
   server: (url: string) => Promise<unknown> | unknown;
   restart: () => Promise<unknown> | unknown;
+  notify: (text: string) => Promise<unknown> | unknown;
 };
 
 export type ControlServerHandle = { close: () => Promise<void> };
 
-const dispatch = async (h: ControlHandlers, req: ControlRequest): Promise<unknown> => {
+// Exported for unit tests: the pure op->handler routing, free of the socket.
+export const dispatch = async (h: ControlHandlers, req: ControlRequest): Promise<unknown> => {
   switch (req.op) {
     case 'status':
       return h.status();
@@ -65,6 +67,8 @@ const dispatch = async (h: ControlHandlers, req: ControlRequest): Promise<unknow
       return h.server(req.url);
     case 'restart':
       return h.restart();
+    case 'notify':
+      return h.notify(req.text);
     default:
       throw new Error(`unknown control op: ${(req as { op: string }).op}`);
   }
