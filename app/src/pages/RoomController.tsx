@@ -3713,7 +3713,7 @@ const RoomController = () => {
         {/* ---- Disband (destructive) ---- */}
         {showDisband && (
           <div className="room-overlay fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
-            <div className="w-full max-w-sm rounded-[22px] border border-danger bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
+            <div className="w-full max-w-sm rounded-[22px] border border-danger bg-bg p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
               <p className="text-[0.6875rem] uppercase tracking-[0.28em] text-danger">destructive</p>
               <h2 className="mt-2 text-xl font-bold tracking-[-0.015em]">
                 disband this channel?
@@ -3748,7 +3748,7 @@ const RoomController = () => {
         {/* ---- Leave (recoverable) ---- */}
         {showLeave && (
           <div className="room-overlay fixed inset-x-0 top-0 z-40 flex h-[100dvh] items-center justify-center bg-black/60 px-6">
-            <div className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
+            <div className="w-full max-w-sm rounded-[22px] border border-rule bg-bg p-6 text-ink shadow-[0_20px_50px_-10px_rgba(10,10,10,0.4)]">
               <h2 className="text-xl font-bold tracking-[-0.015em]">leave this channel?</h2>
               <p className="mt-3 text-sm leading-6 text-ink-soft">
                 you're removed and this channel is wiped from this device only. the channel stays
