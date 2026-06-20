@@ -29,6 +29,23 @@ for (const hour of [0, 7, 13, 23]) {
   }
 }
 
+// Minute round-trip (the picker now allows :MM): local hour+minute -> UTC cron
+// -> back to the same local hour+minute, tz-agnostic.
+for (const [hour, minute] of [[9, 15], [9, 30], [0, 45], [23, 5]]) {
+  for (const days of [[2], [1, 4]]) {
+    const cron = localToUtcCron(days, hour!, minute!);
+    assert(cron !== null, `cron should build for ${JSON.stringify(days)}@${hour}:${minute}`);
+    const back = utcCronToLocal(cron!);
+    assert(back !== null, `minute roundtrip should parse ${cron}`);
+    assert(back!.hour === hour, `hour roundtrip ${cron} -> ${back!.hour}, expected ${hour}`);
+    assert(back!.minute === minute, `minute roundtrip ${cron} -> ${back!.minute}, expected ${minute}`);
+  }
+}
+
+// Minute validation.
+assert(localToUtcCron([1], 9, 60) === null, 'minute 60 should be rejected');
+assert(localToUtcCron([1], 9, -1) === null, 'negative minute should be rejected');
+
 // Label round-trips to the local picker label.
 {
   const cron = localToUtcCron([1, 3, 5], 9)!;

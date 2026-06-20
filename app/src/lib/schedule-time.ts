@@ -10,11 +10,11 @@
 
 const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// A Date at the given LOCAL weekday (0=Sun..6=Sat) and local hour, on the soonest
+// A Date at the given LOCAL weekday (0=Sun..6=Sat) and local time, on the soonest
 // date >= base that matches the weekday. The recurrence is weekly, so any matching
 // week yields the same UTC fields under a fixed offset.
-function localDateForWeekday(weekday: number, hourLocal: number, base: Date): Date {
-  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hourLocal, 0, 0, 0);
+function localDateForWeekday(weekday: number, hourLocal: number, minuteLocal: number, base: Date): Date {
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hourLocal, minuteLocal, 0, 0);
   const delta = (weekday - d.getDay() + 7) % 7;
   d.setDate(d.getDate() + delta);
   return d;
@@ -27,18 +27,19 @@ function utcDateForWeekday(weekday: number, hourUtc: number, minuteUtc: number, 
   return d;
 }
 
-// Local day(s)-of-week (0-6) + local hour (0-23) -> stored UTC cron
-// "<min> <hour> * * <dow-list>". Returns null on invalid input. The minute is
-// the real UTC minute (0 for whole-hour offsets, 30/45 for India/Nepal).
-export function localToUtcCron(localDays: number[], hourLocal: number, base: Date = new Date()): string | null {
+// Local day(s)-of-week (0-6) + local hour (0-23) + local minute (0-59) -> stored
+// UTC cron "<min> <hour> * * <dow-list>". Returns null on invalid input. The UTC
+// minute reflects the local minute plus any half-hour/45-min zone offset.
+export function localToUtcCron(localDays: number[], hourLocal: number, minuteLocal = 0, base: Date = new Date()): string | null {
   if (!Array.isArray(localDays) || localDays.length === 0) return null;
   if (!Number.isInteger(hourLocal) || hourLocal < 0 || hourLocal > 23) return null;
+  if (!Number.isInteger(minuteLocal) || minuteLocal < 0 || minuteLocal > 59) return null;
   const utcDays = new Set<number>();
   let utcHour: number | null = null;
   let utcMinute = 0;
   for (const wd of localDays) {
     if (!Number.isInteger(wd) || wd < 0 || wd > 6) return null;
-    const dt = localDateForWeekday(wd, hourLocal, base);
+    const dt = localDateForWeekday(wd, hourLocal, minuteLocal, base);
     utcDays.add(dt.getUTCDay());
     utcHour = dt.getUTCHours();
     utcMinute = dt.getUTCMinutes();
