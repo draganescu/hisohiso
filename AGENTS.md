@@ -51,6 +51,27 @@ This file is the source of truth for coding agents working in `hisohiso`. Follow
 - Related issue is closed with a comment or via PR auto-close.
 - Main is fast-forwarded to the merge commit.
 
+## Shipping CLI / daemon changes (merge is not enough)
+
+Merging a `cli/` change does **not** put it on any running daemon. The installed
+binary and the backgrounded daemon keep running the old code until a new release
+exists and is pulled down. In particular:
+
+- `hisohiso daemon restart` (and the `restart` control op) only **re-execs the
+  same on-disk binary** — it does NOT fetch new code. Use it to bounce a daemon,
+  not to upgrade one.
+- New code reaches a host only via a **published GitHub Release**: cut one with
+  `./cli/scripts/release.sh vX.Y.Z` (bump → `build:all` → commit → tag → push →
+  release with the four arch binaries attached). Binaries live only on the
+  Release page, never in the repo.
+- A host picks up the release by **`hisohiso update`** (downloads + verifies +
+  atomically swaps the binary, then bounces the running daemon onto it via the
+  `restart` op), or by waiting for the daemon's ~6h auto-update tick.
+
+So the full path for a daemon/CLI fix is: **merge → `release.sh vX.Y.Z` from
+`main` → `hisohiso update` on the host** (or wait for auto-update). "Just restart
+the daemon" is wrong — restart alone never changes the code.
+
 ## Known gotchas (read before debugging these)
 
 - **Message-list scroll / room switcher** — see [`docs/debugging-scroll.md`](./docs/debugging-scroll.md).
