@@ -2161,8 +2161,9 @@ const RoomController = () => {
   // rooms with no pairing factor stay clean. The intended use is "I'm on
   // phone 1, my other phone has the room link but no code; I tap, read off
   // four digits, type them on the other phone." Auto-hide is handled by the
-  // pairingCodeRevealed effect.
-  const pairingCodePanel = roomPassword ? (
+  // pairingCodeRevealed effect. Agent rooms already surface the daemon-minted
+  // code as their room password, so don't duplicate it with a second reveal UI.
+  const pairingCodePanel = roomPassword && !isAgentRoom ? (
     <div className="mt-2 rounded-xl border border-rule bg-bg p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
