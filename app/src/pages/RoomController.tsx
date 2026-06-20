@@ -3009,7 +3009,7 @@ const RoomController = () => {
                   suppress flag so the textarea's blur handler doesn't
                   double-fire send. */}
               <div
-                className="composer-toolbar flex shrink-0 items-center justify-between gap-3 border-t border-rule bg-surface-strong px-4 py-3"
+                className="composer-toolbar flex shrink-0 items-center justify-between gap-3 border-t border-rule bg-bg px-4 py-3"
                 style={{
                   paddingBottom: keyboardVisible
                     ? undefined

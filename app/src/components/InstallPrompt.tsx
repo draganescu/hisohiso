@@ -27,7 +27,7 @@ const IosInstallModal = ({ onClose }: { onClose: () => void }) => (
     role="presentation"
   >
     <div
-      className="w-full max-w-sm rounded-[22px] border border-rule bg-surface p-6 text-ink shadow-[0_20px_60px_-20px_rgba(10,10,10,0.3)]"
+      className="w-full max-w-sm rounded-[22px] border border-rule bg-bg p-6 text-ink shadow-[0_20px_60px_-20px_rgba(10,10,10,0.3)]"
       onClick={(event) => event.stopPropagation()}
     >
       <p className="text-[0.6875rem] uppercase tracking-[0.32em] text-ink-dim">install</p>
