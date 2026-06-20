@@ -22,7 +22,11 @@ export type ControlRequest =
   // Non-destructive in-place re-exec: rooms and pairing preserved. Used by
   // `daemon restart` and by `update` to move a backgrounded daemon onto a
   // freshly-swapped binary without any launchd/systemd interaction.
-  | { op: 'restart' };
+  | { op: 'restart' }
+  // Post a one-off message into the live control room. The host's channel for
+  // local automation (cron, health checks, deploy hooks) to ping the operator's
+  // phone — the daemon encrypts and sends it like any other control-room reply.
+  | { op: 'notify'; text: string };
 
 export type AgentSummary = { agentId: string; name: string };
 export type PendingDevice = { knockMsgId: string; expiresAt: number };
@@ -47,6 +51,11 @@ export type PairResult = {
 };
 
 export type AdmitResult = { resolved: number; message: string };
+
+// `notify` confirms the message reached the control room. `delivered` is false
+// only when the control room is not ready yet (early boot / mid re-pair); the
+// message text is human-readable for the CLI to print.
+export type NotifyResult = { delivered: boolean; message: string };
 
 // repair / server return a human-readable confirmation; the daemon re-execs
 // ~half a second later, so the reply is sent before the process recycles.
