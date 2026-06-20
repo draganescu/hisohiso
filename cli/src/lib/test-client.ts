@@ -230,6 +230,20 @@ export class TestClient {
     await api.sendMessage(this.server, this.roomHash, this.token, msgId, JSON.stringify(encrypted));
   }
 
+  // Simulate tapping a block button: sends a block_response envelope shaped like
+  // the phone's, so the daemon's handleControl routes it by `value`.
+  async sendBlockResponse(blockId: string, value: string, type = 'buttons'): Promise<void> {
+    if (!this.token) throw new Error('TestClient.sendBlockResponse: not yet a participant — knock first');
+    const msgId = base64UrlEncode(randomBytes(12));
+    const payload = JSON.stringify({
+      text: `[${type}] ${value}`,
+      handle: 'hisohiso-test-client',
+      block_response: { block_id: blockId, type, value },
+    });
+    const encrypted = await encryptText(this.messageKey, this.roomHash, 'chat', msgId, payload);
+    await api.sendMessage(this.server, this.roomHash, this.token, msgId, JSON.stringify(encrypted));
+  }
+
   // Await the next inbound chat message (decrypted), FIFO. Resolves
   // immediately if one is already queued; otherwise waits up to timeoutMs.
   async nextMessage(opts?: { timeoutMs?: number }): Promise<{ text: string; from?: string }> {

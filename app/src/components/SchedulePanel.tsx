@@ -168,8 +168,18 @@ export const SchedulePanel: FC<Props> = ({ open, onClose, onSend }) => {
           >
             Add schedule
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              onSend('schedules');
+              onClose();
+            }}
+            className="mt-2 w-full rounded-lg pill-control py-2.5 text-sm font-medium text-ink"
+          >
+            Manage schedules
+          </button>
           <p className="mt-3 text-center text-[0.6875rem] text-ink-dim">
-            Type <code>schedules</code> in chat to list or manage existing ones.
+            "Manage" lists your schedules in chat with Pause / Run / Delete buttons.
           </p>
         </div>
       </div>

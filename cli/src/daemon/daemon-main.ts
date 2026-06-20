@@ -645,6 +645,28 @@ const agentRowBlock = (agentId: string, name: string): unknown => {
   });
 };
 
+// #243: one buttons block per schedule for tappable management. The prompt
+// carries the name + when + state; the action values embed the id so the
+// block_response round-trip needs no extra state (mirrors agentRowBlock).
+const scheduleRowBlock = (s: Schedule): unknown => {
+  const state = s.enabled ? 'on' : 'paused';
+  const last = s.lastStatus ? ` · last ${s.lastStatus}` : '';
+  return buildBlock({
+    type: 'buttons',
+    id: `sched-row:${s.id}`,
+    prompt: `${s.name} · ${formatCronUtc(s.cron)} · ${s.agent} · ${state}${last}`,
+    style: 'inline',
+    multi: false,
+    options: [
+      s.enabled
+        ? { label: 'Pause', value: `sched-pause:${s.id}` }
+        : { label: 'Resume', value: `sched-resume:${s.id}` },
+      { label: 'Run now', value: `sched-run:${s.id}` },
+      { label: 'Delete', value: `sched-del:${s.id}` },
+    ],
+  });
+};
+
 const killConfirmBlock = (agentId: string, name: string): unknown => {
   return buildBlock({
     type: 'confirm-danger',
@@ -898,21 +920,21 @@ class ControlRoom {
 
   // #232: list the daemon's recurring schedules. Times shown in UTC (the phone
   // clock UI will localize later).
+  // #243: post the schedule list as one tappable buttons block per schedule
+  // (Pause/Resume · Run now · Delete), mirroring the running-agents list. Times
+  // shown in UTC (the phone has no tz channel here).
   async sendSchedules(): Promise<void> {
     const all = this.scheduler.list();
     if (all.length === 0) {
       await this.reply(
-        'No schedules yet. Add one:\n`schedule add <days> <hourUTC> <agent> <prompt>`\n' +
-          'e.g. `schedule add weekdays 7 claude summarize overnight GitHub notifications`',
+        'No schedules yet. Tap the clock to add one, or type:\n`schedule add <days> <timeUTC> <agent> <prompt>`',
       );
       return;
     }
-    const lines = all.map((s) => {
-      const state = s.enabled ? 'on' : 'paused';
-      const last = s.lastStatus ? ` · last ${s.lastStatus}` : '';
-      return `• ${s.name} [${s.id}]\n  ${formatCronUtc(s.cron)} · ${s.agent} · ${state}${last}`;
-    });
-    await this.reply(`Schedules (${all.length}):\n\n${lines.join('\n')}\n\nManage: \`schedule pause|resume|run|rm <id>\``);
+    await this.reply(
+      `Schedules (${all.length}) — times in UTC:`,
+      all.map((s) => scheduleRowBlock(s)),
+    );
   }
 
   // #232: handle `schedule <subcommand> ...`. Text-driven for now; the phone
@@ -1104,6 +1126,41 @@ class ControlRoom {
           }
           if (value === 'show-help') {
             await this.sendHelp();
+            return;
+          }
+          // #243: scheduler row-button taps. Pause/Resume/Delete re-post the list
+          // so the UI refreshes; Run fires immediately.
+          if (value === 'show-schedules') {
+            await this.sendSchedules();
+            return;
+          }
+          if (value.startsWith('sched-pause:')) {
+            const id = value.slice('sched-pause:'.length);
+            await this.reply(this.scheduler.pause(id) ? `Paused ${id}.` : `No active schedule ${id}.`);
+            await this.sendSchedules();
+            return;
+          }
+          if (value.startsWith('sched-resume:')) {
+            const id = value.slice('sched-resume:'.length);
+            await this.reply(this.scheduler.resume(id) ? `Resumed ${id}.` : `No paused schedule ${id}.`);
+            await this.sendSchedules();
+            return;
+          }
+          if (value.startsWith('sched-del:')) {
+            const id = value.slice('sched-del:'.length);
+            await this.reply(this.scheduler.remove(id) ? `Deleted ${id}.` : `No schedule ${id}.`);
+            await this.sendSchedules();
+            return;
+          }
+          if (value.startsWith('sched-run:')) {
+            const id = value.slice('sched-run:'.length);
+            const s = this.scheduler.get(id);
+            if (!s) {
+              await this.reply(`No schedule ${id}.`);
+              return;
+            }
+            await this.reply(`Running ${s.name} now…`);
+            await this.scheduler.runNow(id);
             return;
           }
           if (value.startsWith('spawn:')) {

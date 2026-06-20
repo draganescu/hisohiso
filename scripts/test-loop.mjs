@@ -226,6 +226,17 @@ async function runHumanToAgent(server) {
     }
     log('scheduler (add + run-now → parsed blocks, not raw JSON) ✓');
 
+    // manage UI (#243): `schedules` posts a tappable row per schedule; simulate
+    // tapping Pause then Delete via block_response and assert the daemon acts.
+    const schedId = idMatch[1];
+    await control.send('schedules');
+    await awaitText(control, 'Schedules (', MESSAGE_TIMEOUT_MS);
+    await control.sendBlockResponse(`sched-row:${schedId}`, `sched-pause:${schedId}`);
+    await awaitText(control, `Paused ${schedId}`, MESSAGE_TIMEOUT_MS);
+    await control.sendBlockResponse(`sched-row:${schedId}`, `sched-del:${schedId}`);
+    await awaitText(control, `Deleted ${schedId}`, MESSAGE_TIMEOUT_MS);
+    log('scheduler manage (list + pause + delete via buttons) ✓');
+
     // Spawn the bash echo agent via the control-room text path ("bash" → spawn).
     await control.send('bash');
     // The daemon replies "Spawning bash…" then "bash session ready." — drain
