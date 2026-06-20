@@ -133,6 +133,21 @@ function assertEqual(actual, expected, label) {
   }
 }
 
+// Read messages from a paired client until one contains `needle`, draining any
+// already-queued traffic (e.g. the control room's "Daemon online." welcome) so
+// an assertion isn't tripped by an unrelated earlier message.
+async function awaitText(client, needle, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      throw new Error(`awaitText: never saw ${JSON.stringify(needle)} within ${timeoutMs}ms`);
+    }
+    const msg = await client.nextMessage({ timeoutMs: remaining });
+    if (msg.text.includes(needle)) return msg;
+  }
+}
+
 // human↔human: A creates a room, B joins by secret + code and knocks in; assert
 // A→B and B→A each decrypt to the identical plaintext.
 async function runHumanToHuman(server) {
@@ -177,6 +192,18 @@ async function runHumanToAgent(server) {
     clients.push(control);
     await control.knockAndAwaitApproval(KNOCK_MESSAGE);
     log('human↔agent: control room paired');
+
+    // host→control notify (#226): the daemon posts an arbitrary line into the
+    // control room over the owner-only socket — the path local automation (cron,
+    // health checks) uses to ping the phone. Reuse the just-paired control client
+    // to assert the line lands, draining the "Daemon online." welcome first.
+    const note = `notify-${Date.now()}`;
+    const notifyRes = await sendControlRequest({ op: 'notify', text: note });
+    if (!notifyRes || notifyRes.delivered !== true) {
+      throw new Error(`notify: daemon did not report delivery: ${JSON.stringify(notifyRes)}`);
+    }
+    await awaitText(control, note, MESSAGE_TIMEOUT_MS);
+    log('notify (host→control) ✓');
 
     // Spawn the bash echo agent via the control-room text path ("bash" → spawn).
     await control.send('bash');
