@@ -73,11 +73,12 @@
 
       <section id="run" class="section numbered" aria-labelledby="run-title">
         <h2 id="run-title">two minutes to <span class="accent">a phone-driven claude.</span></h2>
-        <p>install and sign in to Claude Code first. then wrap it.</p>
+        <p>install and sign in to Claude Code first. then install hisohiso and start its daemon.</p>
         <pre class="codebox codebox--block"><code>npm install -g @anthropic-ai/claude-code
 claude
-hisohiso wrap claude</code></pre>
-        <p class="footnote">the first two commands are Claude's setup. the last one opens the hisohiso channel around that local CLI.</p>
+curl -fsSL https://raw.githubusercontent.com/draganescu/hisohiso/main/cli/install.sh | sh
+hisohiso daemon start</code></pre>
+        <p class="footnote">the first two are Claude's setup. the last two install hisohiso and run its daemon — scan the QR it prints to pair your phone, then spawn and steer Claude from the control room.</p>
       </section>
 
       <section class="section numbered" aria-labelledby="phone-title">

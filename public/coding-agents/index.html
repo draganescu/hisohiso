@@ -115,24 +115,14 @@
       <section id="install" class="section numbered" aria-labelledby="install-title">
         <h2 id="install-title">two commands. <span class="accent">done.</span></h2>
         <p>
-          install hisohiso once. then wrap the agent you already use. we don't install Claude or Codex for you, and we don't manage their login. we carry the line.
+          install hisohiso once and start its daemon. then spawn and steer the agents you already use — Claude, Codex, and more — from your phone's control room. we don't install them for you or manage their login. we carry the line.
         </p>
         <div class="codebox" data-copy>
           <code id="install-coding-cmd">curl -fsSL https://raw.githubusercontent.com/draganescu/hisohiso/main/cli/install.sh | sh</code>
           <button class="copy-btn" type="button" data-copy-target="install-coding-cmd" aria-label="Copy install command">Copy</button>
         </div>
-        <div class="split" style="margin-top: 24px;">
-          <article class="split-card">
-            <p class="split-tag">claude</p>
-            <h3>wrap Claude Code.</h3>
-            <pre class="codebox codebox--block"><code>hisohiso wrap claude</code></pre>
-          </article>
-          <article class="split-card">
-            <p class="split-tag">codex</p>
-            <h3>wrap Codex.</h3>
-            <pre class="codebox codebox--block"><code>hisohiso wrap codex</code></pre>
-          </article>
-        </div>
+        <pre class="codebox codebox--block" style="margin-top: 24px;"><code>hisohiso daemon start</code></pre>
+        <p class="footnote">scan the QR it prints to pair your phone. then tap “spawn” in the control room and pick the agent — Claude, Codex, or any you've set up.</p>
       </section>
 
       <section class="section numbered" aria-labelledby="care-title">
