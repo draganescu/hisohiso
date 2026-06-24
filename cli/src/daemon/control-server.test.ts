@@ -24,6 +24,12 @@ const makeHandlers = (
     server: rec('server', { ok: 'server' }),
     restart: rec('restart', { ok: 'restart' }),
     notify: rec('notify', { delivered: true, message: 'Posted to the control room.' }),
+    scheduleAdd: rec('scheduleAdd', { schedule: { id: 'sch_x' } }),
+    scheduleList: rec('scheduleList', { schedules: [] }),
+    schedulePause: rec('schedulePause', { ok: true, message: 'Paused.' }),
+    scheduleResume: rec('scheduleResume', { ok: true, message: 'Resumed.' }),
+    scheduleRemove: rec('scheduleRemove', { ok: true, message: 'Deleted.' }),
+    scheduleRun: rec('scheduleRun', { ok: true, message: 'Running.' }),
     ...over,
   };
   return { handlers, calls };
@@ -50,5 +56,27 @@ describe('control-server dispatch', () => {
     await expect(
       dispatch(handlers, { op: 'bogus' } as unknown as ControlRequest)
     ).rejects.toThrow(/unknown control op/);
+  });
+
+  // #245: scheduler ops route to the right handler with the right payload.
+  test('routes schedule-add with the friendly args', async () => {
+    const { handlers, calls } = makeHandlers();
+    await dispatch(handlers, { op: 'schedule-add', days: 'weekdays', time: '9', agent: 'claude', prompt: 'go' } as ControlRequest);
+    expect(calls.scheduleAdd).toEqual([{ days: 'weekdays', time: '9', agent: 'claude', prompt: 'go', name: undefined }]);
+  });
+
+  test('routes schedule-list / pause / resume / remove / run by id', async () => {
+    const { handlers, calls } = makeHandlers();
+    await dispatch(handlers, { op: 'schedule-list' } as ControlRequest);
+    expect(calls.scheduleList).toEqual([]);
+    for (const [op, name] of [
+      ['schedule-pause', 'schedulePause'],
+      ['schedule-resume', 'scheduleResume'],
+      ['schedule-remove', 'scheduleRemove'],
+      ['schedule-run', 'scheduleRun'],
+    ] as const) {
+      await dispatch(handlers, { op, id: 'sch_7' } as ControlRequest);
+      expect(calls[name]).toEqual(['sch_7']);
+    }
   });
 });

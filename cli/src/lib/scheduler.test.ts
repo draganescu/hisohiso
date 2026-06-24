@@ -1,5 +1,38 @@
 import { describe, expect, test } from 'bun:test';
-import { parseCron, computeNextRunAt, Scheduler, type Schedule } from './scheduler.js';
+import { parseCron, computeNextRunAt, parseDaysToken, buildCronFromArgs, Scheduler, type Schedule } from './scheduler.js';
+
+describe('parseDaysToken', () => {
+  test('names, digits, and shortcuts', () => {
+    expect(parseDaysToken('mon,wed,fri')).toBe('1,3,5');
+    expect(parseDaysToken('1,3,5')).toBe('1,3,5');
+    expect(parseDaysToken('weekdays')).toBe('1,2,3,4,5');
+    expect(parseDaysToken('daily')).toBe('0,1,2,3,4,5,6');
+    expect(parseDaysToken('sat')).toBe('6');
+    expect(parseDaysToken('SUN,Mon')).toBe('0,1'); // case-insensitive, sorted, deduped
+  });
+  test('rejects garbage / empty', () => {
+    expect(parseDaysToken('funday')).toBeNull();
+    expect(parseDaysToken('7')).toBeNull();
+    expect(parseDaysToken('')).toBeNull();
+  });
+});
+
+describe('buildCronFromArgs', () => {
+  test('whole hour and H:MM (UTC)', () => {
+    expect(buildCronFromArgs('weekdays', '9')).toEqual({ cron: '0 9 * * 1,2,3,4,5' });
+    expect(buildCronFromArgs('sat', '10:30')).toEqual({ cron: '30 10 * * 6' });
+  });
+  test('errors with a usage hint', () => {
+    expect(buildCronFromArgs('funday', '9')).toHaveProperty('error');
+    expect(buildCronFromArgs('mon', '24')).toHaveProperty('error');
+    expect(buildCronFromArgs('mon', '9:60')).toHaveProperty('error');
+    expect(buildCronFromArgs('mon', 'noon')).toHaveProperty('error');
+  });
+  test('output round-trips through parseCron', () => {
+    const built = buildCronFromArgs('mon,wed', '7') as { cron: string };
+    expect(parseCron(built.cron)).toEqual({ hour: 7, minute: 0, days: new Set([1, 3]) });
+  });
+});
 
 describe('parseCron', () => {
   test('parses the constrained UTC form', () => {

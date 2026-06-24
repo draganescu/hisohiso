@@ -10,7 +10,7 @@ import {
   saveSchedules,
   type DaemonState,
 } from '../lib/config.js';
-import { Scheduler, parseCron, type Schedule } from '../lib/scheduler.js';
+import { Scheduler, parseCron, buildCronFromArgs, type Schedule } from '../lib/scheduler.js';
 import { reExecSelf } from '../lib/reexec.js';
 import {
   generateRoomSecret,
@@ -323,6 +323,36 @@ export const runDaemon = async (): Promise<void> => {
     server: (url) => doServer(url),
     restart: () => doRestart(),
     notify: (text) => doNotify(text),
+    // #245: the `hisohiso schedule` CLI drives the same in-process Scheduler the
+    // control room uses, so an agent with shell access can self-schedule.
+    scheduleAdd: ({ days, time, agent, prompt, name }) => {
+      const built = buildCronFromArgs(days, time);
+      if ('error' in built) throw new Error(built.error);
+      if (!agent || !prompt) throw new Error('agent and prompt are required');
+      const s = scheduler.add({ cron: built.cron, agent, prompt, name });
+      if (!s) throw new Error('could not create schedule (invalid cron)');
+      return { schedule: s };
+    },
+    scheduleList: () => ({ schedules: scheduler.list() }),
+    schedulePause: (id) => {
+      const ok = scheduler.pause(id);
+      return { ok, message: ok ? `Paused ${id}.` : `No active schedule ${id}.` };
+    },
+    scheduleResume: (id) => {
+      const ok = scheduler.resume(id);
+      return { ok, message: ok ? `Resumed ${id}.` : `No paused schedule ${id}.` };
+    },
+    scheduleRemove: (id) => {
+      const ok = scheduler.remove(id);
+      return { ok, message: ok ? `Deleted ${id}.` : `No schedule ${id}.` };
+    },
+    scheduleRun: (id) => {
+      const s = scheduler.get(id);
+      if (!s) return { ok: false, message: `No schedule ${id}.` };
+      // Fire-and-forget: don't block the CLI on a (possibly long) agent run.
+      void scheduler.runNow(id);
+      return { ok: true, message: `Running ${s.name} now…` };
+    },
   }).catch((err) => {
     if (err instanceof DaemonAlreadyRunningError) {
       // Lost a start race against another daemon between the preflight probe and
@@ -736,26 +766,10 @@ type PendingControlKnock = {
 const PENDING_CONTROL_KNOCK_TTL_MS = 10 * 60 * 1000;
 
 // --- scheduler control-room command helpers (#232) ---
+// parseDaysToken + buildCronFromArgs live in lib/scheduler.js so the control
+// room and the `hisohiso schedule` CLI parse identically.
 
-const DOW_NAMES: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-// Parse a days token into a normalized cron dow list (0-6, 0=Sun). Accepts
-// digits ("1,3,5"), names ("mon,wed,fri"), or the shortcuts "weekdays"/"daily".
-// Returns null on anything unrecognized so a bad `schedule add` is rejected, not
-// silently mis-scheduled.
-function parseDaysToken(tok: string): string | null {
-  const out = new Set<number>();
-  for (const part of tok.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) {
-    if (part === 'weekdays') { [1, 2, 3, 4, 5].forEach((x) => out.add(x)); continue; }
-    if (part === 'daily' || part === 'everyday' || part === '*') { [0, 1, 2, 3, 4, 5, 6].forEach((x) => out.add(x)); continue; }
-    if (/^[0-6]$/.test(part)) { out.add(Number(part)); continue; }
-    if (part in DOW_NAMES) { out.add(DOW_NAMES[part]!); continue; }
-    return null;
-  }
-  if (out.size === 0) return null;
-  return [...out].sort((a, b) => a - b).join(',');
-}
 
 // Render a stored UTC cron as a readable line. The control-room text surface
 // shows UTC; the (future) phone clock UI renders in the device's local time.
@@ -944,15 +958,10 @@ class ControlRoom {
     const subcmd = (tokens[0] ?? '').toLowerCase();
 
     if (subcmd === 'add') {
-      const days = parseDaysToken(tokens[1] ?? '');
-      // Time token is UTC "H" or "H:MM" — the phone clock UI sends :MM for
-      // half-hour offset zones (India +5:30, Nepal +5:45) so they round-trip.
-      const timeTok = (tokens[2] ?? '').match(/^(\d{1,2})(?::(\d{1,2}))?$/);
-      const hour = timeTok ? Number(timeTok[1]) : NaN;
-      const minute = timeTok && timeTok[2] !== undefined ? Number(timeTok[2]) : 0;
       const agent = tokens[3];
       const prompt = tokens.slice(4).join(' ').trim();
-      if (!days || !Number.isInteger(hour) || hour < 0 || hour > 23 || minute < 0 || minute > 59 || !agent || !prompt) {
+      const built = buildCronFromArgs(tokens[1] ?? '', tokens[2] ?? '');
+      if ('error' in built || !agent || !prompt) {
         await this.reply(
           'Usage: `schedule add <days> <timeUTC> <agent> <prompt>`\n' +
             'Days: mon,wed,fri | weekdays | daily | 0-6 (0=Sun). Time: 0-23 UTC, or H:MM (e.g. 20:30).\n' +
@@ -960,14 +969,13 @@ class ControlRoom {
         );
         return;
       }
-      const cron = `${minute} ${hour} * * ${days}`;
-      const s = this.scheduler.add({ cron, agent, prompt });
+      const s = this.scheduler.add({ cron: built.cron, agent, prompt });
       if (!s) {
         await this.reply('Could not create that schedule (invalid cron).');
         return;
       }
       const next = s.nextRunAt ? new Date(s.nextRunAt).toISOString() : 'never';
-      await this.reply(`Scheduled ✓ ${s.name} [${s.id}]\n${formatCronUtc(cron)} · ${agent}\nNext run (UTC): ${next}`);
+      await this.reply(`Scheduled ✓ ${s.name} [${s.id}]\n${formatCronUtc(built.cron)} · ${agent}\nNext run (UTC): ${next}`);
       return;
     }
 

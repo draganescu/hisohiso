@@ -57,6 +57,41 @@ export function parseCron(cron: string): { hour: number; minute: number; days: S
   return { hour, minute, days };
 }
 
+const DOW_NAMES: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+
+// Parse a days token into a normalized cron dow list (0-6, 0=Sun). Accepts
+// digits ("1,3,5"), names ("mon,wed,fri"), or the shortcuts "weekdays"/"daily".
+// Returns null on anything unrecognized so a bad schedule is rejected, not
+// silently mis-scheduled. Shared by the control room and the CLI so both agree.
+export function parseDaysToken(tok: string): string | null {
+  const out = new Set<number>();
+  for (const part of tok.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+    if (part === 'weekdays') { [1, 2, 3, 4, 5].forEach((x) => out.add(x)); continue; }
+    if (part === 'daily' || part === 'everyday' || part === '*') { [0, 1, 2, 3, 4, 5, 6].forEach((x) => out.add(x)); continue; }
+    if (/^[0-6]$/.test(part)) { out.add(Number(part)); continue; }
+    if (part in DOW_NAMES) { out.add(DOW_NAMES[part]!); continue; }
+    return null;
+  }
+  if (out.size === 0) return null;
+  return [...out].sort((a, b) => a - b).join(',');
+}
+
+// Build a stored UTC cron from a friendly days token + a UTC time token ("H" or
+// "H:MM"). Returns { cron } or { error } so callers can surface a usage hint.
+// The single source of truth for the control room AND the `hisohiso schedule`
+// CLI, so the two can never drift.
+export function buildCronFromArgs(days: string, time: string): { cron: string } | { error: string } {
+  const dow = parseDaysToken(days ?? '');
+  if (!dow) return { error: 'days must be mon,wed,fri | weekdays | daily | 0-6 (0=Sun)' };
+  const m = (time ?? '').match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+  const hour = m ? Number(m[1]) : NaN;
+  const minute = m && m[2] !== undefined ? Number(m[2]) : 0;
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return { error: 'time must be 0-23 UTC, or H:MM (e.g. 20:30)' };
+  }
+  return { cron: `${minute} ${hour} * * ${dow}` };
+}
+
 // Next UTC instant strictly after `fromMs` that matches the cron's hour + weekday
 // set. Scans up to 8 days (a full week + 1) so it always lands on a match if the
 // cron is valid. Returns null for an unparseable cron.

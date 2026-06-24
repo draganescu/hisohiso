@@ -10,6 +10,7 @@
 
 import { connect } from 'node:net';
 import { SOCKET_FILE } from './config.js';
+import type { Schedule } from './scheduler.js';
 
 export type ControlRequest =
   | { op: 'status' }
@@ -26,7 +27,17 @@ export type ControlRequest =
   // Post a one-off message into the live control room. The host's channel for
   // local automation (cron, health checks, deploy hooks) to ping the operator's
   // phone — the daemon encrypts and sends it like any other control-room reply.
-  | { op: 'notify'; text: string };
+  | { op: 'notify'; text: string }
+  // Scheduler ops — the `hisohiso schedule` CLI drives the same daemon Scheduler
+  // the control room uses, so an agent with shell access can self-schedule.
+  // days/time are friendly + UTC ("weekdays", "9" or "9:30"); the daemon builds
+  // the cron via the shared buildCronFromArgs helper.
+  | { op: 'schedule-add'; days: string; time: string; agent: string; prompt: string; name?: string }
+  | { op: 'schedule-list' }
+  | { op: 'schedule-pause'; id: string }
+  | { op: 'schedule-resume'; id: string }
+  | { op: 'schedule-remove'; id: string }
+  | { op: 'schedule-run'; id: string };
 
 export type AgentSummary = { agentId: string; name: string };
 export type PendingDevice = { knockMsgId: string; expiresAt: number };
@@ -56,6 +67,12 @@ export type AdmitResult = { resolved: number; message: string };
 // only when the control room is not ready yet (early boot / mid re-pair); the
 // message text is human-readable for the CLI to print.
 export type NotifyResult = { delivered: boolean; message: string };
+
+// Scheduler op results. `schedule-add` returns the created schedule; `-list`
+// the full set; the mutating ops a boolean + human message the CLI prints.
+export type ScheduleAddResult = { schedule: Schedule };
+export type ScheduleListResult = { schedules: Schedule[] };
+export type ScheduleActionResult = { ok: boolean; message: string };
 
 // repair / server return a human-readable confirmation; the daemon re-execs
 // ~half a second later, so the reply is sent before the process recycles.
