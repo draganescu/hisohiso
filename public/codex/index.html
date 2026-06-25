@@ -73,11 +73,12 @@
 
       <section id="run" class="section numbered" aria-labelledby="run-title">
         <h2 id="run-title">two minutes to <span class="accent">a phone-driven Codex.</span></h2>
-        <p>install and sign in to Codex first. then wrap it from inside a git repo.</p>
+        <p>install and sign in to Codex first. then install hisohiso and start its daemon.</p>
         <pre class="codebox codebox--block"><code>npm install -g @openai/codex
 codex
-hisohiso wrap codex</code></pre>
-        <p class="footnote">codex expects a git repo. we don't change that. we open an encrypted channel around the session.</p>
+curl -fsSL https://raw.githubusercontent.com/draganescu/hisohiso/main/cli/install.sh | sh
+hisohiso daemon start</code></pre>
+        <p class="footnote">the first two are Codex's setup. the last two install hisohiso and run its daemon — scan the QR to pair your phone, then spawn Codex from the control room (from inside a git repo, the way codex expects).</p>
       </section>
 
       <section class="section numbered" aria-labelledby="phone-title">
