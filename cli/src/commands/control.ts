@@ -19,6 +19,9 @@ import {
   type AdmitResult,
   type ReExecResult,
   type NotifyResult,
+  type ScheduleAddResult,
+  type ScheduleListResult,
+  type ScheduleActionResult,
 } from '../lib/control-plane.js';
 
 const confirm = async (prompt: string): Promise<boolean> => {
@@ -132,6 +135,75 @@ export const notifyCmd = async (text: string): Promise<void> => {
     process.exitCode = 1;
   }
 };
+
+// #245: `hisohiso schedule …` — drive the daemon's scheduler from the CLI so
+// agents (or scripts) can self-schedule recurring runs. Same grammar as the
+// control room: days = mon,wed,fri | weekdays | daily | 0-6; time = UTC H or H:MM.
+const onSchedFail = (verb: string, err: unknown): void => {
+  if (err instanceof DaemonUnreachableError) {
+    console.log(notRunningHint);
+  } else {
+    console.error(`${verb} failed: ${(err as Error).message}`);
+  }
+  process.exitCode = 1;
+};
+
+export const scheduleAddCmd = async (days: string, time: string, agent: string, prompt: string): Promise<void> => {
+  if (!prompt.trim()) {
+    console.error('usage: hisohiso schedule add <days> <timeUTC> <agent> "<prompt>"');
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    const { schedule: s } = await sendControlRequest<ScheduleAddResult>({
+      op: 'schedule-add', days, time, agent, prompt: prompt.trim(),
+    });
+    const next = s.nextRunAt ? new Date(s.nextRunAt).toISOString() : 'never';
+    console.log(`Scheduled ✓ ${s.name} [${s.id}] · ${s.cron} UTC · ${s.agent}\nNext run (UTC): ${next}`);
+  } catch (err) {
+    onSchedFail('schedule add', err);
+  }
+};
+
+export const scheduleListCmd = async (opts: { json?: boolean } = {}): Promise<void> => {
+  try {
+    const { schedules } = await sendControlRequest<ScheduleListResult>({ op: 'schedule-list' });
+    if (opts.json) {
+      console.log(JSON.stringify(schedules, null, 2));
+      return;
+    }
+    if (schedules.length === 0) {
+      console.log('No schedules. Add one: hisohiso schedule add <days> <timeUTC> <agent> "<prompt>"');
+      return;
+    }
+    for (const s of schedules) {
+      const next = s.nextRunAt ? new Date(s.nextRunAt).toISOString() : 'never';
+      const last = s.lastStatus ? ` · last ${s.lastStatus}` : '';
+      console.log(`${s.id}  ${s.enabled ? 'on    ' : 'paused'}  ${s.cron} UTC  ${s.agent}  next ${next}${last}  — ${s.name}`);
+    }
+  } catch (err) {
+    onSchedFail('schedule list', err);
+  }
+};
+
+const scheduleAction = async (
+  op: 'schedule-pause' | 'schedule-resume' | 'schedule-remove' | 'schedule-run',
+  verb: string,
+  id: string,
+): Promise<void> => {
+  try {
+    const r = await sendControlRequest<ScheduleActionResult>({ op, id });
+    console.log(r.message);
+    if (!r.ok) process.exitCode = 1;
+  } catch (err) {
+    onSchedFail(verb, err);
+  }
+};
+
+export const schedulePauseCmd = (id: string): Promise<void> => scheduleAction('schedule-pause', 'schedule pause', id);
+export const scheduleResumeCmd = (id: string): Promise<void> => scheduleAction('schedule-resume', 'schedule resume', id);
+export const scheduleRemoveCmd = (id: string): Promise<void> => scheduleAction('schedule-remove', 'schedule rm', id);
+export const scheduleRunCmd = (id: string): Promise<void> => scheduleAction('schedule-run', 'schedule run', id);
 
 // Non-destructive in-place re-exec: pairing and agent rooms survive. The only
 // way to bounce a backgrounded (launchd/systemd) daemon without poking the

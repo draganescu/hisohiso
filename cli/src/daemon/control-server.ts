@@ -46,6 +46,12 @@ export type ControlHandlers = {
   server: (url: string) => Promise<unknown> | unknown;
   restart: () => Promise<unknown> | unknown;
   notify: (text: string) => Promise<unknown> | unknown;
+  scheduleAdd: (a: { days: string; time: string; agent: string; prompt: string; name?: string }) => Promise<unknown> | unknown;
+  scheduleList: () => Promise<unknown> | unknown;
+  schedulePause: (id: string) => Promise<unknown> | unknown;
+  scheduleResume: (id: string) => Promise<unknown> | unknown;
+  scheduleRemove: (id: string) => Promise<unknown> | unknown;
+  scheduleRun: (id: string) => Promise<unknown> | unknown;
 };
 
 export type ControlServerHandle = { close: () => Promise<void> };
@@ -69,6 +75,18 @@ export const dispatch = async (h: ControlHandlers, req: ControlRequest): Promise
       return h.restart();
     case 'notify':
       return h.notify(req.text);
+    case 'schedule-add':
+      return h.scheduleAdd({ days: req.days, time: req.time, agent: req.agent, prompt: req.prompt, name: req.name });
+    case 'schedule-list':
+      return h.scheduleList();
+    case 'schedule-pause':
+      return h.schedulePause(req.id);
+    case 'schedule-resume':
+      return h.scheduleResume(req.id);
+    case 'schedule-remove':
+      return h.scheduleRemove(req.id);
+    case 'schedule-run':
+      return h.scheduleRun(req.id);
     default:
       throw new Error(`unknown control op: ${(req as { op: string }).op}`);
   }

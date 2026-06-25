@@ -41,6 +41,21 @@ const REPO_ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 const CLI_ENTRY = join(REPO_ROOT, 'cli', 'src', 'index.ts');
 const E2E_DIR = join(REPO_ROOT, 'e2e');
 
+// Run the hisohiso CLI against the test daemon's socket (HISOHISO_HOME = test
+// home) and capture its output — used to exercise `hisohiso schedule` (#245).
+function runCli(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('bun', [CLI_ENTRY, ...args], {
+      env: { ...process.env, HISOHISO_HOME: TEST_HOME },
+    });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d.toString(); });
+    child.stderr.on('data', (d) => { out += d.toString(); });
+    child.on('exit', (code) => resolve({ code, out }));
+    child.on('error', reject);
+  });
+}
+
 // The session knock message every join in this loop authenticates against. A
 // fixed test value keeps the loop deterministic; it never rides the wire as
 // plaintext (it's the k_knock cleartext gate). Passed to the daemon via
@@ -236,6 +251,19 @@ async function runHumanToAgent(server) {
     await control.sendBlockResponse(`sched-row:${schedId}`, `sched-del:${schedId}`);
     await awaitText(control, `Deleted ${schedId}`, MESSAGE_TIMEOUT_MS);
     log('scheduler manage (list + pause + delete via buttons) ✓');
+
+    // CLI scheduler (#245): `hisohiso schedule` drives the SAME daemon scheduler
+    // over the control socket — so an agent/script can self-schedule. Add → assert
+    // it shows in `list --json` → rm.
+    const cliStamp = `cli-${Date.now()}`;
+    const addOut = await runCli(['schedule', 'add', 'daily', '0', 'bash', cliStamp]);
+    const cliId = (addOut.out.match(/\[(sch_[a-z0-9]+)\]/i) || [])[1];
+    if (!cliId) throw new Error(`schedule add (cli): no id in output: ${JSON.stringify(addOut.out)}`);
+    const listOut = await runCli(['schedule', 'list', '--json']);
+    if (!listOut.out.includes(cliId)) throw new Error(`schedule list --json (cli) missing ${cliId}: ${listOut.out}`);
+    const rmOut = await runCli(['schedule', 'rm', cliId]);
+    if (!rmOut.out.includes('Deleted')) throw new Error(`schedule rm (cli) did not delete: ${rmOut.out}`);
+    log('scheduler CLI (add + list --json + rm via hisohiso schedule) ✓');
 
     // Spawn the bash echo agent via the control-room text path ("bash" → spawn).
     await control.send('bash');

@@ -4,7 +4,10 @@ import { Command } from 'commander';
 import { wrap } from './commands/wrap.js';
 import { daemonStart, daemonStop, daemonStatus, daemonInstall, daemonUninstall } from './commands/daemon.js';
 import { register, unregister, list } from './commands/registry.js';
-import { statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, restartCmd, serverCmd, notifyCmd } from './commands/control.js';
+import {
+  statusCmd, pairCmd, admitCmd, denyCmd, repairCmd, restartCmd, serverCmd, notifyCmd,
+  scheduleAddCmd, scheduleListCmd, schedulePauseCmd, scheduleResumeCmd, scheduleRemoveCmd, scheduleRunCmd,
+} from './commands/control.js';
 import { info } from './commands/info.js';
 import { updateCmd } from './commands/update.js';
 import { uninstallCmd } from './commands/uninstall.js';
@@ -96,6 +99,32 @@ program
   .action(async (textParts: string[]) => {
     await notifyCmd(textParts.join(' '));
   });
+
+// #245: drive the daemon scheduler from the CLI (agents/scripts can self-schedule).
+const schedule = program
+  .command('schedule')
+  .description('Manage recurring agent schedules on the running daemon (UTC times)');
+schedule
+  .command('add')
+  .description('Add a schedule. Days: mon,wed,fri | weekdays | daily | 0-6. Time: UTC H or H:MM')
+  .argument('<days>', 'e.g. weekdays | mon,wed,fri | daily | 0-6')
+  .argument('<time>', 'UTC time: 9 or 9:30')
+  .argument('<agent>', 'agent name, e.g. claude')
+  .argument('<prompt...>', 'the prompt to run')
+  .action(async (days: string, time: string, agent: string, promptParts: string[]) => {
+    await scheduleAddCmd(days, time, agent, promptParts.join(' '));
+  });
+schedule
+  .command('list')
+  .description('List schedules')
+  .option('--json', 'Emit the schedules as JSON for scripting')
+  .action(async (opts: { json?: boolean }) => {
+    await scheduleListCmd({ json: opts.json === true });
+  });
+schedule.command('pause').argument('<id>').description('Pause a schedule').action(schedulePauseCmd);
+schedule.command('resume').argument('<id>').description('Resume a paused schedule').action(scheduleResumeCmd);
+schedule.command('run').argument('<id>').description('Run a schedule now (fire-and-forget)').action(scheduleRunCmd);
+schedule.command('rm').argument('<id>').description('Delete a schedule').action(scheduleRemoveCmd);
 
 program
   .command('repair')
