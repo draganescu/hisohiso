@@ -19,3 +19,15 @@ bun.lock
 .claude/*
 !.claude/skills/
 /compose.override.yaml
+
+# /design-sync — staged converter, regenerated build output, machine state.
+# The durable inputs under .design-sync/ (config.json, NOTES.md, conventions.md,
+# previews/, overrides/) ARE committed; only the regenerated/cache paths below
+# are ignored.
+/.ds-sync/
+/ds-bundle/
+/.design-sync/.cache/
+/.design-sync/learnings/
+/.design-sync/node_modules
+/app/ds-types/
+/app/ds-dist/
