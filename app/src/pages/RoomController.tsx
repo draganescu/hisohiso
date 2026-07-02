@@ -46,7 +46,6 @@ import {
 import { groupOpenChannels } from '../lib/room-grouping';
 import { GroupedChannelList } from '../components/GroupedChannelList';
 import { createRoomEventSource } from '../lib/mercure';
-import { useRoomPresence } from '../lib/presence';
 import { useRoomAutoApprove } from '../lib/auto-approve';
 import { setPendingKnockCount } from '../lib/pending-knocks';
 import { deleteMessage, loadMessages, saveMessage, type ChatMessage, type MessageAction, type ReplyEntry } from '../lib/db';
@@ -263,11 +262,6 @@ const RoomController = () => {
   const [lobbyJwt, setLobbyJwt] = useState<string | null>(null);
   const [handle, setHandleState] = useState<string>(() => initialContext?.handle ?? '');
   const [connection, setConnection] = useState<'idle' | 'connected' | 'error'>('idle');
-  // OPT-IN, off-by-default "live / quiet" presence. Reflects ONLY this device's
-  // own connection to the room (the `connection` state above) — never anyone
-  // else's presence and never a read receipt. The opt-in flag is local-only and
-  // never leaves the device; see lib/presence.ts for the full privacy contract.
-  const presence = useRoomPresence(roomHash, connection);
   // OPT-IN, off-by-default auto-approve. When on, a knock that decrypts cleanly
   // (proving the knocker holds link + password) is approved without a tap. The
   // flag is local-only and never leaves the device; see lib/auto-approve.ts for
@@ -2306,6 +2300,11 @@ const RoomController = () => {
                 {roomNickname || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'channel')}
               </h1>
             </div>
+            {/* ---- Relay-connection dot ----
+                Reflects ONLY this device's own live connection to the relay
+                (the room's EventSource stream) — never anyone else's presence
+                and never a read receipt. Green when our stream is open,
+                red/grey while reconnecting / connecting. Always shown. */}
             <div
               className="pointer-events-auto pill-control flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5"
               title={connectionLabel}
@@ -2318,29 +2317,6 @@ const RoomController = () => {
               />
               <span className="hidden text-[0.6875rem] text-ink-dim sm:inline">{connectionLabel}</span>
             </div>
-            {/* ---- Opt-in own-presence dot (off by default) ----
-                Reflects ONLY this device's own connection to the room — never
-                anyone else's presence and never a read receipt. Renders only
-                when the local opt-in is on (toggled in the menu). Lime when our
-                own socket is live, muted otherwise. The label says "you:" so it
-                is honest about whose presence this is. */}
-            {presence.enabled && (
-              <div
-                className="pointer-events-auto pill-control flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5"
-                title={presence.isLive ? 'you: live (your own connection)' : 'you: quiet (your own connection)'}
-                aria-label={presence.isLive ? 'you are live' : 'you are quiet'}
-              >
-                <span
-                  className={`inline-block h-1.5 w-1.5 rounded-full ${
-                    presence.isLive ? 'bg-lime' : 'bg-ink-fade'
-                  }`}
-                  aria-hidden="true"
-                />
-                <span className="hidden text-[0.6875rem] text-ink-dim sm:inline">
-                  {presence.isLive ? 'you: live' : 'you: quiet'}
-                </span>
-              </div>
-            )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -3508,30 +3484,6 @@ const RoomController = () => {
                     <span
                       className={`inline-block h-5 w-5 transform rounded-full bg-surface shadow transition-transform ${
                         pushStatus === 'on' ? 'translate-x-5' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-[14px] border border-rule bg-surface p-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">show my live dot</p>
-                    <p className="mt-1 text-xs leading-5 text-ink-soft">
-                      shows a small dot in the header reflecting <span className="font-medium">your own</span> connection to this channel — lime when you're live, muted when not. it's not a presence or read-receipt signal: nothing is sent to anyone and it tells you nothing about who else is here. off by default, stored on this device only.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={presence.enabled}
-                    onClick={() => presence.toggle()}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                      presence.enabled ? 'bg-ink' : 'bg-overlay-soft'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-surface shadow transition-transform ${
-                        presence.enabled ? 'translate-x-5' : 'translate-x-0.5'
                       }`}
                     />
                   </button>
