@@ -322,7 +322,7 @@ export class AgentManager {
     const env: Record<string, string> = {};
 
     const run = async (): Promise<string> => {
-      if (provider === 'claude' || provider === 'codex') {
+      if (provider === 'claude' || provider === 'codex' || provider === 'opencode') {
         const result = await runStreamingTurn({ command: resolved.command, argv, prompt: messageToSend, format: provider, env });
         const text = (result.text || '').trim();
         if ((result.code !== 0 || result.isError) && !text) {
@@ -585,10 +585,10 @@ export class AgentManager {
           }).catch(() => {});
         };
 
-        // Streaming providers (Claude/Codex): run the turn with full permissions
+        // Streaming providers (Claude/Codex/OpenCode): run the turn with full permissions
         // (the profile carries the provider's bypass flag, like main) while
         // pushing parsed live status into the room.
-        if (provider === 'claude' || provider === 'codex') {
+        if (provider === 'claude' || provider === 'codex' || provider === 'opencode') {
           console.log(
             `[${agentName}:${agentId}]   $ ${session.profile.command} (provider=${provider}${isResume ? ' resume' : ''})`,
           );

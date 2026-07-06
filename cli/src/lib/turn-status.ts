@@ -143,6 +143,34 @@ const codexToolLabel = (itemType: string, item?: Record<string, unknown>): strin
   }
 };
 
+// Parse one OpenCode `--format json` output line. OpenCode emits a single JSON
+// result object at completion, not streaming events. The parser handles the
+// final result containing session_id and response text.
+export const parseOpenCodeStreamLine = (line: string): AgentTurnEvent[] => {
+  const ev = tryParseLine(line);
+  if (!ev) return [];
+  const out: AgentTurnEvent[] = [];
+
+  // OpenCode JSON format may include a sessionId for continuation
+  const sid = textOf(ev.session_id ?? ev.sessionId);
+  if (sid) out.push({ type: 'session', sessionId: sid });
+
+  // Extract the response text - OpenCode may use 'message', 'response', 'text', or 'output'
+  const responseText = textOf(ev.message ?? ev.response ?? ev.text ?? ev.output);
+  if (responseText) {
+    // Check for error indication
+    const isError = ev.error === true || ev.status === 'error';
+    out.push({ type: 'result', text: responseText, isError });
+  }
+
+  // If there's an explicit error field
+  if (ev.error && typeof ev.error === 'string') {
+    out.push({ type: 'error', message: ev.error });
+  }
+
+  return out;
+};
+
 // Compact, human one-liner for a status — sent as the ephemeral status text the
 // phone renders in its single in-place "agent is working" indicator.
 export const describeStatus = (s: TurnStatus): string => {

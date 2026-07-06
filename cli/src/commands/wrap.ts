@@ -215,7 +215,7 @@ export const wrap = async (agentName: string, customCommand?: string[]): Promise
     let output: string;
     let exitNote: string | null = null;
 
-    if (provider === 'claude' || provider === 'codex') {
+    if (provider === 'claude' || provider === 'codex' || provider === 'opencode') {
       console.log(`  $ ${profile.command} (provider=${provider}${isResume ? ' resume' : ''})`);
       const result = await runStreamingTurn({ command: profile.command, argv: args, prompt: messageToSend, format: provider, env });
       if (profile.mode === 'session' && result.sessionId) {
