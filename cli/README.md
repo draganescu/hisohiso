@@ -5,9 +5,9 @@ same end-to-end encrypted channel the web app uses. You run the agent in a
 shell; the agent's output streams to a hisohiso room on your phone; what you
 type back from your phone goes into the agent's stdin.
 
-> **Supported agents: Claude (Anthropic Claude Code) and Codex (OpenAI).**
+> **Supported agents: Claude (Anthropic Claude Code), Codex (OpenAI), and OpenCode.**
 >
-> Both run as multi-turn sessions with structured-block rendering (the same
+> All three run as multi-turn sessions with structured-block rendering (the same
 > phone UI for diffs, buttons, confirm dialogs, etc.). Need something else?
 > Register any single-prompt CLI as a custom agent — see
 > [Registering custom agents](#registering-custom-agents) below.
@@ -42,6 +42,9 @@ claude --version
 
 # Codex — https://developers.openai.com/codex/cli
 codex --version
+
+# OpenCode — https://opencode.ai
+opencode --version
 ```
 
 ## Update
@@ -108,6 +111,8 @@ chat:
 | Phone message    | Effect                                                   |
 | ---------------- | -------------------------------------------------------- |
 | `claude`         | Spawn a Claude session in its own room, get a join link  |
+| `codex`          | Spawn a Codex session in its own room, get a join link   |
+| `opencode`       | Spawn an OpenCode session in its own room, get a join link|
 | `list`           | List currently running agent rooms                       |
 | `kill <agent-id>`| Stop a running agent session                             |
 | `help`           | Show available commands                                  |
@@ -184,8 +189,9 @@ isolated second daemon alongside your main one.
 | -------------- | ------- | -------------------------------------------------- |
 | `claude`       | session | Claude Code, multi-turn (`--resume` between msgs)  |
 | `codex`        | session | Codex CLI (OpenAI), multi-turn (`exec resume`)     |
+| `opencode`     | session | OpenCode, multi-turn (`-s/--continue` between msgs)|
 
-`claude` and `codex` are the two first-class agents. Anything else is a
+`claude`, `codex`, and `opencode` are the three first-class agents. Anything else is a
 [custom agent](#registering-custom-agents) you register yourself. A profile is
 only offered (in `wrap` and on the phone launcher) when its command is actually
 installed on the host.
