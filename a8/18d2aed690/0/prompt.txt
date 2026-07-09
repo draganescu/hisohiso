@@ -1,0 +1,1 @@
+yo in claude there is a www.hisohiso.org host it should be set to run php because there is a _deploy file that should work as a webhook
