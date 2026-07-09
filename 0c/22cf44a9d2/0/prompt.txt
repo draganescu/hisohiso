@@ -1,0 +1,26 @@
+In my caddy file for www.hisohiso.org I see this
+
+www.hisohiso.org {
+        root * /home/vagabond/hisohiso/public
+        encode gzip zstd
+
+        # Remove the next two lines if this is a static (non-PHP) site
+        php_fastcgi unix//run/php/php8.2-fpm.sock
+
+        file_server
+
+        tls vagabond@andreidraganescu.info {
+                protocols tls1.2 tls1.3
+        }
+
+        log {
+                output file /var/log/caddy/hisohiso.access.log {
+                        roll_size 3MiB
+                        roll_keep 5
+                        roll_keep_for 48h
+                }
+                format console
+        }
+}
+
+why does www.hisohiso.org/_deploy.php return 404 with body no
