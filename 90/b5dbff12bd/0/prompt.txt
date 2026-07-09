@@ -1,0 +1,1 @@
+ok tell me the recipe to allow you to manage websites, caddy, restart caddy, add/remove websites, start/stop docker, use the wp manager script in home
