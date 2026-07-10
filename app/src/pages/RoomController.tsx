@@ -26,6 +26,7 @@ import {
   getRoomColor,
   getRoomKind,
   getRoomNickname,
+  getRoomAutoTitle,
   getSubscriberJwt,
   getToken,
   listRooms,
@@ -40,6 +41,7 @@ import {
   upsertRoom,
   updateRoomHandle,
   updateRoomNickname,
+  updateRoomAutoTitle,
   type RoomKind,
   type StoredRoom
 } from '../lib/storage';
@@ -97,6 +99,7 @@ type OptimisticContext = {
   handle: string;
   roomPassword: string;
   roomNickname: string;
+  roomAutoTitle: string;
   roomColor: string;
   subJwt: string | null;
 };
@@ -116,6 +119,7 @@ const loadInitialContext = (): OptimisticContext | null => {
     handle: getHandle(hash) ?? '',
     roomPassword: getRoomPassword(hash) ?? '',
     roomNickname: getRoomNickname(hash) ?? '',
+    roomAutoTitle: getRoomAutoTitle(hash) ?? '',
     roomColor: getRoomColor(hash),
     subJwt: getSubscriberJwt(hash),
   };
@@ -228,6 +232,9 @@ const RoomController = () => {
   const [showCollector, setShowCollector] = useState(false);
   const [headerCondensed, setHeaderCondensed] = useState(false);
   const [roomNickname, setRoomNickname] = useState<string>(() => initialContext?.roomNickname ?? '');
+  // Daemon/agent-suggested title for this room. Shown in the header only when the
+  // user hasn't set a nickname; the in-room agent updates it on topic change.
+  const [roomAutoTitle, setRoomAutoTitle] = useState<string>(() => initialContext?.roomAutoTitle ?? '');
   const [roomColor, setRoomColor] = useState<string>(() => initialContext?.roomColor ?? '#ccc');
   // What kind of room this is. Drives chrome: a 'control' room is a tap-only
   // command surface — no free-text message affordances. Seeded from storage,
@@ -429,12 +436,15 @@ const RoomController = () => {
         : undefined;
     upsertRoom(nextHash, nextSecret, null, action.room_kind, parentControlHash);
 
-    // Daemon-supplied name applies only when no nickname is set — mirrors the
-    // control-room hostname stamp. So a `join:` rebroadcast (operator taps the
-    // re-shown agent row) doesn't clobber a user rename of the agent room.
+    // Daemon-supplied spawn name is the room's initial auto-title (e.g. "Claude
+    // Velvet"), NOT a nickname — the in-room agent later re-titles it via
+    // `room_name` on topic change, and a user rename (nickname) always wins over
+    // both. Only seed it when there's no auto-title yet, so a `join:` rebroadcast
+    // (operator taps the re-shown agent row) can't clobber a newer agent title.
     const roomName = action.roomName?.trim();
-    if (roomName && !getRoomNickname(nextHash)) {
-      updateRoomNickname(nextHash, roomName);
+    if (roomName && !getRoomAutoTitle(nextHash)) {
+      updateRoomAutoTitle(nextHash, roomName);
+      if (nextHash === roomHash) setRoomAutoTitle(roomName);
     }
 
     if (action.code) {
@@ -610,6 +620,15 @@ const RoomController = () => {
     if (envKind === 'control' && envelope.room_name && !getRoomNickname(roomHash)) {
       updateRoomNickname(roomHash, envelope.room_name);
       setRoomNickname(envelope.room_name);
+    }
+    // An in-room agent (re)titles its room by stamping `room_name` on a reply
+    // when the topic changes. Unlike the control-room case this is an auto-title,
+    // not a nickname: it updates freely (the agent overwrites it on the next
+    // topic shift) and is shown only when the user hasn't set a nickname —
+    // getRoomAutoTitle/getRoomNickname decide precedence at render time.
+    if (envKind === 'agent' && envelope.room_name) {
+      updateRoomAutoTitle(roomHash, envelope.room_name);
+      setRoomAutoTitle(envelope.room_name);
     }
     const messageRecord = toChatMessageRecord({
       msgId,
@@ -888,6 +907,7 @@ const RoomController = () => {
         setRoomSetupStage('security');
         setRoomColor(getRoomColor(hash));
         setRoomNickname(getRoomNickname(hash) ?? '');
+        setRoomAutoTitle(getRoomAutoTitle(hash) ?? '');
         setRoomKindState(getRoomKind(hash));
 
         const existingToken = getToken(hash);
@@ -2303,7 +2323,7 @@ const RoomController = () => {
             </button>
             <div className="pointer-events-auto pill-control flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5">
               <h1 className="truncate text-sm font-semibold tracking-[-0.015em]">
-                {roomNickname || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'channel')}
+                {roomNickname || roomAutoTitle || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'channel')}
               </h1>
             </div>
             <div
@@ -3307,7 +3327,7 @@ const RoomController = () => {
                   <p className="text-[0.6875rem] uppercase tracking-[0.2em] text-ink-dim">channel name</p>
                   <input
                     className="mt-2 w-full rounded-[10px] border border-rule bg-surface px-3 py-2 text-base focus:border-ink focus:outline-none"
-                    placeholder={roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'give this channel a name'}
+                    placeholder={roomAutoTitle || (roomKind === 'chat' && roomHash ? generateRoomName(roomHash) : 'give this channel a name')}
                     value={roomNickname}
                     onChange={(e) => {
                       setRoomNickname(e.target.value);

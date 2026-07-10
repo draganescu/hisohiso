@@ -49,7 +49,8 @@ export const RoomRow = ({ room, isCurrent, joinedLabel, href, onSelect, onRename
   // bland "Unnamed channel" since control gets the daemon hostname and
   // agent rooms are named explicitly by the daemon on spawn.
   const fallbackName = room.kind === 'chat' ? generateRoomName(room.roomHash) : 'unnamed channel';
-  const displayName = room.nickname || fallbackName;
+  // Nickname (hand-set) wins; else the daemon/agent auto-title; else fallback.
+  const displayName = room.nickname || room.autoTitle || fallbackName;
 
   // Close the kebab popover on any outside tap. Captured at document level so
   // tapping another row's kebab closes ours first (the natural mental model:

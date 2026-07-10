@@ -70,7 +70,9 @@ export const RoomCard = ({ room, href, onRename, onForget, onSelect, isCurrent }
 
   const badge = KIND_META[room.kind] ?? KIND_META.chat;
   const fallbackName = room.kind === 'chat' ? generateRoomName(room.roomHash) : 'unnamed channel';
-  const displayName = room.nickname || fallbackName;
+  // A user-set nickname always wins; otherwise show the daemon/agent auto-title
+  // (spawn name, then whatever the in-room agent titled itself); else the fallback.
+  const displayName = room.nickname || room.autoTitle || fallbackName;
   const hasMenu = !!(onRename || onForget);
 
   // Voluntary handle wins; otherwise a throwaway ephemeral id (see privacy note).
