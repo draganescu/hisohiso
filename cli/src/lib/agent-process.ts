@@ -310,8 +310,11 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
       ?? envelopes[envelopes.length - 1]!;
     // Prefer a title off the chosen (answer) envelope, but accept one from any
     // envelope in the batch — a codex preamble envelope may carry it while the
-    // answer envelope omits it.
-    const roomName = chosen.roomName ?? envelopes.find((e) => e.roomName)?.roomName ?? null;
+    // answer envelope omits it. Scan from the end so the LATEST title wins: if
+    // several envelopes set different `room_name`s, the one closest to the final
+    // answer reflects the agent's most recent intent, not a stale earlier value.
+    const roomName =
+      chosen.roomName ?? [...envelopes].reverse().find((e) => e.roomName)?.roomName ?? null;
     return { text: chosen.text, blocks: sanitizeBlocks(chosen.blocks), roomName };
   }
 
