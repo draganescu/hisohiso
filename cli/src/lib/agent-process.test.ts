@@ -60,6 +60,52 @@ describe('parseBlockOutput', () => {
     expect(parseBlockOutput('plain agent reply, no json')).toBeNull();
   });
 
+  test('room_name on the envelope is surfaced as the room title', () => {
+    const out = parseBlockOutput('{"text":"on it","room_name":"Fix live-dot"}');
+    expect(out?.text).toBe('on it');
+    expect(out?.roomName).toBe('Fix live-dot');
+  });
+
+  test('absent room_name yields a null title (most turns)', () => {
+    const out = parseBlockOutput('{"text":"still working"}');
+    expect(out?.roomName).toBeNull();
+  });
+
+  test('blank/whitespace room_name is a no-op title, not an empty name', () => {
+    const out = parseBlockOutput('{"text":"hi","room_name":"   "}');
+    expect(out?.roomName).toBeNull();
+  });
+
+  test('room_name is picked off whichever envelope carries it across a batch', () => {
+    // A codex-style batch where the preamble envelope sets the title and the
+    // answer envelope omits it — the title must still survive.
+    const joined = '{"text":"Starting","room_name":"Research titling"}\n\n{"text":"answer","blocks":[{"type":"list","items":["x"]}]}';
+    const out = parseBlockOutput(joined);
+    expect(out?.text).toBe('answer');
+    expect(out?.blocks).toEqual([{ type: 'list', items: ['x'] }]);
+    expect(out?.roomName).toBe('Research titling');
+  });
+
+  test('a title on the answer envelope beats an earlier preamble title', () => {
+    const joined = '{"text":"Starting","room_name":"Stale early title"}\n\n{"text":"answer","room_name":"Final title","blocks":[{"type":"list","items":["x"]}]}';
+    const out = parseBlockOutput(joined);
+    expect(out?.text).toBe('answer');
+    expect(out?.roomName).toBe('Final title');
+  });
+
+  test('when the answer envelope has no title, the LATEST preamble title wins (not the first)', () => {
+    // Two block-less preamble envelopes set different titles; the answer envelope
+    // omits one. The title closest to the answer reflects the agent's most recent
+    // intent, so the second ("Newer topic") must win over the first.
+    const joined =
+      '{"text":"Starting","room_name":"Older topic"}\n\n' +
+      '{"text":"Refocusing","room_name":"Newer topic"}\n\n' +
+      '{"text":"answer","blocks":[{"type":"list","items":["x"]}]}';
+    const out = parseBlockOutput(joined);
+    expect(out?.text).toBe('answer');
+    expect(out?.roomName).toBe('Newer topic');
+  });
+
   test('end-to-end: codex preamble+answer through parseCodexNdjson then parseBlockOutput (#187)', () => {
     const ndjson = codexMessages([
       '{"text":"Inspecting the repo now."}',

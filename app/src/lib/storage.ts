@@ -247,6 +247,13 @@ export type StoredRoom = {
   kind: RoomKind;
   handle?: string | null;
   nickname?: string | null;
+  // Auto-title suggested by the daemon/agent for this room — the agent's spawn
+  // name at join, then whatever title the in-room agent sets via `room_name`
+  // when the conversation topic changes. Distinct from `nickname` (a hand-set
+  // name that always wins): displayed only when the user hasn't named the room,
+  // and freely overwritten by a newer agent title. Precedence everywhere is
+  // `nickname || autoTitle || generatedName`.
+  autoTitle?: string | null;
   color?: string;
   // For 'agent' rooms: the roomHash of the control room (daemon) that spawned
   // it. Learned when the operator taps "Join" from inside that control room —
@@ -387,6 +394,25 @@ export const updateRoomNickname = (roomHash: string, nickname: string): void => 
     existing.nickname = nickname || null;
     writeRooms(rooms);
   }
+};
+
+// Set the daemon/agent-suggested auto-title. Overwrites any prior auto-title
+// (the agent re-titles freely on topic change) but never touches `nickname`, so
+// a user rename keeps winning. A blank value clears it back to the generated
+// name. No-op when the room isn't stored locally yet.
+export const updateRoomAutoTitle = (roomHash: string, autoTitle: string): void => {
+  const rooms = readRooms();
+  const existing = rooms.find((room) => room.roomHash === roomHash);
+  if (existing) {
+    existing.autoTitle = autoTitle || null;
+    writeRooms(rooms);
+  }
+};
+
+export const getRoomAutoTitle = (roomHash: string): string | null => {
+  const rooms = readRooms();
+  const existing = rooms.find((room) => room.roomHash === roomHash);
+  return existing?.autoTitle ?? null;
 };
 
 export const getRoomColor = (roomHash: string): string => {

@@ -111,6 +111,12 @@ type AgentSession = {
   // diagnostic breadcrumb, not a kill switch. Reconcile is the authoritative
   // liveness check; this timestamp just tells you which session to suspect.
   lastEventAt: number;
+  // Last room title the agent set via a `room_name` field on its reply. Used to
+  // dedup: we only forward the title to the phone when it actually changes, so an
+  // agent that repeats the same `room_name` every turn doesn't re-stamp the room.
+  // In-memory only — a restart re-sends the next distinct title, which is a no-op
+  // on the phone (it already holds that auto-title). Null until the first title.
+  lastTitle: string | null;
 };
 
 type AttachArgs = {
@@ -517,6 +523,7 @@ export class AgentManager {
       presence,
       seenMsgIds: new Map<string, number>(Object.entries(seenSeed)),
       lastEventAt: Date.now(),
+      lastTitle: null,
     };
 
     // Execute one agent turn for `text`. The onChat handler owns the turn
@@ -608,7 +615,7 @@ export class AgentManager {
           }
 
           const streamed = (result.text || '').trim();
-          session.lastReplyNeedsAttention = await this.sendAgentOutput(roomHash, participantToken, messageKey, streamed || '(no output)');
+          session.lastReplyNeedsAttention = await this.sendAgentOutput(session, roomHash, participantToken, messageKey, streamed || '(no output)');
           if (result.code !== 0 || result.isError) {
             console.error(`[${agentName}:${agentId}] turn exited code ${result.code}`);
             // The buffered path surfaces "(exit code N)"; mirror that here so a
@@ -672,7 +679,7 @@ export class AgentManager {
           void this.persistRooms();
         }
 
-        session.lastReplyNeedsAttention = await this.sendAgentOutput(roomHash, participantToken, messageKey, output);
+        session.lastReplyNeedsAttention = await this.sendAgentOutput(session, roomHash, participantToken, messageKey, output);
         if (result.code !== 0 && result.stderr) {
           await encryptAndSend(this.server, roomHash, participantToken, messageKey, `(exit code ${result.code})`);
         }
@@ -955,6 +962,7 @@ export class AgentManager {
   // Returns whether the reply carried a block that needs the operator's
   // attention (drives the urgency of the post-turn push).
   private async sendAgentOutput(
+    session: AgentSession,
     roomHash: string,
     participantToken: string,
     messageKey: CryptoKey,
@@ -964,13 +972,24 @@ export class AgentManager {
     const sendText = blockParsed?.text ?? output;
     const sendBlocks = blockParsed?.blocks ?? undefined;
 
+    // The agent may (re)title its room via a `room_name` field. Ride it along on
+    // the first chunk of the reply so no separate/empty message is needed, but
+    // only when it actually changed — an agent that echoes the same title every
+    // turn shouldn't re-stamp the room. The phone applies it as the room's
+    // auto-title; a user rename still wins over it (see RoomController).
+    let roomName: string | undefined;
+    if (blockParsed?.roomName && blockParsed.roomName !== session.lastTitle) {
+      roomName = blockParsed.roomName;
+      session.lastTitle = blockParsed.roomName;
+    }
+
     const MAX_MSG = 4000;
     if (sendText.length <= MAX_MSG) {
-      await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks });
+      await encryptAndSend(this.server, roomHash, participantToken, messageKey, sendText, { blocks: sendBlocks, room_name: roomName });
     } else {
       for (let i = 0; i < sendText.length; i += MAX_MSG) {
         const chunk = sendText.slice(i, i + MAX_MSG);
-        await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks } : undefined);
+        await encryptAndSend(this.server, roomHash, participantToken, messageKey, chunk, i === 0 ? { blocks: sendBlocks, room_name: roomName } : undefined);
       }
     }
 

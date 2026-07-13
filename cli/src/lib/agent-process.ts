@@ -231,8 +231,19 @@ const extractJsonContent = (text: string): string | null => {
  * final answer instead of the first preamble, which would otherwise shadow the
  * answer's blocks and silently drop them (#187).
  */
-const findBlockEnvelopes = (text: string): Array<{ text: string; blocks: unknown[] | null }> => {
-  const envelopes: Array<{ text: string; blocks: unknown[] | null }> = [];
+// Pull an optional room title off a block envelope. The agent MAY set `room_name`
+// to (re)name its room when the conversation topic changes; the daemon forwards
+// it and the phone applies it as the room's auto-title (a user rename still wins).
+// Returns a trimmed non-empty string or null so a blank/whitespace value is a
+// no-op rather than an empty title.
+const readRoomName = (obj: Record<string, unknown>): string | null => {
+  if (typeof obj.room_name !== 'string') return null;
+  const trimmed = obj.room_name.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+const findBlockEnvelopes = (text: string): Array<{ text: string; blocks: unknown[] | null; roomName: string | null }> => {
+  const envelopes: Array<{ text: string; blocks: unknown[] | null; roomName: string | null }> = [];
   let depth = 0;
   let inString = false;
   let escape = false;
@@ -260,7 +271,7 @@ const findBlockEnvelopes = (text: string): Array<{ text: string; blocks: unknown
           const obj = JSON.parse(text.substring(objStart, i + 1)) as Record<string, unknown>;
           if (typeof obj.text === 'string') {
             const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
-            envelopes.push({ text: obj.text, blocks });
+            envelopes.push({ text: obj.text, blocks, roomName: readRoomName(obj) });
           }
         } catch { /* not an envelope (prose with braces, partial object) — skip */ }
         objStart = -1;
@@ -276,13 +287,13 @@ const findBlockEnvelopes = (text: string): Array<{ text: string; blocks: unknown
  * caller can fall back to the raw output. Returns `{ text, blocks }` whenever
  * a `"text"` field was extracted, even if there are no blocks attached.
  */
-export const parseBlockOutput = (text: string): { text: string; blocks: unknown[] | null } | null => {
+export const parseBlockOutput = (text: string): { text: string; blocks: unknown[] | null; roomName: string | null } | null => {
   // Happy path: entire text is valid block JSON
   try {
     const obj = JSON.parse(text) as Record<string, unknown>;
     if (typeof obj.text === 'string') {
       const blocks = Array.isArray(obj.blocks) && obj.blocks.length > 0 ? obj.blocks : null;
-      return { text: obj.text, blocks: sanitizeBlocks(blocks) };
+      return { text: obj.text, blocks: sanitizeBlocks(blocks), roomName: readRoomName(obj) };
     }
   } catch { /* not valid JSON, try extraction */ }
 
@@ -297,7 +308,14 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
     const chosen =
       [...envelopes].reverse().find((e) => e.blocks && e.blocks.length > 0)
       ?? envelopes[envelopes.length - 1]!;
-    return { text: chosen.text, blocks: sanitizeBlocks(chosen.blocks) };
+    // Prefer a title off the chosen (answer) envelope, but accept one from any
+    // envelope in the batch — a codex preamble envelope may carry it while the
+    // answer envelope omits it. Scan from the end so the LATEST title wins: if
+    // several envelopes set different `room_name`s, the one closest to the final
+    // answer reflects the agent's most recent intent, not a stale earlier value.
+    const roomName =
+      chosen.roomName ?? [...envelopes].reverse().find((e) => e.roomName)?.roomName ?? null;
+    return { text: chosen.text, blocks: sanitizeBlocks(chosen.blocks), roomName };
   }
 
   // No complete envelope parsed — the JSON is likely truncated. Strip code
@@ -317,7 +335,9 @@ export const parseBlockOutput = (text: string): { text: string; blocks: unknown[
   }
 
   const blocks = extractCompleteBlocks(jsonPart);
-  return { text: extracted, blocks: sanitizeBlocks(blocks) };
+  // Truncated-JSON salvage path: recover text + blocks only. A title is cosmetic
+  // and not worth a fragile regex against a broken envelope.
+  return { text: extracted, blocks: sanitizeBlocks(blocks), roomName: null };
 };
 
 export const spawnAgent = async (
