@@ -1331,11 +1331,20 @@ const RoomController = () => {
         setReconnectNonce((n) => n + 1);
       }
     };
+    // A network transition (4G⇄Wi-Fi, a tower handoff, a signal dip that
+    // recovers) can leave the live SSE bound to a dead socket while the app
+    // stays in the foreground — so no visibilitychange fires, the catch-up
+    // never runs, and the agent's reply only shows up after the room is
+    // reopened. `online` fires the moment the browser regains connectivity;
+    // rebuild the connection then so onopen → catch-up runs immediately.
+    const onOnline = () => setReconnectNonce((n) => n + 1);
     document.addEventListener('visibilitychange', onResume);
     window.addEventListener('pageshow', onResume);
+    window.addEventListener('online', onOnline);
     return () => {
       document.removeEventListener('visibilitychange', onResume);
       window.removeEventListener('pageshow', onResume);
+      window.removeEventListener('online', onOnline);
     };
   }, []);
 

@@ -27,6 +27,16 @@ const buildTopic = (roomHash: string, scope: RoomTopicScope): string => {
 // daemon's watchdog in cli/src/lib/sse-client.ts.
 const STALL_TIMEOUT_MS = 75_000;
 
+// The read-stall watchdog only arms AFTER a response arrives. A reconnect that
+// never gets that far — the connect hangs on a dead route after a 4G⇄Wi-Fi
+// handoff or a signal dip — would leave `fetch` pending forever with no
+// watchdog, so the UI sits at "Live" while nothing comes through and only an
+// app restart heals it. Abort a connect that produces no response headers in
+// this window so EventSource falls into its normal retry loop instead. Well
+// under STALL_TIMEOUT_MS: a live connect returns headers in well under a
+// second, so a 20s ceiling only ever trips a genuinely dead attempt.
+const CONNECT_TIMEOUT_MS = 20_000;
+
 // Wrap fetch so the EventSource sees a body stream that aborts when no bytes
 // arrive for STALL_TIMEOUT_MS. Transparent on the happy path — every chunk
 // (including SSE comment heartbeats) resets the timer.
@@ -34,7 +44,27 @@ const stallWatchdogFetch = async (
   input: Parameters<typeof fetch>[0],
   init: Parameters<typeof fetch>[1]
 ): Promise<Response> => {
-  const response = await fetch(input, init);
+  // Route both the connect-phase timeout and the polyfill's own abort (fired on
+  // EventSource.close / reconnect) through one controller. The polyfill passes
+  // its signal in `init.signal`; forward it so closing the source still tears
+  // the fetch and its body stream down.
+  const controller = new AbortController();
+  const upstream = init?.signal;
+  if (upstream) {
+    if (upstream.aborted) controller.abort(upstream.reason);
+    else upstream.addEventListener('abort', () => controller.abort(upstream.reason), { once: true });
+  }
+  const connectTimer = setTimeout(() => {
+    controller.abort(new Error('SSE connect timeout'));
+  }, CONNECT_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    // Response headers are in — the read-stall watchdog takes over from here.
+    clearTimeout(connectTimer);
+  }
   if (!response.body) return response;
 
   const reader = response.body.getReader();
