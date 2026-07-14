@@ -626,7 +626,16 @@ const RoomController = () => {
     // not a nickname: it updates freely (the agent overwrites it on the next
     // topic shift) and is shown only when the user hasn't set a nickname —
     // getRoomAutoTitle/getRoomNickname decide precedence at render time.
-    if (envKind === 'agent' && envelope.room_name) {
+    //
+    // Gate on the room's KNOWN kind, not this envelope's `room_kind` stamp: the
+    // daemon only stamps `room_kind: 'agent'` on the spawn/join announcement,
+    // never on regular replies (unlike the control room, which restamps every
+    // turn). So `envKind` is undefined on the very replies that carry
+    // `room_name`, and gating on it dropped every title. `getRoomKind` is
+    // authoritative — set to 'agent' when the operator joined — so a title still
+    // can't leak into a plain chat room.
+    const knownKind = envKind ?? getRoomKind(roomHash);
+    if (knownKind === 'agent' && envelope.room_name) {
       updateRoomAutoTitle(roomHash, envelope.room_name);
       setRoomAutoTitle(envelope.room_name);
     }
