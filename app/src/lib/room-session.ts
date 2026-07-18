@@ -12,7 +12,11 @@ export type OutboxMessage = {
   msg_id: string;
   ts: number;
   sender_hash: string | null;
+  // Empty string on an expired tombstone — there is nothing left to decrypt.
   encrypted_payload: string;
+  // True when the server has aged this message's content out of the outbox and
+  // kept only a marker. See ingestTombstone in RoomController.
+  expired?: boolean;
 };
 
 export type ApiRequestOptions = {

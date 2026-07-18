@@ -696,6 +696,33 @@ const RoomController = () => {
     });
   }, [cryptoKey, roomHash, persistMessage]);
 
+  // Catch-up delivered a tombstone: a message arrived while we were offline but
+  // its content expired from the server outbox before we reconnected (see
+  // outbox_expire_and_prune). Drop a content-free "a message expired" marker so
+  // the timeline shows something happened instead of a silent gap that reads as
+  // "the app is broken". Keyed by the original msg_id so a real message that
+  // somehow still turns up upserts cleanly over it, and never the other way
+  // round — we refuse to overwrite decrypted content with a tombstone.
+  const ingestTombstone = useCallback(async (msgId: string, ts: number) => {
+    if (!roomHash || !msgId) return;
+    const record: ChatMessage = {
+      id: msgId,
+      room_hash: roomHash,
+      timestamp: ts,
+      content: 'a message expired before you saw it',
+      type: 'system',
+      direction: 'in',
+      expired: true,
+    };
+    setMessages((prev) => {
+      const existing = prev.find((item) => item.id === msgId);
+      // Already hold the real message, or already showed this tombstone: no-op.
+      if (existing) return prev;
+      void persistMessage(record);
+      return [...prev, record].sort((a, b) => a.timestamp - b.timestamp);
+    });
+  }, [roomHash, persistMessage]);
+
   // The terminal 'done'/'failed' status clears an agent's indicator; this is the
   // backstop for when the daemon dies mid-turn and never sends one. Drop any status not refreshed
   // within the window so a "working…" bubble can't hang around forever.
@@ -1287,7 +1314,11 @@ const RoomController = () => {
             if (r.ok) {
               const data = (await r.json()) as { messages: OutboxMessage[] };
               for (const m of data.messages) {
-                await ingestEncryptedChat(m.msg_id, m.ts, m.sender_hash, m.encrypted_payload);
+                if (m.expired || m.encrypted_payload === '') {
+                  await ingestTombstone(m.msg_id, m.ts);
+                } else {
+                  await ingestEncryptedChat(m.msg_id, m.ts, m.sender_hash, m.encrypted_payload);
+                }
               }
             }
           } catch {
@@ -1325,7 +1356,7 @@ const RoomController = () => {
       eventTypes.forEach((type) => source.removeEventListener(type, handleEvent));
       source.close();
     };
-  }, [roomHash, roomState, cryptoKey, token, tokenHash, subJwt, lobbyJwt, wipeLocalRoom, ingestEncryptedChat, reconnectNonce]);
+  }, [roomHash, roomState, cryptoKey, token, tokenHash, subJwt, lobbyJwt, wipeLocalRoom, ingestEncryptedChat, ingestTombstone, reconnectNonce]);
 
   // Resume reconciler. When the tab/PWA returns to the foreground (opened from a
   // push notification, app-switched back, or restored from bfcache), force the
@@ -2656,7 +2687,12 @@ const RoomController = () => {
                   return (
                     <div key={msg.id} className="my-1 flex justify-center">
                       <p className="rounded-full bg-bg px-3 py-1 text-[0.6875rem] text-ink-dim">
-                        {getMessagePreview(msg.content)} · {formatMailStamp(msg.timestamp)}
+                        {/* Tombstones deliberately show no precise time: the server
+                            already forgot the sender, and a coarse marker is enough
+                            to say "something arrived and expired". */}
+                        {msg.expired
+                          ? getMessagePreview(msg.content)
+                          : `${getMessagePreview(msg.content)} · ${formatMailStamp(msg.timestamp)}`}
                       </p>
                     </div>
                   );

@@ -59,6 +59,12 @@ export type ChatMessage = {
   reply_to?: ReplyRef | null;
   // Agent-room batch: replies the operator collected and dispatched together.
   replies?: ReplyEntry[] | null;
+  // Catch-up tombstone: a message that arrived while we were offline but whose
+  // content expired from the server outbox before we reconnected. We keep a
+  // content-free marker (type 'system') so the timeline shows "a message
+  // expired" instead of a silent gap. The id is the original message's msg_id,
+  // so if the real message ever turns up it upserts over this without dupes.
+  expired?: boolean;
 };
 
 class ChatDatabase extends Dexie {
