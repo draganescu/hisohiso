@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 //   - It is purely a LOCAL UI preference. The flag never leaves the device, is
 //     never uploaded, and the relay never learns it exists. Mirrors the
 //     local-only per-room helpers at the top of storage.ts (token/handle/
-//     room_password) and the presence opt-in (lib/presence.ts).
+//     room_password).
 //   - It does NOT weaken the join handshake. A knock only auto-approves once the
 //     joiner has cryptographically PROVEN possession of the room link + password:
 //     the knock arrives encrypted under knockKey = deriveKnockKey(roomSecret,
@@ -60,7 +60,7 @@ export const clearAutoApprove = (roomHash: string): void => {
 
 // --- React hook ------------------------------------------------------------
 //
-// Follows the local-state-with-storage pattern of useRoomPresence: reads the
+// Follows a local-state-with-storage pattern: reads the
 // persisted opt-in and exposes a setter that writes through to storage. The
 // hook never talks to the server and never opens a socket.
 export type UseRoomAutoApprove = {
