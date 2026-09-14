@@ -2,6 +2,7 @@ import { spawnAgent } from './agent-process.js';
 import {
   parseClaudeStreamLine,
   parseCodexStreamLine,
+  parseOpenCodeStreamLine,
   type AgentTurnEvent,
   type TurnStatus,
 } from './turn-status.js';
@@ -11,7 +12,7 @@ import {
 // (Claude/Codex). Agents run with full permissions (their profile carries the
 // bypass flag) — there is no in-turn approval round-trip.
 
-export type StreamFormat = 'claude' | 'codex';
+export type StreamFormat = 'claude' | 'codex' | 'opencode';
 
 export type StreamTurnArgs = {
   command: string;
@@ -117,7 +118,14 @@ export const runStreamingTurn = async (args: StreamTurnArgs): Promise<StreamTurn
       if (line.trim()) stderrLines.push(line);
       return;
     }
-    const events = format === 'claude' ? parseClaudeStreamLine(line) : parseCodexStreamLine(line);
+    let events: AgentTurnEvent[] = [];
+    if (format === 'claude') {
+      events = parseClaudeStreamLine(line);
+    } else if (format === 'codex') {
+      events = parseCodexStreamLine(line);
+    } else if (format === 'opencode') {
+      events = parseOpenCodeStreamLine(line);
+    }
     for (const ev of events) applyEvent(ev);
   });
 

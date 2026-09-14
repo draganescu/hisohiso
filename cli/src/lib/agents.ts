@@ -1,7 +1,7 @@
 // Which provider's control surface an agent speaks. Drives streaming-status
 // parsing (see agent-stream / turn-status). 'other' = a plain command with no
 // streaming surface (bash/python/…).
-export type AgentProvider = 'claude' | 'codex' | 'other';
+export type AgentProvider = 'claude' | 'codex' | 'opencode' | 'other';
 
 export type AgentProfile = {
   command: string;
@@ -15,11 +15,12 @@ export type AgentProfile = {
   appendSystemPrompt?: string;
   // Output parser dispatch. Default 'claude-json' = single JSON {result, session_id}.
   // 'codex-ndjson' = JSONL event stream with thread.started + item.completed/agent_message.
-  outputFormat?: 'claude-json' | 'codex-ndjson';
+  // 'opencode-json' = JSON event stream --format json output (no streaming, single result).
+  outputFormat?: 'claude-json' | 'codex-ndjson' | 'opencode-json';
   // How to inject appendSystemPrompt. Default 'append-flag' uses --append-system-prompt <value>
   // (Claude). 'prepend-message-once' prepends the prompt to the user message on the first turn
   // only (for agents like codex that lack a system-prompt flag — session continuity carries it).
-  systemPromptMode?: 'append-flag' | 'prepend-message-once' | 'codex-config';
+  systemPromptMode?: 'append-flag' | 'prepend-message-once' | 'codex-config' | 'opencode-run';
   // Build args for a resume turn. If undefined, default behavior is `[...args, '--resume', id]`
   // (Claude). Codex needs `exec resume <id> ...` which can't be expressed as a flag append.
   buildResumeArgs?: (sessionId: string) => string[];
@@ -56,6 +57,19 @@ const BUILTIN_AGENTS: Record<string, AgentProfile> = {
     outputFormat: 'codex-ndjson',
     systemPromptMode: 'codex-config',
     buildResumeArgs: (id) => ['exec', 'resume', id, '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'],
+  },
+  'opencode': {
+    command: 'opencode',
+    // OpenCode is trusted: auto-approve permissions and skip approval loops.
+    args: ['run', '--format', 'json', '--auto'],
+    description: 'OpenCode autonomous session (multi-turn)',
+    mode: 'session',
+    provider: 'opencode',
+    appendSystemPrompt: BLOCK_PROMPT,
+    outputFormat: 'opencode-json',
+    systemPromptMode: 'opencode-run',
+    // OpenCode uses -s/--continue for session continuation
+    buildResumeArgs: (id) => ['run', '-s', id, '--format', 'json', '--auto'],
   },
 };
 

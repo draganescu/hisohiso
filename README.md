@@ -43,7 +43,7 @@ were closed when a message was sent can still receive it on next open.
 - **Runtime**: FrankenPHP + Caddy
 - **Server storage**: SQLite — room/token/presence metadata only (`/data/chat.sqlite`)
 - **Client storage**: IndexedDB — encrypted message history
-- **Terminal bridge**: `hisohiso` CLI (`cli/`) — bridges a terminal AI agent to a hisohiso room. Currently supports **Claude** only. See [cli/README.md](cli/README.md).
+- **Terminal bridge**: `hisohiso` CLI (`cli/`) — bridges a terminal AI agent to a hisohiso room. Supports **Claude**, **Codex**, and **OpenCode**. See [cli/README.md](cli/README.md).
 
 ## Local setup
 
