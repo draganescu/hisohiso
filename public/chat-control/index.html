@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f3efe6" />
+    <title>Chat Control 1.0 — what the EU just passed, and what it means for encrypted chat</title>
+    <meta name="description" content="On 10 July 2026 the European Parliament let Chat Control 1.0 pass — even though most MEPs present voted no. Here's what the law actually does, why end-to-end encrypted rooms are carved out, and how hisohiso already sits outside its reach." />
+    <link rel="canonical" href="https://www.hisohiso.org/chat-control/" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Chat Control 1.0 — what the EU just passed" />
+    <meta property="og:description" content="It passed even though most MEPs present voted no. What the law does, why end-to-end encryption is carved out, and where a room with no server-side history stands." />
+    <meta property="og:url" content="https://www.hisohiso.org/chat-control/" />
+    <meta property="og:image" content="https://www.hisohiso.org/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/fonts/riso-fonts.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Chat Control 1.0?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Chat Control 1.0 is the EU's temporary derogation from the ePrivacy Directive that lets messaging and email providers voluntarily scan their services for child sexual abuse material. The European Parliament adopted it on 10 July 2026 and it runs until 3 April 2028. It is separate from Chat Control 2.0 (the CSA Regulation), the permanent scanning law still under negotiation."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Chat Control 1.0 break end-to-end encryption?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. An amendment adopted alongside the vote keeps end-to-end encrypted services outside the derogation's scope. Chat Control 1.0 allows voluntary scanning by providers that can already read message content; it does not order encrypted services to scan or weaken their encryption. That fight belongs to the still-unpassed Chat Control 2.0."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How did Chat Control 1.0 pass if most MEPs voted against it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "314 MEPs voted to reject it — a majority of those present — but rejecting a second-reading text needs an absolute majority of 361 votes. The rejection fell 47 short, so the law survived by default rather than by a positive majority in its favour."
+          }
+        }
+      ]
+    }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="room-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/" aria-label="hisohiso home">
+          <span class="wave wave--brand" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="brand-name">hisohiso</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="topnav" aria-expanded="false">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
+        <nav class="topnav" id="topnav" aria-label="Primary">
+          <a class="topnav-link" href="/">index</a>
+          <a class="topnav-link" href="/security/">protocol</a>
+          <a class="topnav-link" href="/coding-agents/">agents</a>
+          <a class="topnav-link" href="/hermes/">hermes</a>
+          <a class="topnav-link" href="/alternatives/">alternatives</a>
+          <a class="topnav-link" href="https://github.com/draganescu/hisohiso">source</a>
+          <a class="topnav-cta" href="https://hisohiso.org/new">open a channel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">10 july 2026 · brussels</p>
+        <h1 id="hero-title">
+          the EU passed Chat Control 1.0.<br /><span class="accent">most MEPs present voted no.</span>
+        </h1>
+        <p class="lead">
+          it passed anyway — a rejection needed 361 votes and got 314. here's what the law actually does, why end-to-end encrypted rooms are left out of it, and where a chat with no history on any server already stands.
+        </p>
+        <div class="sticker-row">
+          <span class="sticker">temporary derogation</span>
+          <span class="sticker sticker--blue">e2ee carved out</span>
+          <span class="sticker sticker--ink">runs to apr 2028</span>
+        </div>
+        <div class="hero-actions">
+          <a class="cta" href="https://hisohiso.org/new">open a channel</a>
+          <a class="link" href="/security/">read the protocol</a>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="what-title">
+        <h2 id="what-title">what Chat Control 1.0 <span class="accent">actually is.</span></h2>
+        <p>
+          it's a <strong>temporary derogation</strong> from the EU's ePrivacy rules. those rules normally forbid providers from reading the content of your messages. the derogation carves out an exception: services that can already see your message content — think webmail, or a chat app that holds the plaintext — may <em>voluntarily</em> scan it for known child sexual abuse material and grooming. the European Parliament adopted it on 10 july 2026, and it now runs until <strong>3 april 2028</strong>.
+        </p>
+        <ul class="bullets">
+          <li><strong>it is voluntary, not an order.</strong> it permits scanning; it does not command every provider to scan.</li>
+          <li><strong>it is a stopgap.</strong> it keeps the existing voluntary scanning legal while the bigger fight drags on.</li>
+          <li><strong>it is not the scary one.</strong> the mandatory-scanning law is a different bill — see below.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="vote-title">
+        <h2 id="vote-title">the vote that <span class="accent">passed by failing.</span></h2>
+        <p>
+          under second-reading rules, killing the text needs an <strong>absolute majority — 361 votes</strong>, not just more nos than yeses. 314 MEPs voted to reject it. that was a majority of the room, but 47 votes short of the bar. so the law survived not because a majority backed it, but because not quite enough voted to bury it.
+        </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">the headline</p>
+            <h3>it passed.</h3>
+            <p>Chat Control 1.0 is now EU law and stays in force until april 2028.</p>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">the footnote</p>
+            <h3>nobody won it.</h3>
+            <p>more MEPs present voted against than for. it lived on a procedural threshold, not a mandate.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section numbered" aria-labelledby="e2ee-title">
+        <h2 id="e2ee-title">end-to-end encryption <span class="accent">is left out of it.</span></h2>
+        <p>
+          an amendment adopted alongside the main vote keeps <strong>end-to-end encrypted services outside the derogation's scope</strong>. that's the honest, un-dramatic reading: this law lets providers who can <em>already</em> read your messages keep scanning them. it doesn't order an encrypted service to scan, and it doesn't ask anyone to weaken or backdoor encryption. a service that literally cannot read your messages has nothing to hand over.
+        </p>
+        <ul class="bullets">
+          <li><strong>if a provider can read it, it may scan it.</strong> that's the whole mechanism — access to plaintext.</li>
+          <li><strong>if a provider can't read it, there's nothing to scan.</strong> encryption isn't broken; it's simply out of scope.</li>
+          <li><strong>the mandatory version is still not law.</strong> the pressure on encryption lives in Chat Control 2.0, which hasn't passed.</li>
+        </ul>
+      </section>
+
+      <section class="section numbered" aria-labelledby="two-title">
+        <h2 id="two-title">don't confuse it with <span class="accent">Chat Control 2.0.</span></h2>
+        <p>
+          the one people fear is the <strong>CSA Regulation — "Chat Control 2.0"</strong> — a permanent law that would allow <em>detection orders</em> and reach toward client-side scanning: checking your messages on your own device before they're encrypted. that bill has <strong>not</strong> passed. round after round of trilogue negotiations between Parliament, Council, and Commission have stalled, mostly over exactly this question of scanning everyone without suspicion. 1.0 is the temporary patch; 2.0 is the unresolved argument.
+        </p>
+      </section>
+
+      <section class="section numbered" aria-labelledby="us-title">
+        <h2 id="us-title">where a room with no memory <span class="accent">already stands.</span></h2>
+        <p>
+          hisohiso wasn't built as a reaction to this vote — it just happens to sit on the safe side of it. a room's secret lives in the link, in the fragment after the <code>#</code> that never leaves your browser. the router only ever sees ciphertext. and when you close the room, there's nothing left to keep, scan, or subpoena — because nothing was stored to begin with.
+        </p>
+        <div class="split">
+          <article class="split-card">
+            <p class="split-tag">what a scanner needs</p>
+            <h3>readable content.</h3>
+            <p>every scanning regime — voluntary or mandatory — depends on someone, somewhere, being able to read the message.</p>
+          </article>
+          <article class="split-card">
+            <p class="split-tag">what we keep</p>
+            <h3>nothing.</h3>
+            <p>no account, no phone number, no history on our server. close the room and it's gone. there is no plaintext for anyone to reach for.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="cta-band" aria-labelledby="end-title">
+        <h2 id="end-title">the law moved. <span class="accent">the quiet room didn't have to.</span></h2>
+        <p>whatever Brussels decides next, the design is the same: a private, accountless line where the secret stays in the link and the server only sees noise. open one, use it, close it — and there's nothing left behind.</p>
+        <div class="hero-actions">
+          <a class="cta" href="https://hisohiso.org/new">open a channel</a>
+          <a class="link" href="/security/">read the protocol</a>
+        </div>
+      </section>
+
+      <p class="footnote-note" style="max-width:60ch;margin:0 auto;padding:1.5rem 0;opacity:.7;font-size:.85rem;">
+        this page explains the law in plain terms; it isn't legal advice. dates and vote counts reflect reporting on the 10 july 2026 European Parliament vote.
+      </p>
+    </main>
+
+    <footer class="footer">
+      <p>hisohiso — the quiet line between you and your agent.</p>
+      <p class="footer-links">
+        <a class="link" href="/">index</a>
+        <a class="link" href="/security/">protocol</a>
+        <a class="link" href="/coding-agents/">agents</a>
+        <a class="link" href="/hermes/">hermes</a>
+        <a class="link" href="/alternatives/">alternatives</a>
+        <a class="link" href="https://github.com/draganescu/hisohiso">source</a>
+      </p>
+      <p class="footer-license">GPLv3 · self-host it · fork it · read the code</p>
+    </footer>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
