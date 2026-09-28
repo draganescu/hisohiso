@@ -7,10 +7,13 @@
 #   1. Pre-flight (tools installed, gh authed, working tree clean, tag free)
 #   2. Bumps cli/package.json + cli/src/index.ts to the target version
 #   3. Builds the four-arch binary set with `bun run build:all`
-#   4. Commits the source-only diff (binaries are NOT committed — cli/dist is
+#   4. Re-signs the two macOS binaries ad-hoc (bun's own signature is rejected
+#      by macOS, which SIGKILLs the binary) — before checksums, so the
+#      manifest matches what we upload
+#   5. Commits the source-only diff (binaries are NOT committed — cli/dist is
 #      gitignored and binaries live ONLY on the GitHub Release page)
-#   5. Tags the commit and pushes main + tag to origin
-#   6. Creates the GitHub Release and uploads the four binaries as assets
+#   6. Tags the commit and pushes main + tag to origin
+#   7. Creates the GitHub Release and uploads the four binaries as assets
 #
 # Why no binary commit: install.sh fetches from /releases/latest/download/,
 # which serves the assets attached to the Release — never the repo. Past
@@ -120,6 +123,25 @@ echo ">> Building binaries..."
 for arch in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
   [[ -f "cli/dist/hisohiso-$arch" ]] || { echo "Missing cli/dist/hisohiso-$arch after build" >&2; exit 1; }
 done
+
+# Re-sign the macOS binaries ad-hoc. `bun build --compile` appends the JS
+# bundle to the bun runtime and leaves a signature macOS rejects outright:
+# on Apple silicon the kernel SIGKILLs the process before main(), so the
+# binary looks like it produces no output at all (exit 137). An ad-hoc
+# re-sign makes it valid and runnable. Must run BEFORE the checksums below,
+# or the published manifest won't match the bytes we upload and the
+# auto-updater's verification will reject every download.
+echo ">> Re-signing macOS binaries (ad-hoc)..."
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  for arch in darwin-arm64 darwin-x64; do
+    codesign -s - -f "cli/dist/hisohiso-$arch" 2>/dev/null \
+      || { echo "Failed to sign cli/dist/hisohiso-$arch" >&2; exit 1; }
+    codesign -v "cli/dist/hisohiso-$arch" 2>/dev/null \
+      || { echo "cli/dist/hisohiso-$arch still has an invalid signature after re-signing" >&2; exit 1; }
+  done
+else
+  echo "   (not on macOS — skipping; release the darwin binaries from a Mac)" >&2
+fi
 
 # Emit a checksum manifest so the auto-updater can verify downloads. Order
 # matches the upload list below for human readability — only filename and
