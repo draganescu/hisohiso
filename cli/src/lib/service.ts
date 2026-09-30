@@ -225,9 +225,9 @@ export const systemdUnit = (execPath: string): string => {
     '[Service]',
     'Type=simple',
     `ExecStart=${execPath} daemon start`,
-    // Restart on crash/reboot only. The binary self-updates by re-exec (same
-    // PID image), not by exiting, so Restart=always isn't for updates — see the
-    // updater/Restart QA note in the PR.
+    // Restart on crash/reboot, and after a self-update: under the service the
+    // updater swaps the binary and exits, and this brings the new one up
+    // (lib/updater.ts restartPlan).
     'Restart=always',
     'RestartSec=2',
     ...env,

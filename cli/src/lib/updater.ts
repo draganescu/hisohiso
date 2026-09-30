@@ -254,8 +254,19 @@ async function tick(ctx: TickCtx): Promise<void> {
     return;
   }
 
-  ctx.log(`swapping binary and re-execing...`);
   await fs.rename(tmpPath, EXEC_PATH);
+
+  if (restartPlan(process.env) === 'service-exit') {
+    // Under launchd (KeepAlive) or systemd (Restart=always) the service manager
+    // restarts us on exit, with the new binary. Spawning our own detached child
+    // as well left two daemons — the child plus the manager's respawn — both
+    // answering every phone message (v0.16.0 → v0.17.0, 2026-09-28).
+    ctx.log(`swapped binary; exiting so the service manager restarts it...`);
+    setTimeout(() => process.exit(0), 250);
+    return;
+  }
+
+  ctx.log(`swapped binary; re-execing...`);
 
   // Re-exec with the USER args only — slice(2), not slice(1). In a Bun-
   // compiled binary process.argv is [binary, /$bunfs/<entry>, ...userArgs],
@@ -276,6 +287,14 @@ async function tick(ctx: TickCtx): Promise<void> {
   child.unref();
   // Give the new process a beat to grab whatever resources we held.
   setTimeout(() => process.exit(0), 250);
+}
+
+// How to come back after swapping the binary. A daemon run by the service
+// manager (HISOHISO_SERVICE, set in the unit — lib/service.ts) just exits: the
+// manager restarts it. A foreground daemon re-execs
+// itself, since nothing else would bring it back.
+export function restartPlan(env: NodeJS.ProcessEnv): 'service-exit' | 'reexec' {
+  return env.HISOHISO_SERVICE ? 'service-exit' : 'reexec';
 }
 
 // --- helpers ---
