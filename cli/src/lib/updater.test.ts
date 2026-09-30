@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isInstalledBinary, resolveExecPath } from './updater.js';
+import { isInstalledBinary, resolveExecPath, restartPlan } from './updater.js';
 
 describe('isInstalledBinary', () => {
   test('true for a Bun single-file executable (/$bunfs entry at argv[1])', () => {
@@ -53,5 +53,16 @@ describe('resolveExecPath', () => {
     // target that clobbered node (#228).
     expect(got).not.toBe(fakeNode);
     expect(got).toBe(process.execPath);
+  });
+});
+
+describe('restartPlan', () => {
+  test('under a service manager: exit and let it restart the new binary', () => {
+    expect(restartPlan({ HISOHISO_SERVICE: 'launchd' })).toBe('service-exit');
+    expect(restartPlan({ HISOHISO_SERVICE: 'systemd' })).toBe('service-exit');
+  });
+  test('in the foreground: re-exec, nothing else would bring it back', () => {
+    expect(restartPlan({})).toBe('reexec');
+    expect(restartPlan({ HISOHISO_SERVICE: '' })).toBe('reexec');
   });
 });

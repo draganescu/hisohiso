@@ -6,7 +6,7 @@
 // (crash leftover, no listener) is detected by probe and cleared before bind.
 
 import { createServer, connect, type Server } from 'node:net';
-import { chmod, unlink } from 'node:fs/promises';
+import { chmod, lstat, unlink } from 'node:fs/promises';
 import { SOCKET_FILE } from '../lib/config.js';
 import type { ControlRequest, ControlResponse } from '../lib/control-plane.js';
 
@@ -126,9 +126,14 @@ export const startControlServer = async (handlers: ControlHandlers): Promise<Con
   });
 
   await new Promise<void>((resolve, reject) => {
-    const onError = (err: NodeJS.ErrnoException) => {
+    const onError = async (err: NodeJS.ErrnoException) => {
       // Lost a race: another daemon bound the socket between our probe and now.
-      reject(err.code === 'EADDRINUSE' ? new DaemonAlreadyRunningError() : err);
+      // Bun's listen error carries no EADDRINUSE code ("Failed to listen at
+      // …"), so ask the socket itself: live means someone else holds it.
+      // Treating that as a plain bind failure let the loser carry on without a
+      // socket — a second daemon answering every message (v0.17.0 update).
+      const taken = err.code === 'EADDRINUSE' || (await isControlSocketLive());
+      reject(taken ? new DaemonAlreadyRunningError() : err);
     };
     server.once('error', onError);
     server.listen(SOCKET_FILE, () => {
@@ -137,9 +142,17 @@ export const startControlServer = async (handlers: ControlHandlers): Promise<Con
     });
   });
   await chmod(SOCKET_FILE, 0o600).catch(() => {});
+  const ours = await lstat(SOCKET_FILE).then((s) => s.ino).catch(() => null);
 
   return {
+    // Called on the way out (shutdown, re-exec). If the path now holds another
+    // daemon's socket — a successor bound it during a handoff — leave both the
+    // file and our listener alone: Bun's server.close() unlinks the path it
+    // listened on, which would delete the successor's socket and let the next
+    // start take it for stale. Our listener's fd goes when the process exits.
     close: async () => {
+      const now = await lstat(SOCKET_FILE).then((s) => s.ino).catch(() => null);
+      if (ours === null || now !== ours) return;
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await unlink(SOCKET_FILE).catch(() => {});
     },
