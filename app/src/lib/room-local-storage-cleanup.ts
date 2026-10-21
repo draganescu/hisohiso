@@ -8,7 +8,6 @@ import {
   clearToken,
   removeRoom,
 } from './storage';
-import { clearPresence } from './presence';
 import { clearAutoApprove } from './auto-approve';
 import { clearPendingKnocks } from './pending-knocks';
 import { clearPushPreference } from './push-preference';
@@ -26,7 +25,6 @@ export const clearLocalRoomStorage = (roomHash: string): void => {
   clearExpectedKnockMessage(roomHash);
   clearLastKnockMessage(roomHash);
   clearRoomSetupDismissed(roomHash);
-  clearPresence(roomHash);
   clearAutoApprove(roomHash);
   clearPendingKnocks(roomHash);
   clearPushPreference(roomHash);
