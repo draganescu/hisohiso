@@ -55,6 +55,11 @@
 	# Events are published with private=on, so the hub gates delivery per
 	# topic against each subscriber's claim.
 	mercure {
+		# Mercure in FrankenPHP 1.13.1+ refuses to start with publisher_jwt /
+		# subscriber_jwt unless compatibility mode is opted into explicitly.
+		# This keeps the token checks we have always had; moving to the new
+		# `issuer` block is a separate change.
+		protocol_version_compatibility 8
 		publisher_jwt {$MERCURE_PUBLISHER_JWT_KEY}
 		subscriber_jwt {$MERCURE_SUBSCRIBER_JWT_KEY}
 		# Send `: heartbeat\n\n` every 30s so an idle SSE connection produces
